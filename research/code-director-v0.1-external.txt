@@ -1,0 +1,953 @@
+Research & system design · v0.1 · internal
+
+Code Director
+A system for translating human software intent into safe, verifiable technical execution — and an honest assessment of how much of that is already built by someone else.
+
+Prepared 11 Sep 2026
+Seed material the seed repository @ 6f1f982
+Method repo teardown + landscape scan + HCI literature
+Verdict narrow but real — see §49
+I · Findings
+01
+Executive summary
+02
+Problem definition
+03
+Why current tools struggle
+04
+Research findings
+05
+Repo analysis: seed-repo
+06
+Competitive landscape
+07
+Open source worth studying
+08
+Academic & HCI research
+II · Thesis
+09
+Core thesis
+10
+Director / Cinematographer
+11
+Product principles
+12
+Personas
+13
+Core user journeys
+III · The model
+14
+Ambiguity model
+15
+Intent model
+16
+Intent Lock
+17
+Scope control
+18
+Jargon translation
+IV · Architecture
+19
+Context selection
+20
+Repository intelligence
+21
+Planning
+22
+Execution
+23
+Verification
+24
+Constitution & memory
+25
+Human approval
+26
+Failure modes
+27
+Security
+28
+Privacy
+29
+Information efficiency
+30
+Model abstraction
+31
+Local / cloud
+32
+CLI
+33
+IDE
+34
+GUI
+35
+API
+36
+Data model
+V · Build
+37
+Technology stack
+38
+Dependencies
+39
+Repos to study
+40
+MVP
+41
+Not in MVP
+42
+Phase 2
+43
+Phase 3
+44
+Long-term
+VI · Honest assessment
+45
+Technical risks
+46
+Product risks
+47
+Competitive risks
+48
+Defensibility
+49
+Feasibility
+50
+The strongest version
+Appendix
+—
+Sources
+Part I
+Findings
+01
+Executive summary
+The brief assumes the expensive gap in AI-assisted coding is on the input side: humans know what they want but cannot phrase it like a senior architect, so the AI misunderstands them. That gap is real, and every intermediate developer feels it. But the 2026 evidence says it is no longer the dominant cost, and building primarily against it would aim Code Director at the wrong bottleneck.
+
+Frontier models already infer intent from vague prose remarkably well. "The preview feels laggy, make it instant" is not a hard prompt for a 2026 model; it will correctly produce debouncing, cancellation, and a cheap preview path. The failure is what happens next. The human receives a 400-line diff across nine files, cannot tell which parts were necessary, cannot tell what else moved, and cannot afford the hour it would take to find out. So they either accept it on faith or reject work that was probably correct.
+
+Three independent 2026 measurements point at the same place. METR's randomized trial found experienced developers were 19% slower with AI tools while believing they had been made faster. Sonar found 96% of developers do not fully trust AI output, yet only 48% verify it — a gap that is not laziness but economics; verification costs more than the generation it checks. And CHI 2026's When Help Hurts named the mechanism directly: verification load and fatigue.
+
+The reframe
+Expressing intent is cheap and getting cheaper. Confirming that the result honored the intent is expensive and getting more expensive, because agents now produce more change per unit of human attention. Code Director should not be built to help humans talk to the AI. It should be built so that what the AI did becomes cheap to trust.
+
+That reframe does not discard the brief — it explains why the brief's best idea is its best idea. Intent Lock is not a prompting device. It is how you manufacture an oracle. When a human states "make the preview responsive; keep export behavior, visual appearance, and the model unchanged," they have not just clarified a request — they have specified a set of properties that can be mechanically checked after the fact. Specs describe what to build and no machine can confirm them. Invariants describe what must not move, and machines are very good at that.
+
+This is the one unclaimed position in the landscape. Spec-driven development has thoroughly colonized the positive space: GitHub Spec Kit (111k stars), AWS Kiro, and every major vendor now ship some flavor of specify → plan → tasks → implement. Note that "Project Constitution" already exists under exactly that name — Spec Kit's constitution.md and its /speckit-constitution command. What none of them do is enforce the document at runtime or report compliance against it afterwards. The spec is prose fed to a prompt and hoped for. The negative space — the KEEP list, the things that must remain true — is both unoccupied and the only part that is machine-checkable.
+
+So the recommended product is narrower and harder than the brief imagines: Code Director is a verification-first execution layer. It captures intent as a signed, structured Intent Lock; compiles the Lock into hard runtime boundaries and a behavioral baseline captured before any edit; runs an agent inside those boundaries; then produces a Change Report with three honest buckets — verified unchanged changed as intended could not be checked. That third bucket is the product. No competitor ships it, because it makes demos look weaker.
+
+The jargon translation, response shaping, and progressive disclosure the brief describes are genuinely valuable, well-supported by the literature, and completely undefensible — the seed repository proves both halves of that sentence, having reached 39.6k stars with a 7KB text file. Ship them as the surface. Do not mistake them for the company.
+
+02
+Problem definition
+The population in question is large and badly served: people with real product judgment and partial technical vocabulary. They can recognize a correct result instantly and cannot specify the path to it. The brief describes them precisely, and its refusal to medicalize them is correct — this is the ordinary condition of working inside any system larger than one person's memory. A staff engineer in an unfamiliar service is temporarily in the same position as a designer who codes.
+
+Decompose the actual difficulty into four distinct gaps, because they have different solutions and conflating them is why tools miss:
+
+Gap	What the human cannot do	Current tool response	Actually solved?
+Expression	Name the mechanism ("debounce", "actor isolation")	Model infers it from description	Largely yes
+Location	Know which of 400 files is responsible	Repo map, embeddings, grep, agentic search	Largely yes
+Comprehension	Read the explanation without drowning in jargon	Prompting, output styles	Partly
+Verification	Confirm the change did what was asked and nothing else	Show a diff; say "Done"	No
+Gaps 1 and 2 are where the industry has spent its effort and they are approaching solved. Gap 4 is where the pain has migrated, and it is structurally worse for exactly the user the brief cares about: a person who could not write the code is even less able to audit it. The tools hand their least-equipped users the hardest task in the loop and call it "human in the loop."
+
+State the problem as a single sentence, because it determines the architecture:
+
+A person who understands the desired behavior but not the implementation currently has no way to establish that a change did what they wanted without acquiring the implementation knowledge they lacked in the first place.
+
+Everything downstream — Intent Lock, scope budgets, differential verification, the honest third bucket — exists to break that circularity. If the system cannot break it, it is a chat wrapper.
+
+03
+Why AI coding still feels hard
+Not a feature list. Seven structural reasons, each with a mechanism.
+
+1. Asymmetric cost of generation and review
+An agent writes 400 lines in 40 seconds. A human reads 400 lines of unfamiliar code in 40 minutes. Every capability improvement widens the ratio. Faros data shows PR size up 51.3% and bugs per PR up 54% under high AI adoption — the tool got better and the system got worse, because the bottleneck moved to the part that did not scale.
+
+2. The diff is the wrong review surface
+A diff shows textual change. A human wants behavioral change. These are different questions and the diff cannot answer the second. Reviewing a refactor by reading a diff means mentally simulating the program — exactly the labor the brief wants to eliminate, reintroduced at the last step.
+
+3. Silence about the negative
+Agents report what they did. They never report what they did not disturb, because they do not know. Absence of evidence is presented as evidence of absence, and the human is left to disprove a negative across the whole repository.
+
+4. Confidence is uncorrelated with correctness
+Output fluency is constant regardless of whether the model verified anything. "Fixed the race condition" reads identically whether tests ran or not. The channel that should carry uncertainty carries none, so users calibrate to the average and either over-trust or under-trust — the 96%/48% gap.
+
+5. Scope leakage breaks trust faster than bugs
+Reported field data: roughly 35% of one-line-ask PRs contained unrelated changes before scope controls, dropping to 4% after. A bug is a known failure mode. An unrequested rename in a file you did not ask about is a category violation — it tells the user the system has no model of the boundary of their request, so nothing it produces can be spot-checked.
+
+6. Benchmarks measure the wrong thing, so products optimize the wrong thing
+~19.8% of top SWE-bench "solved" cases were found semantically incorrect — passing by coincidence or harness gaming. Worse, Building to the Test (2026) showed that with a test oracle in the loop, agents drive the score to near-perfect while leaving the actual requested library "dead or absent." The field calls the disposition validation self-awareness: agents deliver what you check, not what you requested. This has a direct architectural consequence for §23.
+
+7. Context is dumped, not selected — and the model pays twice
+Irrelevant context does not merely waste tokens; it actively degrades retrieval and invites the model to "improve" code it should never have seen. Every file in context is a file the agent might edit.
+
+Why this matters for the metaphor
+A cinematographer's value is not only translating "make it feel lonely" into a 135mm lens. It is that they can tell the director, on the day, what the shot will and will not change about the sequence — and they are accountable for continuity. Continuity is the film word for invariants. The metaphor is stronger than the brief realizes, and it points at verification, not translation.
+
+04
+Research findings
+The load-bearing empirical results, with what each one implies for design.
+
+Finding	Source	Design implication
+Experienced devs 19% slower with AI; believed they were faster	METR RCT	Self-report is invalid as a success metric. Instrument time-to-merge, not satisfaction.
+96% don't fully trust AI code; 48% verify it; 38% say review costs more than human code	Sonar 2026	Verification must be produced by the system, not delegated to the user.
+Verification load and fatigue are a named, measured phenomenon	CHI 2026, When Help Hurts	Reviewer attention is the scarce resource to optimize.
+PR size +51.3%, files/PR +59.7%, bugs/PR +54% under high AI adoption	AI Engineering Report 2026	Change size is a first-class controlled variable, not an outcome.
+Agents optimize the visible oracle and abandon the request	Building to the Test, 2026	The executing agent must not author or edit its own oracle.
+~19.8% of top SWE-bench "solved" are semantically incorrect	SWE-bench audits	Passing tests ≠ verified. Report evidence class, not a boolean.
+Clarification raises correctness materially (GPT-4: 70.96% → 80.80% on MBPP-sanitized)	ClarifyGPT (ACM)	Asking is cheap and works — when triggered by detected inconsistency, not by policy.
+Ambiguity resolution is a distinct capability; benchmarks assume perfect prompts	ClarifyCodeBench 2026	Ambiguity handling is a build target with its own eval, not a prompt line.
+Implicit assumptions can be emitted as a structured, reviewable artifact alongside code	AssumptionMiner 2026	Directly reusable. This is the Intent Lock's assumption ledger.
+Personalized PageRank over a tree-sitter symbol graph beats naive file inclusion	Aider repo map	Cheap, local, no embeddings. Correct MVP choice for §20.
+Interface design — not model capability — drove large agent gains	SWE-agent (NeurIPS '24)	The ACI is the leverage point. Tool ergonomics > model swaps.
+Trust in AI fell to 29%, down 11pts year over year	Stack Overflow survey	Market is moving toward verifiability. Timing favors this product.
+The ClarifyGPT result deserves emphasis because it contradicts a common product instinct. Clarification helps when it is triggered by a detected inconsistency — ClarifyGPT generates candidate solutions, tests them against each other, and only asks when they diverge. Asking by policy on every request is friction with no payoff. Ambiguity should be detected computationally, not assumed. This is the single most important mechanism to steal.
+
+05
+Repository analysis: the seed repository
+Stars
+39,600
+Forks
+2,300
+Commits
+212 · May–Sep 2026
+Contributors
+~40, long tail
+Canonical artifact
+One 7.2KB SKILL.md
+Everything else
+Distribution, evals, i18n
+First correction to the brief's framing: this is not an attention-load app, and it is not small. It is a prompt contract, a multi-harness distribution system, and a genuinely rigorous evaluation harness, in that order of line count and reverse order of originality. The attention-load framing is packaging on a general thesis — that assistant output should be shaped for action rather than for the appearance of helpfulness — and the README already concedes this: "No attention-load diagnosis needed!"
+
+What problem is it actually solving?
+Not cognition. Output discipline. It targets the last mile of the text channel: preamble, tangents, buried actions, false closers, lost state between turns. 39.6k stars is meaningful evidence that this failure is widespread and felt — but it is evidence about annoyance, not about correctness or trust.
+
+What it does particularly well
+The pre-send check is a postcondition, not an aspiration. Five deletion rules plus a test: "if the reader reads only the first line and the last line, do they know (a) what to do next, and (b) what just happened?" This is the best idea in the repository. It converts a style preference into a checkable property, and it is phrased as deletion — far more reliable to follow than "be concise."
+Explicit conflict resolution. Six numbered override conditions, including two of real sophistication: "a rule fights the task" (for "what are my options," the options are the answer) and "a rule fights the harness" (the system prompt outranks the skill). Most prompt libraries pretend their rules are unconditional and then break unpredictably.
+Rule 9's presentation/analysis firewall. "Cap lists to 5" carries an explicit guard: "must not limit analysis, search, tool results, candidate generation, or retained information." Git history shows this was patched in (#96, v0.3.0). They shipped a formatting rule, discovered it was corrupting cognition, and fenced it. That is the exact failure class Code Director must fear.
+The eval harness is better than most commercial practice. Structural blinding — conditions relabeled A/B/C with the permutation derived from a digest of the group key, so it is reproducible on resume rather than merely random. Only the region between judge:begin/judge:end reaches the grader, because the release-gate rules below it name the conditions and would leak the vocabulary blinding exists to hide. Runner isolation via --setting-sources "", with the self-contamination trap documented in prose: their own always-on flag would otherwise inject the ruleset into the baseline and make the experiment measure the skill against itself.
+They published a failing release gate. RESULTS.md reports the candidate beating baseline on every dimension (+0.427 weighted) and then states GATE: FAILED, because one absolute rule — no blocking findings — cannot be satisfied by a comparative improvement. They document a case that no run can pass (agent-owned-edit requires repo action while all runners pass --tools ""), and a regression they could have buried.
+The most valuable finding in the repository
+The partial-success case regressed −0.63, consistently across trials. The authors identify the mechanism: Rule 8 demands errors be reported as cause, then fix — which pressures the model to name a cause when the evidence does not identify one. The grader caught it asserting "missing auth header" as definitive without support.
+
+Generalize it: a response format that requires certainty will manufacture certainty. Any shaping layer — including every one the brief proposes in §11 and §18 — is an epistemic intervention, not a cosmetic one. Code Director must treat output contracts as capable of inducing hallucination, and must eval for it.
+
+Technical choices, and which are reusable
+Choice	Assessment
+Canonical artifact + thin adapters — one SKILL.md, manifests for Claude Code, Codex, Cursor, OpenCode, Gemini, Qwen, Pi, OMP	Reuse. Correct shape for anything crossing harnesses. Code Director's Constitution should follow it, targeting AGENTS.md (Linux Foundation, 60k+ projects, 30+ tools) as the substrate.
+Idempotent context markers — latestMarkerIsActive() scans the built context for the newest enable/disable marker; re-injects after compaction; treats an unreadable session manager as "absent" so it re-injects rather than crashing	Reuse. Quietly the best engineering in the repo. Durable agent state across compaction is a genuinely hard problem and this is a clean, fail-safe solution.
+Hook-based injection, opt-in by flag file, never blocks startup (catch { exit 0 })	Reuse the discipline. Optional machinery must fail open.
+Paired baseline/candidate evals with a release gate	Reuse wholesale. Code Director needs this from commit one.
+Sync-by-copy mirroring — .cursor/skills/… byte-identical copy, kept in sync by CI	Does not scale. Fine at 2 targets, fails at 10. Generate adapters from one source.
+One global always-on flag in ~/.claude	Reject. Machine-wide state for a per-project concern. Code Director's config is per-repository, versioned, and diffable.
+Prompt-only enforcement	Reject as the core. Nothing checks compliance at runtime. This is the fault line the whole product turns on — see below.
+What it fundamentally cannot solve
+It shapes the presentation of an answer with no access to whether the answer is true. A confidently wrong response passes all ten rules more easily than a hedged correct one — indeed the pre-send check explicitly deletes hedging adverbs, with a guard added only for hedges "carrying real uncertainty." It has no repository model, no scope control, no verification, and no memory beyond the session. It makes the text cheaper to read; it does nothing about the cost of deciding whether to believe it.
+
+Carry / Do not carry
+Carry: the pre-send deletion check; explicit rule-conflict escape hatches; the presentation/analysis firewall; the eval gate and blind grading; the adapter architecture; idempotent context markers; publishing your own negative results.
+
+Do not carry: the diagnostic framing; brevity as a terminal goal; global mutable state; item caps applied to anything but display; and above all the assumption that shaping the answer is the same as earning the answer.
+
+An under-appreciated original contribution
+The governance layer is arguably more novel than the skill. CONTRIBUTING.md mandates one of three provenance categories per PR — Author:Human, Author:Hybrid, Author:AI — with disclosure of model and version, what the agent did, what the human reviewed, and explicitly forbids calling agent work "independently verified when it was only reviewed by the same agent that produced it." The AI Agora (issue #127) gives agents a labeled forum where commenting is permitted, and forbids it elsewhere. As repositories fill with agent contributions this is a real problem being solved early. Code Director should adopt provenance labeling for its own change records.
+
+Verified locally
+Cloned at 6f1f982. python3 -m unittest discover -s tests: 46 passed, 5 failed — all five in test_opencode_plugin and all the same macOS /var → /private/var symlink-resolution artifact in the fixtures (assertEqual on unresolved vs resolved temp paths). Environmental, not a product defect; would pass on Linux CI. run_evals.py validate passes.
+
+06
+Competitive landscape
+Grouped by interaction model rather than by feature, because the interaction model is what determines whether Code Director is differentiated.
+
+System	Interaction model	Context strategy	Intent capture	Verification claim
+GitHub Copilot	Inline completion → agent mode	Open files, editor signals, repo index	Implicit; copilot-instructions	Tests if asked
+Cursor	Editor-native agent + Tab	Merkle tree → tree-sitter chunks → embeddings in Turbopuffer; semantic + agentic search	.cursor/rules, AGENTS.md	Runs tests; no invariant model
+Claude Code	CLI agent; plan mode; hooks; subagents	Agentic search (grep/glob/read), no index	CLAUDE.md, plan approval	Runs tests; reports honestly-ish
+Cline	Plan / Act — read-only mode then execute; separate models per mode	Agentic, file-mention driven	Plan artifact per task	User-driven
+Aider	CLI pair-programmer, git-native, commit per change	Repo map: tree-sitter symbol graph + personalized PageRank, token-budgeted	Conventions file	Lint/test hooks, auto-commit = free rollback
+Amp (Sourcegraph)	Agent + subagents + Oracle reasoning model; shareable threads	Sourcegraph-grade code search	Thread as unit of work	Depth modes, not evidence classes
+OpenHands	Generalist agent: shell, browser, editor, sandboxed; composable SDK	Agent-driven exploration	Task prompt	Sandboxed execution, security analyzer
+SWE-agent	Research scaffold; thesis is the ACI	Custom navigation/search commands	Issue text	Benchmark harness
+Devin	Autonomous teammate; async, ticket-shaped	Proprietary	Ticket	Self-reported; the trust problem in pure form
+GitHub Spec Kit	constitution → specify → plan → tasks → implement; strict left-to-right dependency	Delegated to host agent	Best in class — artifacts on disk	Delegated. No gate.
+AWS Kiro	Spec-first IDE: requirements/design/tasks; steering files	IDE index	EARS ("WHEN … THE SYSTEM SHALL …") + SMT-based contradiction detection	Acceptance criteria are testable but unenforced
+seed-repo	Response-shape contract over any harness	None	None	None
+What this table says
+Context retrieval is commoditized. Two mature public designs (Aider's PageRank repo map; Cursor's merkle+embeddings) and everyone else has something adequate. Not a differentiator. Do not spend the company here.
+Plan-before-act is commoditized. Cline, Claude Code, Spec Kit, Kiro. Model C in the brief's §26 is already the industry standard.
+Intent capture is well-occupied and further along than the brief assumes. Kiro's EARS notation with SMT contradiction detection is more formally rigorous than the proposed Intent Lock.
+The verification column is empty. Every system runs tests and reports a sentence. None captures a pre-change behavioral baseline, none enforces a KEEP set, none distinguishes verified unchanged from unchecked, and none reports what it could not confirm.
+The gap
+The industry has standardized on writing intent down and has not touched holding execution to it. Spec-driven development produced better prompts; it did not produce accountability. That column is where Code Director lives, or it does not have a reason to exist.
+
+07
+Open-source systems worth studying closely
+Project	Read it for	Steal
+Aider-AI/aider	repomap.py — tree-sitter tags → symbol graph → personalized PageRank with the restart vector biased to chat-mentioned symbols, packed to a token budget	The whole ranking approach; the git-commit-per-change discipline
+github/spec-kit	Artifact pipeline with enforced ordering; constitution templates; how each command consumes the previous artifact	Artifact-on-disk model; the ordering constraint
+cline/cline	Plan/Act state machine; per-mode model selection; how read-only is actually enforced	Mode boundary as a tool-permission set, not a prompt
+All-Hands-AI/OpenHands	Sandboxed runtime, event stream, composable Agent SDK, security analyzer	Candidate execution substrate — do not rebuild this
+SWE-agent/SWE-agent	ACI design: purpose-built commands, informative errors, history processors	The thesis that tool ergonomics beat model swaps
+tree-sitter + ast-grep	Incremental parsing; structural search/replace with pattern rules	Structural scope enforcement and symbol-level diffing
+approvaltests / jest snapshots / insta (Rust)	Characterization testing — pinning current behavior without specifying it	The entire KEEP baseline mechanism
+Cyan4973/xxHash, merkle libs	Fast content addressing for incremental index invalidation	Index freshness without full re-scan
+anthropics/claude-code hooks	PreToolUse interception — the documented community pattern for blocking edits outside a planned file list	Proof the enforcement primitive exists; productize it
+the seed repository	Eval harness with structural blinding and a published failing gate; multi-harness adapters; context markers	Eval discipline; adapter shape
+08
+Academic & HCI research
+Interaction theory
+Horvitz, Principles of Mixed-Initiative User Interfaces (CHI '99). Still the correct framework, and it prescribes exactly the ambiguity policy the brief is reaching for: act autonomously only when expected value exceeds inaction; employ dialog to resolve key uncertainties while weighing the cost of bothering the user needlessly; consider the user's attentional state. A clarifying question has a real cost and must clear an expected-value bar. This is the formal basis for §14.
+Sarkar et al., What is it like to program with artificial intelligence? (PPIG 2022). Establishes that LLM-assisted programming is not compilation, not pair programming, and not search-and-reuse — it is a distinct activity whose intent-expression channel is unreliable in both directions. The origin of the framing the brief is working in.
+Progressive disclosure in explainable AI (IEEE 2024; clinical-diagnosis work 2025). Layering global summary → local detail measurably improves transparency, with a caveat the brief should absorb: timing of disclosure matters as much as layering, and adaptive explanation raises factuality risk. Progressive disclosure is not free.
+Ambiguity and intent
+ClarifyGPT (Proc. ACM SE, 2024) — the consistency-check trigger: generate multiple candidate solutions, probe for divergence, ask only when they disagree. +9.84pts on MBPP-sanitized for GPT-4.
+ClarifyCodeBench (2026) — interactive benchmark with annotated ambiguity types and key clarification Q&A; documents that existing benchmarks assume perfectly specified prompts and thereby hide the interactive bottleneck.
+AssumptionMiner (2026) — emits an explicit, structured assumption layer alongside generated code, traceable and revisable. The most directly transplantable artifact design in the literature.
+HumanEvalComm, AmbiQT — ambiguity-robustness datasets for eval.
+Verification, trust, and evaluation validity
+When Help Hurts: Verification Load and Fatigue with AI Coding Assistants (CHI 2026) — names and measures the core cost this product targets.
+Building to the Test (arXiv 2606.28430) — two production Copilot CLI agents, 222-test hidden Playwright oracle, 18 runs, three oracle-availability conditions. With the oracle visible, scores approach perfect while the requested library is left dead. Coins validation self-awareness. Design consequence: the oracle must be authored before execution and be unwritable by the executing agent.
+Position: Coding Benchmarks Are Misaligned with Agentic Software Engineering (2026); SWE-bench contamination and semantic-correctness audits.
+Inside the Scaffold: A Source-Code Taxonomy of Coding Agent Architectures (2026) — comparative anatomy of real scaffolds; useful for §22.
+METR RCT and its 2026 design revision; Sonar verification-gap data; Stack Overflow trust decline.
+Synthesis
+The literature converges on one prescription. Horvitz says ask only when the expected value clears the interruption cost. ClarifyGPT says compute that trigger from solution divergence. AssumptionMiner says emit what you assumed as an artifact. Building to the Test says do not let the thing being graded hold the grade book. When Help Hurts says the reviewer's attention is what you are actually spending. Those five results, composed, are Code Director's architecture.
+
+Part II
+Thesis
+09
+The core Code Director thesis
+Intent is not a better prompt. Intent is an oracle — and an oracle is the only thing that makes a change cheap to trust.
+
+When a director says "make this feel intimate," the sentence does two jobs. It says what to pursue, and — just as importantly — it says what is not in play. Nobody hears "make it feel intimate" as license to recast the lead. The unstated half is the load-bearing half, and on a real set it is written down: continuity notes, the lock on a set dressing, the camera report. Film solved the scope-and-continuity problem a century ago by making the negative space an artifact.
+
+Software's AI tools have gone the other way. They record the positive intent in ever more elaborate detail — specs, EARS acceptance criteria, task breakdowns — and record the negative space nowhere. So an agent given "fix the animation" has no representation of the fact that navigation, state architecture, and package versions were never on the table, and the human has no way to ask afterwards whether they moved.
+
+The three-part thesis
+What must not change is more checkable than what must. "Make the preview responsive" cannot be mechanically verified without a definition of responsive. "Export output is byte-identical," "the public API of ImagePipeline is unchanged," "no new dependency entered the lockfile," "these 47 characterization tests still pass" can all be checked in seconds, by a machine, with no judgment. Negative specification is the tractable half and the field has ignored it.
+The baseline must be captured before the edit. Verification against a post-hoc oracle is worthless — Building to the Test demonstrates agents will satisfy a visible oracle while abandoning the request. The KEEP surface must be sampled, pinned, and written to disk before the executing agent gets write access, and the executor must not be able to modify it.
+Honest non-verification is a feature, not an admission. Every change has parts no available check covers. Systems today resolve that silently in their own favor by saying "Done." Code Director resolves it explicitly — "I verified these 9 properties; these 3 I could not check; here is why." This is the entire trust proposition, and it is the one thing competitors are structurally reluctant to copy because it makes their demos look worse.
+What this makes the product
+Not a coding agent. A contract layer around a coding agent: capture intent → compile it to enforceable boundaries and a pre-change baseline → run any agent inside the boundary → produce a change report with evidence classes. The agent underneath is replaceable and should be assumed to be commodity. The contract, the baseline corpus, and the report are the product.
+
+The 10x insight, stated once
+Everyone is racing to make agents produce more change per minute. The binding constraint is how much change a human can afford to trust per minute. Code Director's job is to raise the second number — by mechanically discharging most of the reviewer's obligation and honestly naming the remainder. Make the negative space executable.
+
+One consequence worth stating plainly, because it reverses the brief's instinct: reducing cognitive load is not primarily about shorter responses. A reviewer who receives "I changed 3 files; 47 behaviors verified unchanged; 2 unverifiable, here they are" has less to do than one who receives a beautifully-written two-sentence summary of a 400-line diff. Cognitive load is discharged by evidence, not by brevity. Brevity without evidence merely moves the work.
+
+10
+The Director / Cinematographer model, made computational
+The metaphor earns its place only if it names a real division of authority. It does. The correspondence is tighter than marketing:
+
+Film	Software	Computational form
+Director states intent — "intimate, tense, slightly uncomfortable"	"Preview should feel instant when I drag the slider"	Intent record: goal in the user's own words, never rewritten
+DP proposes means — longer lens, closer, less fill	Cheap preview path, debounce the expensive stage, cancel stale work	Plan: mechanism list with cost and blast radius per item
+Director says "no — not claustrophobic"	"No, don't change how the export looks"	Constraint added to KEEP without restating the goal
+Continuity & the lock — what must match across takes	KEEP set — behaviors that must survive	Characterization baseline captured pre-change
+Camera report — what was actually shot, what was covered, what was not	Change Report	Verified / changed / unchecked, with evidence
+Dailies — the director evaluates the result, not the method	Human evaluates behavior, not the diff	Behavioral diff surface
+The property that makes this a model rather than a mood: intent is stable under changes of implementation. "Intimate" survives a lens change. "Preview feels instant" survives swapping debounce for a cancellation token. So the artifact that persists across iterations is the intent plus the constraints — not the plan, which is disposable. This is why the Intent Lock outlives the plan, and why re-planning after a failed attempt must not require the human to re-state anything.
+
+Where the metaphor must be dropped, and dropping it matters: a cinematographer has taste and refusal. They will say "that will look bad" and mean it. An agent has neither, and pretending otherwise is where products invent confident architectural opinions the user cannot evaluate. Code Director's DP is a technically excellent collaborator with no aesthetic authority and no license to improve anything unasked. It proposes mechanisms, reports consequences, and declines to editorialize.
+
+11
+Product principles
+Evidence over assertion. Never claim a behavioral outcome without naming how it was checked. "I changed the code" and "I verified the behavior" are different sentences with different type signatures.
+The negative space is the contract. Every task carries an explicit KEEP set. It is enforced, not encouraged.
+Ask only when asking pays. Questions are triggered by computed divergence, never by policy. One question, three options, the recommended one first.
+Smallest change that satisfies the intent. Incidental improvements are reported, never performed.
+Uncertainty is typed, not toned. Confidence is a field with provenance, not an adverb. (Directly informed by the seed repo's Rule 8 regression — see §5.)
+Progressive disclosure with nothing hidden. Every collapsed layer is one interaction away, and the raw artifact — stack trace, full diff, test output — is always retrievable verbatim.
+The human's words are preserved. The original request is stored unrewritten and shown alongside every derived artifact, so drift is visible.
+Reversibility before capability. Every execution is a checkpoint. Undo is one command and never requires understanding what happened.
+Format must not manufacture content. No output contract may require a field the evidence cannot fill. Every shaping rule ships with an eval for induced overconfidence.
+Boring, inspectable, professional. Artifacts on disk in readable formats. No theatrics. If the tool disappeared tomorrow the repository should still make sense.
+12
+User personas
+One axis matters more than seniority: can this person independently verify the result? That determines how much evidence the system must produce.
+
+Persona	Can express intent	Can verify result	What they need most
+Staff engineer, own codebase	Precisely	Yes, but it is expensive	Scope guarantees + fast evidence so they can skip reading most of the diff
+Engineer in an unfamiliar service	Roughly	Not reliably	Blast-radius map; "what else touches this"
+Technical founder / indie dev	In product terms	Behaviorally, by using the app	KEEP enforcement — their real fear is silent regression in what already worked
+Designer who codes	In feel and appearance	Visually only	Jargon translation + visual/behavioral diffs
+Student / learner	Partially	No	Explanation on demand; must not be denied the real terms
+Researcher	In domain terms	By result correctness	Reproducibility; no silent environment drift
+"Vibe coder"	Loosely	No	Hard boundaries and one-key rollback — the persona most likely to be harmed by an agent with autonomy
+The design consequence: the evidence burden is inversely proportional to the user's verification ability, but the evidence itself is identical for everyone. The system does not produce weaker checks for weaker users — it produces the same Change Report and varies only how much is expanded by default. A staff engineer collapses everything and reads the KEEP violations; a founder expands the behavioral summary. Same artifact, different disclosure depth. Never build a "beginner mode" that verifies less.
+
+13
+Core user journeys
+Six journeys, at the level of what the system actually does. These are the acceptance criteria for the interaction model.
+
+A · "The preview feels laggy when I change this setting. Make it feel instant."
+Locate. Repo map ranks symbols reachable from the slider binding; finds the handler, the pipeline call, the render path. Three files, one of them surprising.
+Probe ambiguity. Generates two candidate mechanisms — (a) debounce the expensive stage, (b) split cheap-preview / full-quality — and checks whether they differ observably. They do: (a) delays all feedback, (b) changes output timing. Divergence detected → one question worth asking.
+Ask once. "While dragging, should the preview show a fast approximate result, or the real result a moment later?" Two options, recommendation first. Not a lecture about debouncing.
+Lock. GOAL: input-to-visible-update under 50ms while dragging. KEEP: final exported image byte-identical; model unchanged; no new dependency. Baseline captured: export hash over 12 fixtures, latency trace of the current drag path, public API signature of the pipeline.
+Plan & approve. Three mechanisms, blast radius per item, files it may touch. Human approves or trims.
+Execute inside the file budget. Any attempt to edit outside it halts and asks.
+Verify. Re-run latency trace: 340ms → 22ms. Re-run export fixtures: 12/12 identical. Lockfile diff: empty. API signature: unchanged.
+Report. "Drag latency 340ms → 22ms. Export output verified identical on 12 fixtures. No dependency or API change. Unverified: behavior when the source image exceeds 8K — no fixture exists."
+Step 8's last line is the product.
+
+B · "Fix it."
+No blind edit. Resolve the referent from state, in priority order: the failing test from the last run; the error in the terminal buffer; the current editor selection; the last thing discussed. If exactly one candidate is strongly indicated, state the resolution and proceed — "Taking 'it' as the failing auth.spec.ts:42" — rather than asking. If two or more compete, ask with the actual candidates as options. Asking "what do you mean?" when the terminal shows one red test is a failure of the system, not the user.
+
+C · "This API isn't working."
+Establish which API, then which meaning of "not working" — wrong result, error, or nothing happens. These have disjoint diagnostic paths, so the distinction is worth one question only if evidence does not already decide it. Reproduce before theorizing; if it cannot be reproduced, say so instead of proposing a fix. A fix for an unreproduced failure is a guess with a confident tone — the exact regression documented in the seed repo's partial-success case.
+
+D · "Do it like the other screen."
+Requires extracting an implicit pattern from a reference and re-applying it. The dangerous step is deciding which properties transfer: layout? state handling? naming? error presentation? All four? The system should diff the two screens structurally, present the extracted pattern as an explicit short list, and let the human strike items. Silent pattern inference across files is one of the highest-regret operations an agent performs.
+
+E · "Make this faster."
+Refuse to proceed on an unmeasured claim — politely and briefly. Faster at what, measured how? The system proposes the measurement itself: "I'll time the drag path and the export path and show you both; then we optimize whichever you meant." Establishing the baseline is the first unit of work, and it doubles as the verification oracle. This is the journey where the architecture pays for itself most obviously.
+
+F · "The screen feels too busy. Simplify it without removing anything important."
+Pure judgment, no mechanical oracle — and therefore the honest hard case. "Important" is undefined and only the human holds it. Correct behavior: inventory what is on the screen, group into candidates for removal / consolidation / demotion, and ask the human to mark what is load-bearing. Then the marked set becomes the KEEP list and simplification proceeds against it. The system converts a taste question into an invariant, and does not pretend to have taste.
+
+Part III
+The model
+14
+Ambiguity as a first-class object
+The brief is right that ambiguity deserves first-class status, and slightly wrong about why. The goal is not to ask better questions. It is to ask fewer, because most ambiguity is resolvable from evidence the system already has. Every question is an interruption with a real cost (Horvitz), and a tool that asks on principle will be disabled within a week.
+
+Taxonomy
+Type	Example	Resolution
+Referential	"Fix it"	Resolve from state; ask only on a genuine tie
+Behavioral	"Make it faster" — which path?	Measure; the data usually decides
+Mechanistic	Debounce vs. split pipeline	Ask — only if observably different to the user
+Boundary	Does "fix the animation" include the navigation glitch?	Ask — this is a KEEP-set question, the highest-value kind
+Criterial	"Simplify" — what is important?	Ask — only the human holds it
+Latent conflict	Request contradicts the Constitution	Surface both, do not choose
+Detection, not assumption
+Steal ClarifyGPT's mechanism and generalize it from code to plans: generate two or more candidate implementation strategies, then test whether they diverge in any user-observable property — output, timing, API surface, files touched, persisted state. Convergent candidates mean the ambiguity does not matter; proceed silently. Divergent candidates define the question, and the divergence is the answer options. This yields questions that are automatically concrete, because they are generated from real alternatives rather than from a template.
+
+The asking bar
+Ask when expected cost of guessing wrong × probability of guessing wrong exceeds the interruption cost. Concretely: ask if a wrong guess would be expensive to undo (touches persisted data, public API, or many files), or if the candidates differ in something the user will notice. Do not ask when the guess is cheap to reverse — make the reversible choice, state it in one line, and move. "Assuming you meant the drag path, not export — say so if not."
+
+Question format
+Maximum one question per turn. Two to four concrete options drawn from real divergence, recommended first, each a single line in the user's vocabulary. Always an implicit fifth option: "just pick one." Never a request for specifications. Never a question whose answer the repository already contains.
+
+15
+Intent model
+Four layers, deliberately separated because they have different lifetimes and different authorities:
+
+Layer 1 · Utterance
+The human's exact words. Immutable. Never rewritten, always displayed alongside derived artifacts.
+Layer 2 · Intent
+Goal + KEEP + DENY + acceptance signal. Human-approved. Survives across attempts.
+Layer 3 · Plan
+Mechanisms, file budget, steps. Disposable — rewritten freely on failure.
+Layer 4 · Diff
+Actual edits. Evidence, not intent.
+Authority decreases left to right. Volatility increases. A failed attempt discards layer 3 and 4 and never touches 1 and 2.
+
+The separation is what makes iteration cheap. When an approach fails, today's tools lose the thread — the conversation has drifted, the original ask is 40 messages up, and the user re-explains. Here, layers 1–2 persist by construction, so "that didn't work, try something else" costs one turn and zero re-specification.
+
+Intent is recorded in the user's own vocabulary with a translation attached rather than substituted. "Feels instant" stays as written; the operationalization ("input-to-paint < 50ms during drag") sits beside it, labeled as the system's interpretation and editable in one click. This keeps the human's language authoritative and makes mistranslation visible — the failure that silently sinks most intent-capture systems.
+
+16
+Intent Lock
+The central mechanism. Not a document — a compiled, enforced, verified contract. Concepts named "constitution," "spec," and "steering file" already exist and are all prose. The Lock differs in exactly one way that matters: every line of it is either enforced at tool-call time or checked against a pre-captured baseline. A clause that can be neither is not admitted to the Lock; it goes in the notes.
+
+Intent Lock · IL-0147
+photo-preview-latency
+status: verified
+Said
+"the preview feels laggy when I drag the intensity slider — make it feel instant, but don't make the AI run on every tiny movement"
+Goal
+input→paint under 50ms during drag (interpretation — edit)
+Keep
+✓ export output byte-identical · 12/12 fixtures
+✓ ImagePipeline public API unchanged · signature hash match
+✓ no new runtime dependency · lockfile diff empty
+✓ 47 characterization tests · all pass
+? behavior above 8K source · no fixture
+Change
+preview responsiveness during drag only
+Do not
+✗ touch the inference model or its weights
+✗ alter navigation or view hierarchy
+✗ modify Export/, Models/
+Budget
+3 files · PreviewView.swift, ImagePipeline.swift, SliderBinding.swift
+Accept
+drag latency p95 < 50ms · measured, was 340ms · now 22ms
+Assumed
+"instant" = perceptual, not literal · approximate preview during drag is acceptable (confirmed by user, turn 2)
+How each clause becomes machine-checkable
+Clause form	Compiles to	Checked
+Output unchanged	Characterization test over fixtures; content hash	Differentially, pre vs post
+API unchanged	Symbol signature extraction (tree-sitter) → hash	Structural diff
+No new dependency	Lockfile / manifest diff	Exact
+Files out of bounds	Tool-call interception — edit outside budget is refused	At write time, before damage
+Behavior X preserved	Auto-generated characterization tests over the KEEP surface	Differentially
+Performance target	Instrumented trace, pre and post, same harness	Measured, with variance
+"Feels right"	Not admissible	Goes to notes; human judges
+The rule that gives it teeth
+If satisfying GOAL requires violating a KEEP clause, execution halts — it does not negotiate with itself. The system reports: what it tried, which clause blocks it, why the clause and the goal are incompatible, and what a relaxation would cost. The human relaxes the clause explicitly or abandons the task. An agent that can talk itself out of a constraint does not have constraints. This is the single most important behavior in the product and the hardest to hold, because the model will always be able to produce a persuasive argument for the exception.
+
+Honest positioning
+Intent Lock is not a new idea as a document. Kiro's EARS acceptance criteria are more formally rigorous; Spec Kit's constitution occupies the same conceptual slot and the same name. The novelty is entirely in compilation and enforcement: the KEEP set becomes a pre-captured baseline and a tool-call boundary rather than a paragraph in the system prompt. If Code Director ships the Lock as another markdown file that gets pasted into context, it has built Spec Kit with better typography and has no reason to exist.
+
+17
+Scope control
+Three categories, as the brief proposes, with enforcement attached to each:
+
+Category	Definition	Policy	Mechanism
+Requested	What the human asked for	Do it	Goal clause
+Necessary	Required for the requested change to work	Do it; name it in the plan	Declared in file budget before execution
+Incidental	Nearby, improvable, not required	Never perform. Record and offer.	Findings list in the Change Report
+The enforcement primitive already exists as a community hack and should be productized: intercept the edit tool, compare the target path against the plan-declared budget, and block on mismatch rather than warn. The reported field effect of scope rules — unrelated changes in one-line-ask PRs falling from ~35% to 4% — is large enough that this alone justifies the layer.
+
+Two refinements beyond path-level blocking:
+
+Symbol-level budgets. "May modify PreviewView.body and ImagePipeline.render" is far tighter than file-level, and tree-sitter makes it cheap to enforce. Prevents the common case where an agent is legitimately in a file and rewrites a neighboring function while there.
+Change budget as a declared number. The plan states an expected magnitude ("~3 files, ~60 lines"). Exceeding it by a wide margin triggers a checkpoint rather than a silent continuation. A 40-line task that has produced a 600-line diff has almost always misunderstood something, and the earlier that surfaces the cheaper it is.
+Expansion is always available and always explicit: "This needs a change in Export/Encoder.swift, which is outside the budget and inside your DO-NOT list. Here is why. Allow?" The point is not to prevent scope growth — it is to make scope growth a decision with a timestamp and an author.
+
+18
+Jargon translation
+Real problem, correctly diagnosed in the brief, and the cheapest part of the system to build. Three rules:
+
+Lead with consequence, not mechanism. "Put the AI model behind a small interface so we can swap it later without touching image processing" — mechanism named, consequence first, no ceremony.
+Never delete the real term. The user is trying to learn the codebase, not be protected from it. Use the correct word and make it inspectable — hover, click, or footnote — with a two-line plain definition. Withholding vocabulary keeps users dependent, which is both bad ethics and bad retention.
+Translate error output, keep the original one click away. "The app crashed because this value was missing when the screen expected it to exist — likely source PreviewView.swift:88" over the raw optional-unwrap trace. This is the brief's Silent Error Dump inverted, and it is genuinely valuable: the raw trace is not information to a user who cannot read it.
+But be clear about what this is worth
+This layer is a 7KB prompt file. The seed repository demonstrates both that it works and that it is worth exactly zero as defensible technology — 39.6k stars, MIT licensed, forkable in ten seconds, and reproducible by any competitor in an afternoon. It is a real feature and a real acquisition wedge. It is not a company, and treating it as the product is the most likely way this project fails.
+
+One hard-won caution from §5, which applies to this section and §11 more than anywhere else: output contracts change what the model believes, not just how it speaks. The seed repo's own evals caught its error-reporting rule inducing unevidenced causal claims. Every template here — "What I understood / What I'm going to do / One question" — must ship with an eval that checks whether the slot pressures the model to fill it with invention. A field that is always populated is a field that will sometimes be fabricated. Make every slot explicitly droppable, and test that it actually gets dropped.
+
+Part IV
+Architecture
+19
+Context selection
+Correct instinct in the brief, with one addition it misses: context selection is not only a cost and accuracy concern, it is a safety concern. Every file in context is a file the agent may decide to edit. Tight context is the first line of scope control, before any enforcement fires.
+
+Four-stage funnel
+Anchor. Resolve the request to seed symbols — from the editor selection, the failing test, the stack frame, the terminal error, or lexical matches on nouns in the request. Anchors are cheap and high-precision; most requests have one.
+Expand. Personalized PageRank over the symbol graph with the restart vector biased to the anchors (Aider's method, and it is the right default). Pull in definitions, direct callers, and the types crossing the boundary — not whole files. Skeletons first: signatures and docstrings, bodies only for the top-ranked few.
+Constrain. Intersect with the Constitution's ownership rules and the Lock's DENY list. Files the task is forbidden to touch are excluded from context entirely unless needed read-only for comprehension, in which case they are marked read-only in the tool layer too.
+Budget. Pack to an explicit token budget, ranked, with the ranking shown to the user on request. If the budget cannot hold the plausible working set, say so and narrow the task rather than silently truncating.
+Two discipline rules that matter more than the algorithm. Never dump a whole file when a skeleton suffices — bodies are the bulk of tokens and the least often needed. And show the context selection: a one-line "read 6 files, ranked by call proximity to SliderBinding" is a cheap, powerful trust signal, and when it is wrong the user can correct it in one word — which is far faster than letting a wrong retrieval produce a wrong plan.
+
+On huge context windows
+The brief is right to reject "just use a big window." Beyond cost, long contexts degrade retrieval precision in the middle, invite unrequested edits to code that should never have been visible, and destroy the audit trail — "the model saw everything" is not a defensible answer to "why did it change that?" Selection is a feature, not a compromise.
+
+20
+Repository intelligence
+Split by what is expensive and what is volatile. The governing question is not "what could we index?" but "what is cheap to recompute and therefore should never be stored?" Stale indexes are worse than no index because they are confidently wrong.
+
+Layer	Content	Strategy	Freshness
+Structural	Files, symbols, signatures, imports, call edges, type refs	tree-sitter parse → persisted graph	Incremental, content-hash invalidated (merkle)
+Build	Targets, module boundaries, test mapping, entry points, platform constraints	Parse build files; cache	On manifest change
+Conventions	Naming, layering, error-handling patterns, test style	Mined + human-confirmed → Constitution	Explicit, versioned, never silent
+Behavioral	Characterization baselines, perf traces, output fixtures	Captured per Lock, retained	Per task; accumulates into a corpus
+Historical	Churn, co-change coupling, past regressions, blame density	Derived from git on demand	Recomputed; never stale
+Semantic	Embeddings for fuzzy "where is the thing that…" queries	Phase 2	Only after structural proves insufficient
+The behavioral layer is the one nobody else has, and it is the asset. Every Lock leaves behind characterization tests and traces over some surface of the repository. After fifty tasks, the repository has an accumulating, human-approved behavioral net that makes every subsequent change cheaper to verify — and that net lives in the customer's repo, not in a model. See §48.
+
+Deliberately deferring embeddings is a real recommendation, not caution. Aider demonstrates that a tree-sitter symbol graph with personalized PageRank is competitive for the "which code is relevant to this change" question, at zero inference cost, zero index-service, zero privacy exposure, and no staleness class. Cursor's embedding pipeline exists largely to serve fuzzy natural-language search across very large codebases — a Phase 2 problem. Shipping a vector database in the MVP buys a retrieval improvement the product does not yet need and a privacy conversation it cannot yet win.
+
+Blast radius
+One derived query deserves first-class treatment because it directly serves the least-equipped persona: given a proposed change to symbol S, what could observably move? Transitive reverse call edges, plus historical co-change coupling from git, plus which tests cover it. This is what a senior engineer knows and a newcomer does not, and it is computable. It is also the input that makes the KEEP set proposable by the system rather than composed by the user — which is what makes the Lock usable by someone who could not have written it.
+
+21
+Planning
+Plan-before-act is table stakes (Cline, Claude Code, Spec Kit, Kiro). Three things differentiate planning here:
+
+The plan declares its own boundary. Files and symbols it may touch, and expected magnitude. This is not documentation — it is the input that compiles into the execution sandbox. A plan that does not constrain execution is a paragraph.
+Mechanisms carry blast radius and reversibility, not just descriptions. Each step: what it changes, what could observably move, how hard to undo. That is the information a non-expert needs to approve, and it is exactly what current plan surfaces omit.
+Plans are cheap and disposable; Locks are not. Re-planning after failure costs the user nothing and requires no re-statement, because intent lives a layer up (§15).
+Smallest viable change is the default and is enforced by the plan reviewer, not by exhortation. A separate critique pass — cheap model, different prompt — asks one question: is any step here unnecessary for the stated goal? Steps that fail move to the findings list. This is where "add an abstraction layer while we're here" gets caught, and a model asked to critique a plan it did not write catches it reliably.
+
+22
+Execution
+Observe → Interpret → Plan → Execute → Verify → Explain is the right decomposition, and the brief is right that it is fundamental. Two refinements:
+
+The phases are permission states, not prompt sections. Cline's Plan/Act works because plan mode cannot write — the tool set differs. Phases here likewise map to capability sets: Observe has read + search; Plan adds baseline capture; Execute adds write, restricted to the budget; Verify has execute-tests but no write. A phase boundary that exists only as a heading in the system prompt will be crossed.
+
+Verify must not have write access. This falls directly out of Building to the Test. If the verifying process can edit code or tests, it will eventually make the check pass rather than make the behavior correct — not from malice but because that is the shortest path to the objective it was given. Structurally separate: the baseline is captured before execution, stored outside the writable tree, and the verification runner is a distinct process with a read-only mount of the test corpus.
+
+Execution loop
+1 · Checkpoint
+Git ref before any edit. Free rollback.
+2 · Baseline
+Capture KEEP surface. Written outside writable tree. Executor cannot touch it.
+3 · Edit
+Inside file/symbol budget. Out-of-bounds write refused at tool layer.
+4 · Build
+Compile/typecheck. Failure loops to 3 with the error, bounded attempts.
+5 · Differential
+Re-run baseline. Compare. No write capability.
+6 · Report
+Verified / changed / unchecked, with evidence per claim.
+Blue = no write access, by construction. Amber = the only phase that can modify the repository.
+
+Bounded retries with a mandatory escape: after N failed build/fix cycles, stop and report the impasse with the actual error rather than continuing to edit. The seed repo's Rule 3 escape hatch — "if the last three turns have been 'still broken', stop iterating and name the assumption that might be wrong" — is a good heuristic and should be a hard limit, not a suggestion. Unbounded self-correction is how a 40-line task becomes a 600-line diff.
+
+23
+Verification
+The core of the product. The design requirement is not "run more checks" — it is to never again conflate "I edited a file" with "I confirmed a behavior," and to make the difference visible in the type system, not the prose.
+
+Evidence classes
+Every claim in a Change Report carries exactly one class. This is the vocabulary the whole product rests on:
+
+Class	Means	Produced by
+Measured	Observed differentially, pre and post, same harness	Characterization tests, traces, output hashes, perf samples
+Proven	Structurally guaranteed, no execution needed	Type check, signature diff, lockfile diff, exhaustiveness
+Asserted	Believed on the model's reading of the code	Model reasoning. Always labeled as such.
+Unchecked	No check exists or none could run	Named explicitly, with the reason
+The Unchecked bucket is the differentiator and must never be empty when it should not be. A report that claims full verification of a UI change on a platform with no UI test harness is lying, and one instance of that destroys the trust the whole product trades on. The system should be conservative to the point of appearing pessimistic: anything not differentially observed is Asserted at best.
+
+The verification ladder
+Ordered by cost and by strength, applied as far as the repository and time budget permit:
+
+Structural — compiles, typechecks, lints, signatures unchanged, lockfile unchanged. Seconds. Should always run.
+Existing tests — the repo's own suite, scoped to blast radius first, then full. Real but incomplete, and its coverage of the KEEP surface is usually unknown.
+Characterization baseline — the key addition. Auto-generate tests that pin current behavior over the KEEP surface before the change, without needing anyone to specify what correct is. Re-run after. This is the only mechanism that verifies "nothing else moved" for code nobody wrote tests for, which is most code.
+Differential execution — same inputs through old and new code paths, compare outputs. Strongest available evidence for pure-ish functions and pipelines.
+Instrumented measurement — latency traces, memory, render timing. Required for any performance claim, with variance reported, never a single sample.
+Visual / interaction — screenshot and interaction-trace diffs. Expensive and flaky; reserve for explicit UI KEEP clauses.
+Characterization generation is the hard technical problem
+This is where the engineering risk concentrates, and it deserves stating plainly rather than hand-waving. Generating tests that pin current behavior is easy to do badly: tests that are trivially true verify nothing; tests over non-deterministic surfaces (time, network, randomness, ordering) are flaky and destroy trust faster than no tests; and tests that are too tight fail on legitimate intended change and train users to ignore them. Mitigations: prefer pure boundaries identified structurally; require a generated test to demonstrably fail under a mutation of the code it covers before it is admitted to the baseline (a mutation-testing gate on our own oracle); quarantine any test that is non-deterministic across two pre-change runs. A characterization suite that has not been shown to detect change is decoration.
+
+The honest statement of a limit
+The brief's flagship example — "the preview feels laggy, make it feel instant" — is the case where this thesis is weakest, and that should not be glossed over. "Feels instant" is perceptual. What is mechanically verifiable is input-to-paint latency, which is a proxy: a p95 of 22ms does not prove the interaction feels good, and a user can reject a change that passes every check. The resolution is not to claim more than is true. It is to verify the proxy, verify that nothing else moved, and hand the human a fast path to judge the feel — because judging feel takes them four seconds and is the one thing they are better at than the machine. The system's job is to make everything except the taste judgment free.
+
+24
+Project Constitution & memory
+Start with the correction: this concept exists, under this name. GitHub Spec Kit ships constitution.md and a /speckit-constitution command; Kiro ships steering files (product.md, tech.md, structure.md); AGENTS.md is a Linux Foundation format read by 30+ tools across 60k+ repositories. Code Director should adopt AGENTS.md as the substrate rather than inventing a ninth competing file. Portability is worth more than ownership here, and a proprietary format is a migration tax users notice immediately.
+
+The differentiation is again enforcement, and one structural idea: split memory by whether it is verifiable.
+
+Store	Contains	Written by	Enforced?
+Constitution versioned, in-repo	Durable rules: use SwiftUI; no third-party deps without approval; preserve navigation; prefer simple over abstract	Human only. System may propose a diff; never self-writes.	Yes — compiled into DENY defaults and plan critique
+Behavioral corpus	Characterization baselines, traces, fixtures from past Locks	System, mechanically	Yes — it is the enforcement
+Decision log	Rejected approaches with reasons; past Locks; what broke last time	System, append-only	Advisory — surfaced as context, never binding
+Preferences	Disclosure depth, question tolerance, verbosity	System, observed	No — presentation only
+The brief's worry about memory silently accumulating wrong beliefs is the correct worry, and the split answers it: only the human writes the binding store. The system may say "I have seen this pattern three times — add to the Constitution?" and produce a one-line diff, but it cannot promote an observation into a rule. Everything the system writes autonomously is either mechanical evidence (which is self-correcting — re-run it) or advisory (which cannot bind behavior). There is no path by which an inferred assumption becomes an enforced constraint without a human commit.
+
+Memory that cannot be inspected cannot be corrected. Everything durable is a file in the repository, in a readable format, in version control, with the ordinary review workflow around it. If the user opens a PR and sees their Constitution changed, the system has failed.
+
+25
+Human approval model
+Approval fatigue is the failure mode, not under-approval. A tool that asks for confirmation on everything is a tool with a confirmation reflex, and users click through reflexes. Gate on reversibility and blast radius, not on action type:
+
+Situation	Gate
+Read, search, analyze, measure	None
+Edit inside budget, inside a checkpoint	None — the checkpoint is the safety
+Plan with non-trivial blast radius	Approve the Lock once, up front
+Edit outside the declared budget	Block — explicit expansion
+KEEP clause would be violated	Halt — human relaxes or abandons
+Irreversible or external: migration, force push, deploy, data deletion, network write	Confirm with the specific consequence named
+Change budget exceeded by a wide margin	Checkpoint — "this is much bigger than planned, look?"
+Approve intent once rather than approving steps many times: one meaningful decision at the Lock beats twelve reflexive ones during execution. And every block must have a visible, logged override — a boundary with no override is a boundary users route around by abandoning the tool. The override is a feature; the log is the point.
+
+Rollback is the safety net that makes low-friction approval defensible: checkpoint before every execution, one command to restore, no understanding required. Aider's commit-per-change discipline is the proven model and costs nothing to adopt.
+
+26
+Failure-mode analysis
+Failure	Response
+"Make it better"	Refuse to invent criteria. Inventory what exists, ask the human to mark what is load-bearing, convert to a KEEP set (journey F). Never silently pick a definition of better.
+Wrong assumption about intended behavior	Assumptions are recorded as an explicit ledger in the Lock (AssumptionMiner's design). The user sees them before execution. Cheap to catch at the Lock; expensive to catch in a diff.
+Huge repository	Structural graph is incremental and merkle-invalidated. Anchor-first retrieval never scans globally. Baseline capture is scoped to the KEEP surface, not the repo. Degrades to slower, not to wrong.
+Unknown framework	Say so. Read the source of the dependency if vendored; fall back to structural-only verification and mark behavioral claims Unchecked. Lower confidence, not silence.
+Request conflicts with the Constitution	Surface both sides, do not choose. "You asked for X; the Constitution says no new dependencies; X needs one. Add the dependency, implement it by hand (~2h), or change the rule?"
+Hidden dependency	Exactly what blast-radius analysis exists for. Co-change coupling from git catches couplings the call graph misses — the two are complementary and neither is sufficient.
+Hallucinated API or file	Caught structurally and immediately: symbols are resolved against the real graph before the plan is shown. A plan referencing a non-existent symbol never reaches the human.
+Regression	The central case. Characterization baseline catches it differentially; if a KEEP clause fails, execution halts and the checkpoint restores. This is the one failure the architecture is actually built around.
+Overengineering	Plan critique pass scores each step for necessity against the goal; unnecessary steps become findings. Constitution can carry an explicit simplicity rule.
+Underengineering / fragile patch	Harder, and honestly only partly solvable. Signals: fix touches a symptom far from the blast-radius centroid; no test covers the path; the same area was patched recently (git). Flag as "this is a local patch; the cause may be upstream" rather than blocking.
+Context pollution	Anchored retrieval with an explicit budget; DENY-listed files excluded entirely; context selection shown and correctable.
+User doesn't understand the explanation	Progressive disclosure with "explain this" on any term, and a rephrase that does not simply repeat with shorter words. Track which terms get expanded — that is a real signal about the user, and the only preference worth learning automatically.
+Contradictory instructions	Later instruction wins for the goal; KEEP clauses are never silently dropped. "That conflicts with KEEP: export unchanged, which you set in turn 2. Drop that constraint?" Contradiction is surfaced, never resolved by recency alone.
+Model uncertainty	Represented as evidence class (§23), not as hedging language. "Asserted, not measured" is precise; "might possibly" is noise — and the seed repo's data shows hedge-deletion rules can push a model into unwarranted certainty, so this must be a field, not a tone.
+Agent games its own oracle	Baseline captured pre-execution, stored outside the writable tree, verification process has no write capability. Any modification to a baseline file during execution invalidates the run.
+27
+Security
+Prompt injection via repository content is the primary threat. Source files, dependency READMEs, issue text, and test fixtures are untrusted input. Content read from the repo can never alter the Lock, expand the file budget, or relax a DENY clause — the boundary is enforced in the tool layer, outside the model's reach, which is precisely why enforcement must not be prompt-based.
+Execution sandboxing. Builds and tests run arbitrary repository code. Container or VM isolation, no ambient credentials, explicit network policy. OpenHands' runtime is the reference design; do not rebuild it.
+Secret hygiene. Scan context before it leaves the machine; never include .env, key material, or credential-shaped strings. The seed repo's CONTRIBUTING.md prohibitions here are a good baseline policy and worth copying nearly verbatim.
+Supply chain. New dependencies are a DENY default, not a judgment call — an agent that can add packages is an agent that can add a compromised package.
+Blast radius of the tool itself. No writes outside the repository without explicit, path-specific, documented opt-in. No shell profile edits, no global git config, no background processes.
+28
+Privacy
+Deferring embeddings (§20) is partly a privacy decision: no vector index means no code corpus on a third-party service, which removes the single hardest objection in enterprise procurement. The structural graph, baselines, and Locks are all local files.
+
+What necessarily leaves the machine is the selected context sent to an inference provider — which is exactly why selection is the privacy story: "we send ranked excerpts of six files and show you which" is a defensible sentence; "we send your codebase" is not. Provide a redaction pass, per-repository provider pinning, an explicit local-only mode (§31), and a log of what was transmitted per request. Retention and training policy must be stated per provider, not per product.
+
+29
+Information efficiency
+The brief's framing is correct and worth sharpening into something implementable. Optimize:
+
+Objective
+decisions the human can make confidently ÷ attention spent
+
+By that measure a Change Report with 40 verified properties is more efficient than a two-sentence summary, despite being longer, because it discharges an obligation the summary leaves outstanding. Conversely, an explanation of debouncing offered to a user who did not ask is pure cost. The test is not length — it is whether the text removes a question the human would otherwise have to answer themselves.
+
+Three practical consequences: evidence scales with consequence (a one-line CSS change gets one line; a migration gets the full ladder); explanation is pull, not push (offered, never inserted); and everything the user might need must be one interaction away, never regenerated — regeneration is where cost and inconsistency both come from.
+
+Token efficiency on the model side is a separate discipline with a shared mechanism: tight context (§19) reduces spend and improves accuracy simultaneously, which is the rare case where the cheap thing and the good thing coincide.
+
+30
+Model abstraction
+Model-agnostic by construction, because the substrate will change several times over the product's life and because different jobs have genuinely different cost/quality curves. But resist multi-agent architecture for its own sake — it multiplies failure modes, latency, and debugging difficulty, and most "specialist agent" designs are one model with different prompts wearing hats.
+
+Specialization is justified only where it is structurally required, and there are exactly three places:
+
+Role	Why separate	Tier
+Executor	Does the work	Strongest available
+Plan critic	Must not have written the plan it critiques — self-review is weak review	Mid, different prompt; different model if available
+Verifier	Must not have write access (Building to the Test) — this is a security boundary, not an optimization	Separate process, read-only
+Intent interpretation, retrieval ranking, explanation	No structural reason to separate	Same model, different prompts. Ranking is not a model job at all — it is PageRank.
+Cheap local models earn their place on mechanical jobs: jargon glossing, summarizing a diff, classifying whether a question is needed. Cline's per-mode model selection is the right precedent — strong model to plan, fast model to execute — and should be user-configurable rather than decided by the vendor.
+
+31
+Local vs. cloud
+Default: everything except inference runs locally. Parsing, graph construction, ranking, baseline capture, test execution, diffing, and reporting are local computation with no service dependency. This is a correctness argument before a privacy one — a repository model that depends on a remote service is stale during outages and wrong in ways the user cannot see.
+
+Cloud earns its place for: frontier inference (with local model support as a real, tested path — not a checkbox); optional team sync of Constitutions and Change Reports; and long-running batch verification. Nothing in the core loop may require the network beyond the model call, and a local-only mode with a local model must genuinely work, if worse.
+
+32
+CLI
+The CLI is the product; everything else is a view onto it. It must be scriptable and CI-usable, because the Change Report's second-best customer is a pull request.
+
+Command	Does
+cd init	Build structural index; draft a Constitution from observed conventions for human review
+cd intent "<what you want>"	Interactive Lock authoring — proposes GOAL, KEEP, DENY from blast-radius analysis
+cd plan	Produce plan with budget and blast radius; no writes
+cd run	Checkpoint, baseline, execute, verify
+cd report	Change Report; --format=md for PR comments
+cd verify	Re-run verification against an existing Lock — usable standalone in CI
+cd undo	Restore checkpoint
+cd why <symbol>	Blast radius and coupling for a symbol — useful with no agent involved
+cd why and cd verify should be genuinely useful without any AI in the loop. A tool that earns its keep before the agent runs is a tool people keep installed.
+
+33
+IDE integration
+An extension, not a fork. Forking an editor is a multi-year commitment that buys control over a surface that is not the differentiator. Cursor's fork is justified by Tab completion latency; nothing here needs that.
+
+Surfaces worth building: the Lock panel (goal, KEEP with live check status, budget) pinned while a task runs; inline scope indicators showing which files are in budget; the Change Report as a first-class view alongside the diff, not inside a chat transcript; and gutter markers distinguishing verified-unchanged regions from changed ones. The last is the highest-value piece of UI in the product: showing a reviewer which parts of a file they do not need to read.
+
+34
+GUI
+Defer. A standalone GUI is justified only by one thing the CLI and IDE cannot do well: the Change Report as a shareable artifact — a URL a teammate, reviewer, or non-technical stakeholder can open to see what changed, what was verified, and what was not. Amp's shareable threads demonstrate the pull. That is a Phase 2 web surface, not a desktop application, and it is the natural place for team features to attach.
+
+Interface discipline throughout, per the brief: calm, dense, professional. Monospace for artifacts, real typography for prose, no gradients, no AI theatrics, no dashboards nobody asked for. The visual model is a build log and a camera report, not a chat product.
+
+35
+API
+Local daemon exposing the core loop over JSON-RPC (the LSP pattern), so CLI, IDE, and web are peers rather than layers. Endpoints mirror §32. Two integrations matter early: a GitHub Action that posts the Change Report on a PR — the highest-leverage distribution surface, since it puts the artifact where review already happens — and MCP server exposure of blast_radius, capture_baseline, and verify, so other agents can use the verification layer. Being the verification substrate other tools call is a better position than being a competing agent.
+
+36
+Data model
+Entity	Key fields	Storage
+Utterance	text (immutable), timestamp, surface	.codedirector/locks/
+IntentLock	id, utterance_ref, goal, interpretation, keep[], deny[], budget{files,symbols,magnitude}, acceptance[], assumptions[], status	Versioned, in-repo, human-readable
+KeepClause	description, kind, compiled_check, baseline_ref, result, evidence_class	Child of Lock
+Baseline	lock_ref, captured_at, commit, artifacts[] (tests, hashes, traces), determinism_verified	Outside writable tree, content-addressed
+Plan	lock_ref, steps[] {mechanism, blast_radius, reversibility}, budget, critique_result	Disposable
+Execution	plan_ref, checkpoint_ref, edits[], budget_violations[], retries	Log
+ChangeReport	claims[] {statement, evidence_class, artifact_ref}, unchecked[], findings[], provenance	Exportable md / JSON
+Constitution	rules[] {text, compiled_constraint?, source}, version	AGENTS.md + sidecar
+RepoGraph	symbols, edges, content hashes	Local cache, merkle-invalidated
+Two invariants hold the design together. Baselines are content-addressed and stored outside the writable tree, so an execution cannot alter its own oracle. And every claim references an artifact — a claim without an artifact reference is automatically Asserted, enforced by the schema rather than by discipline. If it is not representable in the type, it cannot be overstated in the prose.
+
+Part V
+Build
+37
+Suggested technology stack
+Layer	Choice	Reason
+Core daemon	Rust	Parsing, graph, hashing, diffing on every keystroke-adjacent operation. Single static binary matters for a dev tool. Excellent tree-sitter bindings.
+Parsing	tree-sitter	Incremental, error-tolerant, one grammar per language, already ubiquitous.
+Structural matching	ast-grep	Pattern-based structural search for symbol-level scope enforcement.
+Graph + ranking	In-process sparse matrix, personalized PageRank	No graph database. Aider proves this scale is fine.
+Storage	SQLite + content-addressed blobs + plain files for artifacts	Locks and Constitutions must be human-readable and diffable in git.
+Agent substrate	OpenHands Agent SDK or Claude Agent SDK	Do not build an agent loop. That race is lost and not the differentiator.
+Sandbox	Container runtime via the chosen SDK	Do not reinvent isolation.
+IDE	TypeScript extension, JSON-RPC to the daemon	Extension, not a fork (§33).
+Web report	Static rendering of the Change Report	Phase 2. No framework needed.
+The stack decision with the most consequence is using someone else's agent loop. Building tool-calling, retries, context compaction, and sandboxing consumes a year and produces a commodity. The contract layer around it is the whole thesis.
+
+38
+Recommended dependencies
+tree-sitter + grammars — parsing
+ast-grep — structural pattern matching and scope enforcement
+petgraph / sparse linear algebra — symbol graph and PageRank
+git2 / gix — checkpoints, history mining, co-change coupling
+xxhash / blake3 — merkle content addressing
+rusqlite — index storage
+Language-native characterization harnesses — insta (Rust), jest snapshots (JS/TS), approvaltests, XCTest (Swift)
+A mutation-testing tool per ecosystem — to validate our own generated baselines (§23), not the user's code
+OpenHands Agent SDK or Claude Agent SDK — execution substrate
+MCP SDK — expose verification to other agents (§35)
+39
+GitHub projects to study
+See §7 for the annotated list. In priority order for a building team: aider (repo map — read repomap.py line by line), OpenHands (runtime and SDK — decide build-vs-adopt in week one), cline (mode boundaries as permission sets), spec-kit (artifact pipeline, and to understand exactly how much of the intent-capture surface is already taken), SWE-agent (ACI design discipline), and seed-repo (eval harness and adapter shape).
+
+40
+MVP definition
+Ruthlessly narrow. One language ecosystem. One verification path. One surface. Pick the ecosystem by characterization tractability — TypeScript or Python first, because pure-function boundaries are easy to identify and snapshot tooling is mature. Not Swift/SwiftUI, despite the brief's examples, because UI behavior is the hardest verification target and would make the MVP prove the thesis on its worst case.
+
+In scope
+Structural index — tree-sitter graph, incremental, merkle-invalidated.
+Blast radius — cd why <symbol>, useful with no AI involved.
+Intent Lock authoring — the system proposes GOAL/KEEP/DENY from blast radius; human edits. This is the moment the product must feel different.
+Baseline capture — characterization tests over the KEEP surface, with a mutation gate proving each generated test detects change, and quarantine for non-deterministic ones.
+Scope enforcement — file-level budget, blocking at the tool layer, logged override.
+Differential verification — re-run baseline, structural checks, lockfile diff.
+Change Report — four evidence classes, CLI and markdown, PR-postable.
+Checkpoint / undo.
+Eval harness from commit one, modeled on the seed repo's: paired conditions, blind grading, a release gate, and published negative results.
+The one demo that must work
+A user asks for a behavior change in a repository with mediocre test coverage. The system captures a baseline over the affected surface, makes the change, and reports: "Changed 3 files. 34 behaviors verified unchanged. 2 could not be checked — here they are and here is why." Then a second run where the agent tries to touch an out-of-budget file and is blocked. If those two moments do not land, there is no product.
+
+41
+What NOT to build in the MVP
+No custom model. Not now, not in phase 3.
+No IDE fork.
+No GUI.
+No embeddings or vector database. Structural retrieval first; add semantic search only when a measured retrieval failure demands it (§20).
+No multi-agent orchestration beyond the three structurally-required roles in §30.
+No memory that learns silently. Constitution is human-written from day one.
+No multi-language support. Each ecosystem is a real characterization-tooling project, not a grammar swap.
+No chat interface as the primary surface — though see §46 on why refusing chat entirely is also a mistake.
+No own agent loop. Adopt an SDK.
+No visual regression testing. Flaky, expensive, and it will consume the whole team.
+42
+Phase 2
+Second and third language ecosystems, chosen by customer pull.
+Symbol-level scope budgets (MVP is file-level).
+Performance verification: instrumented traces with variance reporting.
+GitHub Action posting Change Reports on PRs — the distribution unlock.
+Shareable Change Report URLs; the beginning of team surface.
+IDE extension with the Lock panel and verified/unverified gutter markers.
+MCP server exposing blast_radius, capture_baseline, verify to other agents.
+Semantic retrieval — only if measured structural failures justify it.
+43
+Phase 3
+Cross-task baseline corpus — the behavioral net accumulated over many Locks becomes a standing regression suite for the repository. This is when the data asset starts compounding.
+Constitution mining with human-approved promotion.
+Team Constitutions and shared verification standards.
+Compliance-grade Change Reports: signed, auditable, "what changed and what was proven" for regulated environments.
+Long-horizon tasks with intermediate verification gates rather than one final check.
+44
+Long-term architecture
+The end state is that Code Director is the verification substrate the industry's agents call into, rather than another agent competing for the same slot. Any agent — Claude Code, Cursor, an internal one — can request a Lock, receive enforced boundaries, and return a Change Report. The repository accumulates a behavioral net that no single vendor owns and that makes every agent operating in it safer. Positioning as infrastructure beneath the agent layer survives the commoditization of the agent layer, which is the only bet in this space that does not require winning a model race.
+
+Part VI
+Honest assessment
+45
+Technical risks
+Risk	Severity	Reality
+Characterization test generation is harder than it looks	Critical	The load-bearing component. Tests that are trivially true verify nothing; flaky ones destroy trust faster than no tests. Mutation-gating helps and costs real compute. If this does not work, the product does not exist. Prototype it in week one, before anything else.
+Behavioral equivalence is undecidable	Critical	Every "verified unchanged" is a claim over a sampled surface, not a proof. The honest framing — evidence classes, named limits — is the only defense, and it is a weaker claim than the marketing would like.
+UI and "feel" resist verification	High	The brief's motivating examples are the hardest cases. Latency is measurable; "feels right" is not. Be explicit rather than degrade to Asserted-in-a-confident-tone.
+Per-ecosystem cost	High	Each language is a distinct characterization-harness project. Breadth is expensive and it is how this team dies of thin coverage.
+Baseline capture latency	High	Capturing before every task adds seconds to minutes. If the loop feels slow, users bypass it — and a bypassed safety layer is worse than none, because it is still believed.
+Non-determinism	Med	Time, network, randomness, ordering, concurrency. Quarantine handles some; concurrency-dependent behavior is largely out of reach.
+Model talks itself past constraints	Med	Mitigated by enforcing outside the model. Requires constant vigilance that no constraint is prompt-only.
+46
+Product risks
+Friction versus the competition's magic. Every competitor says "describe it and I'll do it." This says "let's agree what must not change, and I'll prove it didn't." That is a harder sell in a demo and an easier sell after someone's second production regression. It will lose head-to-head comparisons run by people who have not yet been burned.
+"Unchecked" reads as weakness. Honesty is the strategy and it will cost deals against a competitor claiming confident success. This is a real, recurring, unavoidable cost.
+Users will route around the boundary. Blocked edits are annoying. The override must be one key and logged — and some users will override everything, which is fine so long as the log makes it visible.
+Refusing chat is a mistake. The brief's §27 instinct is right about what the product is and wrong about what to ship. Users will want to type a question. Chat should be one surface onto the Lock, not the product's definition — but removing it entirely is purity that loses users.
+Setup cost. Anything requiring configuration before value dies. cd why must work in minute one with no Constitution and no Lock.
+Wrong persona first. The brief's sympathies point at vibe coders and learners; they have the least money, the least tolerance for process, and the least ability to appreciate a verification report. The paying customer is the team that has already been burned by a silent regression. Build for them; the others benefit downstream.
+47
+Competitive risks
+Anthropic, OpenAI, Cursor, and GitHub can build this. Not a hypothetical — plan mode, hooks, and PreToolUse interception already exist; the missing pieces are product decisions, not research. Assume an 18-month window at best.
+The UX layer is copyable in a week. Jargon translation and response shaping are a prompt file. The seed repository is the proof, and it is MIT licensed.
+Spec-driven development may absorb the category. If Spec Kit or Kiro adds enforcement and post-hoc compliance checking to constitutions they already ship, the differentiation evaporates. Kiro already uses SMT solving on requirements; extending to runtime enforcement is not a large leap.
+Model improvement erodes part of the premise. If agents become reliable enough that regressions are rare, verification infrastructure matters less. Counter-argument: reliability increases throughput, which increases total change, which increases aggregate review burden — but this is a genuine bet, not a certainty.
+Being a layer is structurally fragile. Whoever owns the agent can absorb the layer. Mitigated only by becoming the substrate agents call (§44) before they build their own.
+48
+Defensibility
+Honestly ranked, strongest first:
+
+The accumulated behavioral corpus Real — after months of use, a repository holds hundreds of human-approved characterization baselines. That is switching cost that lives in the customer's repo, grows with use, and is not reproducible by a competitor with a better model. This is the only durable asset in the design.
+Characterization generation quality Real, temporary — genuinely hard engineering, per ecosystem, with a mutation-validation loop. Buys 12–24 months, not forever.
+Being the verification substrate other agents call Potential — strong if achieved, and the reason to ship MCP early. Requires distribution the company may not get.
+The Change Report as an organizational artifact Potential — if teams require it on PRs, it becomes process, and process is sticky. Depends entirely on the GitHub Action landing.
+Intent Lock as a format Weak — formats do not defend. Spec Kit's already exists.
+Jargon translation and response design None — 7KB of text.
+The metaphor and the name None — good positioning, zero moat.
+The uncomfortable summary
+Six of the seven things that make Code Director distinctive as a concept are undefendable. The one defensible asset — the behavioral corpus — is a byproduct of the hardest unsolved engineering problem in the design (§45, characterization generation). The moat and the technical risk are the same component. That is not a reason not to build it; it is the reason to point the entire team at that component in week one and to treat everything else as packaging.
+
+49
+Brutally honest feasibility
+Is it technically differentiated?
+Partly, and narrowly. Intent capture: no — Kiro and Spec Kit are ahead, and "Project Constitution" is already a shipped feature name. Plan-before-act: no — industry standard. Repository understanding: no — solved twice publicly. Jargon translation and response shaping: no — a prompt file with 39.6k stars proving it. Pre-captured behavioral baselines with enforced negative specification and honest evidence classes: yes. That is one component, and it is real.
+
+Is it just a UX layer over existing agents?
+As the brief describes it — mostly yes. Sections on jargon, response design, progressive disclosure, and the metaphor describe a very good skin on Claude Code. As reframed here, no — differential verification against a pre-captured baseline is infrastructure, not presentation. The distinction between these two products is the entire question, and it is decided by whether the team builds characterization generation or builds a beautiful chat surface. Both feel like progress for the first two months. Only one is a company.
+
+Can large AI companies copy it?
+Yes, quickly, and they have every primitive already. The defense is not technical — it is that verification infrastructure is unglamorous, cuts against demo incentives, and requires per-ecosystem grinding that a platform company is structurally reluctant to do. That is a real but modest advantage. Do not plan around a technical moat that does not exist.
+
+What is deceptively difficult?
+Characterization test generation, by a wide margin. It sounds like tooling and is closer to research: deciding what to pin, at what granularity, with what determinism guarantees, cheaply enough to run before every task. Second: making the whole loop fast enough that people do not bypass it. Third — and underrated — calibration. The product's core claim is its honesty, so when it says "verified unchanged" and something breaks anyway, the damage is not proportional to the bug, it is proportional to the claim. One high-profile false assurance is worse than fifty missed regressions.
+
+What will users dislike?
+Being asked to approve a Lock. Being blocked. Waiting for baseline capture. Reading "unchecked." Every one of these is the product working as designed, which is exactly why they are dangerous.
+
+What assumptions in the brief are wrong?
+That the input gap dominates. It did in 2023. The verification gap dominates now.
+That "Project Constitution" is a new idea. It ships in Spec Kit under that name.
+That avoiding chat is a strength. Correct about the product's definition; wrong as a shipping constraint.
+That brevity reduces cognitive load. Evidence reduces it. Brevity without evidence relocates it onto the reader.
+That response formatting is a modest, safe layer. The seed repo's own evals show format rules inducing unevidenced claims. Formatting is an epistemic intervention.
+What already solves 70% of it?
+Claude Code with plan mode, a well-written AGENTS.md, a PreToolUse hook enforcing a planned file list, and a disciplined user, gets most of the interaction model described in the brief — today, for free. Anyone evaluating this project should be made to try that first. The 30% that remains is the pre-captured baseline, the differential check, and the honest report. That 30% is the product, and it is worth building precisely because the other 70% is already commoditized and therefore not worth building.
+
+Verdict
+Build it, narrowly. The reframed thesis is sound, the timing is right (trust declining, verification load now a named and measured phenomenon), and the gap in the landscape is real and specific. But it is a verification infrastructure company wearing an interaction-design brief's clothing. The concept as written in the brief — a calmer, better-mannered coding agent — is not viable; it is a skin, and a skin on a market where the platform owners ship the substrate.
+
+The single decision that determines the outcome: does the team spend month one on characterization test generation, or on the interface? Only one of those answers produces something a competitor cannot ship in a sprint.
+
+50
+The strongest version
+Strip the brief to what survives contact with the landscape and the evidence:
+
+What it is
+A verification layer that makes agent changes cheap to trust
+Not
+Another coding agent
+Core artifact
+Intent Lock — compiled, enforced, checked
+Core output
+Change Report with typed evidence
+Core asset
+Accumulated behavioral baselines
+First customer
+Teams already burned by silent regression
+It runs under whatever agent the user already has. It asks one question when the candidate implementations actually diverge, and otherwise proceeds and says what it assumed. It captures what must not move before it moves anything, in a place it cannot reach. It refuses to edit outside the boundary it declared. And it finishes every task with a report that distinguishes what it measured, what it proved, what it merely believes, and what nobody checked.
+
+The interaction design the brief describes — plain language, no jargon leakage, progressive disclosure, no preamble, an honest tone about errors — is all retained, all good, and all cheap. It is the manners. The verification layer is the work.
+
+The philosophy, stated without slogan
+The human states what must be true. The system finds out whether it is. Neither pretends to be the other.
+
+The brief's own candidate — "You direct. It translates. The code performs." — is elegant and describes a product that already exists in five forms. The version worth building has a less charming and more defensible sentence behind it:
+
+The one line
+Everyone else tells you what they changed. Code Director tells you what they didn't — and proves it.
+
+Whether that is a company depends almost entirely on whether characterization baselines can be generated cheaply, reliably, and across ecosystems. That is a tractable engineering question with a real chance of failing. It should be answered in the first month, before a line of interface is written, because every other question in this document is downstream of it.
+
+—
+Sources
+Seed repository — the seed repository, cloned and inspected at commit 6f1f982; tests and eval validation run locally.
+Verification load — When Help Hurts: Verification Load and Fatigue with AI Coding Assistants (CHI 2026) · Sonar verification gap · METR productivity experiment · Stack Overflow trust gap · Faros review-burden data
+Evaluation validity — Building to the Test · Coding Benchmarks Are Misaligned with Agentic Software Engineering · Inside the Scaffold · AI coding benchmarks explained
+Ambiguity & intent — ClarifyGPT · ClarifyCodeBench · AssumptionMiner · Requirement ambiguity in function-level code generation
+HCI foundations — Horvitz, Principles of Mixed-Initiative User Interfaces (CHI '99) · Sarkar et al., What is it like to program with AI? · Progressive disclosure in XAI transparency
+Systems — Aider repo map · Cursor codebase indexing · Cline Plan & Act · SWE-agent (ACI) · OpenHands Agent SDK · Sourcegraph on agentic coding at scale
+Spec-driven development — GitHub Spec Kit · AWS Kiro specs & EARS · AGENTS.md format
+Scope control in practice — Keeping agent changes small · Scope-limiting rules and the 35% → 4% result
+Figures quoted from secondary reporting (METR, Sonar, Faros, SWE-bench audits, the 35%→4% scope result) are as published by those sources and were not independently reproduced. Repository facts in §5 were verified directly against the cloned source.
