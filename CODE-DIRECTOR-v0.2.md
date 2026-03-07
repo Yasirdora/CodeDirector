@@ -454,3 +454,270 @@ The Unchecked bucket must never be empty when it should not be. A report claimin
 
 ---
 
+# Part III — Architecture
+
+## 15. Context selection & repository intelligence
+
+Merged: doc A §11's build/defer analysis + doc B §§19–20's safety framing and layer split.
+
+**Context selection is a safety mechanism, not just a cost/accuracy concern (doc B, adopted as the section's lead).** Every file in context is a file the agent might edit. Tight context is the first line of scope control, before any enforcement fires. Irrelevant context does not merely waste tokens — it actively degrades retrieval (context rot: all 18 frontier models tested degrade as input grows, with coherent-but-irrelevant context hurting *more* than shuffled) and invites the model to "improve" code it should never have seen. [Chroma context-rot study](https://upsolve.ai/blog/context-rot) Anthropic's framing is the policy: the smallest set of high-signal tokens. "The model saw everything" is not a defensible answer to "why did it change that?"
+
+**The four-stage funnel (doc B, adopted):**
+
+1. **Anchor.** Resolve the request to seed symbols — from the editor selection, the failing test, the stack frame, the terminal error, or lexical matches on nouns in the request. Anchors are cheap and high-precision; most requests have one.
+2. **Expand.** Personalized PageRank over a tree-sitter symbol graph, restart vector biased to the anchors (Aider's method, the right default). Pull in definitions, direct callers, and the types crossing the boundary — skeletons first (signatures, docstrings), bodies only for the top-ranked few. [Aider](https://github.com/Aider-AI/aider)
+3. **Constrain.** Intersect with the Constitution's ownership rules and the Lock's DENY list. Files the task is forbidden to touch are excluded from context entirely unless needed read-only for comprehension — in which case they are marked read-only in the tool layer too.
+4. **Budget.** Pack to an explicit token budget, ranked, with the ranking shown to the user on request. If the budget cannot hold the plausible working set, say so and narrow the task rather than silently truncating.
+
+**Two discipline rules that matter more than the algorithm (doc B):** never dump a whole file when a skeleton suffices; and show the context selection — a one-line "read 6 files, ranked by call proximity to `SliderBinding`" is a cheap, powerful trust signal the user can correct in one word.
+
+**Repository intelligence, split by cost and volatility (doc B's layer table, merged with doc A's ecosystem choices):**
+
+| Layer | Content | Strategy | Freshness |
+|---|---|---|---|
+| Structural | Files, symbols, signatures, imports, call edges | tree-sitter (MIT, verified) parse → persisted graph | Incremental, content-hash (merkle) invalidated |
+| Build | Targets, module boundaries, test mapping, entry points | Parse build files; cache | On manifest change |
+| Conventions | Naming, layering, error-handling patterns, test style | Mined + human-confirmed → Constitution | Explicit, versioned, never silent |
+| Behavioral | Characterization baselines, perf traces, output fixtures | Captured per Lock, retained | Per task; accumulates into the corpus (§26) |
+| Historical | Churn, co-change coupling, past regressions, blame density | Derived from git on demand | Recomputed; never stale |
+| Semantic | Embeddings for fuzzy queries | **Phase 2, only if structural fails** | — |
+
+Compiler-grade truth (precise defs/refs/diagnostics) comes from wrapping LSP servers as agent tools per the Serena pattern (rust-analyzer MIT/Apache-2.0, pyright MIT, verified) — do not build code intelligence from scratch. [LSP spec](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/), [Serena pattern](https://github.com/cskwork/serena-mcp-quickstart) grep/BM25 keyword retrieval is the baseline; hybrid retrieval beats any single method, but the MVP starts here. [graph-vs-vector RAG analysis](https://zzet.org/gortex/graph-rag-vs-vector-rag-for-code/)
+
+**Defer-embeddings is a real recommendation, not caution (both docs agree).** Cursor's published pipeline (server-side embedding, Merkle tree of file hashes, content-addressed chunk cache, remote vector store at 1T+-vector scale) answers a scale problem the MVP doesn't have; Cursor claims ~12.5% accuracy gain over grep alone — real but modest. Embeddings capture similarity, not relationships; they go stale on edit. Add local embeddings (LanceDB, Apache-2.0, verified) only when evals show retrieval misses. Deferring is also a privacy decision (§21): no vector index means no code corpus on a third-party service. [Cursor indexing](https://zzet.org/gortex/how-cursor-indexes-codebase-embeddings-vs-graph/), [LanceDB](https://github.com/lancedb/lancedb)
+
+**Blast radius deserves first-class treatment (doc B, adopted):** given a proposed change to symbol S, what could observably move? Transitive reverse call edges, plus historical co-change coupling from git, plus which tests cover it. This is what a senior engineer knows and a newcomer does not, and it is computable. It is also the input that makes the KEEP set **proposable by the system** rather than composed by the user — which is what makes the Lock usable by someone who could not have written it.
+
+**What remains unsolved (doc A, retained):** faithful *semantic* understanding of why code is the way it is — bug history, ABI promises, invariants — is research-open; maintainers report AI PRs systematically miss this implicit context. [maintainer analysis](https://dailycodesolutions.com/blog/for-open-source-programs-ai-coding-tools-are-a-mixed-blessing/) Code Director's answer is not to pretend otherwise: protected scope and human confirmation exist precisely where the system's model of the project is known to be shallow.
+
+---
+
+## 16. Planning & execution
+
+Merged: doc B §§21–22 (phases as permission states; oracle separation; the execution loop) + doc A §12/§16 (wrapped agent loop, git spine, sandboxing tiers).
+
+**Planning.** Plan-before-act is table stakes (Cline, Claude Code, Spec Kit, Kiro). Three things differentiate planning here: (1) **the plan declares its own boundary** — files and symbols it may touch and expected magnitude; this compiles into the execution sandbox, and a plan that does not constrain execution is a paragraph; (2) **mechanisms carry blast radius and reversibility**, not just descriptions — what each step changes, what could observably move, how hard to undo: exactly the information a non-expert needs to approve, and exactly what current plan surfaces omit; (3) **plans are cheap and disposable; Locks are not** — re-planning after failure costs the user nothing because intent lives a layer up (§11). Smallest viable change is enforced by a **plan critic**: a separate critique pass (cheap model, different prompt — a model asked to critique a plan it did not write catches unnecessary steps reliably) asks one question: is any step unnecessary for the stated goal? Steps that fail move to the findings list. This is where "add an abstraction layer while we're here" gets caught.
+
+**Phases are permission states, not prompt sections (doc B, adopted).** Cline's Plan/Act works because plan mode cannot write — the tool set differs. Phases here likewise map to capability sets: Observe has read + search; Plan adds baseline capture; Execute adds write, restricted to the budget; Verify has execute-tests but no write. A phase boundary that exists only as a heading in the system prompt will be crossed.
+
+**Oracle separation (doc B, adopted as a hard architectural invariant).** This falls directly out of Building to the Test: if the verifying process can edit code or tests, it will eventually make the check pass rather than make the behavior correct — not from malice but because that is the shortest path to the objective it was given. [arXiv 2606.28430](https://arxiv.org/abs/2606.28430) Structurally: the baseline is captured before execution, stored outside the writable tree, content-addressed; the verification runner is a distinct process with a read-only mount of the test corpus; any modification to a baseline file during execution invalidates the run.
+
+**The execution loop (doc B §22, adopted):**
+
+```
+1 · Checkpoint — git ref before any edit. Free rollback.
+2 · Baseline   — capture KEEP surface. Outside writable tree. Executor cannot touch it. (no write access)
+3 · Edit       — inside file/symbol budget. Out-of-bounds write refused at tool layer. (the only write phase)
+4 · Build      — compile/typecheck. Failure loops to 3 with the error, bounded attempts.
+5 · Differential — re-run baseline. Compare. (no write access)
+6 · Report     — Measured / Proven / Asserted / Unchecked, with evidence per claim.
+```
+
+Bounded retries with a mandatory escape: after N failed build/fix cycles, stop and report the impasse with the actual error rather than continuing to edit — the debug-spiral circuit breaker as a hard limit (§12).
+
+**Supporting machinery (doc A, retained):**
+
+- **Git-native rollback.** Git is the spine: clean tree or auto-snapshot before agent turns; one commit per accepted change-batch with a structured message (intent, scope, confidence, evidence classes); rollback = revert to checkpoint, conversation-aware like Claude Code's `/rewind`. Documented honestly: rollback cannot undo external side effects (installs, pushes, API calls) — those are approval-gated. Known sharp edges handled: dirty-tree conflicts on interrupted sessions, untracked files, the developer's own uncommitted work mixing with agent work (snapshot captures both). [Claude Code rewind analysis](https://www.mindstudio.ai/blog/claude-code-rewind-command-rollback), [claude-code issue #6001](https://github.com/anthropics/claude-code/issues/6001)
+- **The coding agent is a wrapped commodity.** mini-swe-agent-style minimal loop (~100-line harness, also the harness used in SWE-bench Pro Verified evaluations) or a wrapped OpenHands runtime. Do not build a novel agent framework — that race is lost and it is not the differentiator. [SWE-agent](https://github.com/SWE-agent/SWE-agent), [SWE-bench Pro](https://arxiv.org/html/2609.08149v1)
+- **Sandboxing tiers.** MVP: macOS Seatbelt profile + command approval tiers on desktop (zero-dependency; the same approach Claude Code ships); hardened Docker for headless (default seccomp, cap-drop, no-new-privileges, network off). gVisor/Firecracker only for untrusted multi-tenant workloads. Two gaps persist at every tier: network egress is an exfiltration channel; writable mounts are a code-modification channel. CVE-2025-59532 (Codex sandbox bypass via crafted cwd) stands as the permanent reminder: sandboxes reduce blast radius; they do not eliminate it. [sandboxing tiers](https://www.digitalapplied.com/blog/ai-agent-sandboxing-isolation-patterns-2026), [Seatbelt guide](https://alejandromp.com/development/blog/sandboxing-an-ai-harness-on-macos), [SentinelOne CVE](https://www.sentinelone.com/vulnerability-database/cve-2025-59532/)
+- **Model abstraction.** Per-component model choice (expensive planner, cheap editor — Aider's architect-mode split; Cline's per-mode selection is the right precedent and should be user-configurable). Specialization is justified only where structurally required, and there are exactly three places (doc B): the **executor** (strongest available); the **plan critic** (must not have written the plan it critiques — self-review is weak review); and the **verifier** (must not have write access — a security boundary, not an optimization). Intent interpretation, retrieval ranking, and explanation share one model with different prompts; ranking is not a model job at all — it is PageRank. Resist multi-agent architecture for its own sake: it multiplies failure modes, and most "specialist agent" designs are one model with different prompts wearing hats. [Aider architect mode](https://www.promptlayer.com/glossary/aider-architect-mode/)
+
+---
+
+## 17. Verification
+
+The core of the product (doc B §23, adopted; doc A's test-in-the-loop machinery folded in). The design requirement is not "run more checks" — it is to never again conflate "I edited a file" with "I confirmed a behavior," and to make the difference visible in the type system, not the prose.
+
+**Evidence classes** (defined in §14): Measured / Proven / Asserted / Unchecked. The Unchecked bucket is the differentiator and the product's signature; conservatism is policy — anything not differentially observed is Asserted at best.
+
+**The verification ladder** — ordered by cost and by strength, applied as far as the repository and time budget permit:
+
+1. **Structural** — compiles, typechecks, lints, signatures unchanged, lockfile unchanged. Seconds. Always runs. *(In the MVP this plus (2) is most of the evidence base.)*
+2. **Existing tests** — the repo's own suite, scoped to blast radius first, then full. Real but incomplete, and its coverage of the KEEP surface is usually unknown. Doc A's adapter: language-detecting test-runner integration (detect project type → run → parse JUnit/JSON → classify fail-to-pass vs. pass-to-pass), exposed as an MCP tool; green tests raise effective autonomy, red tests trigger bounded repair then rollback — never silent scope expansion. [APR survey](https://arxiv.org/html/2506.23749v1) Watch for flaky tests (quarantine + retry budgets); use the symbol graph for test selection on long suites.
+3. **Characterization baseline** — the key addition and the hard problem. Auto-generate tests that pin current behavior over the KEEP surface *before* the change, without needing anyone to specify what correct is; re-run after. This is the only mechanism that verifies "nothing else moved" for code nobody wrote tests for — which is most code. Snapshot/approval-testing ecosystems are the mature substrate (approvaltests, jest snapshots, insta). **Phase 1.5, not MVP — see §24.**
+4. **Differential execution** — same inputs through old and new code paths, compare outputs. Strongest available evidence for pure-ish functions and pipelines.
+5. **Instrumented measurement** — latency traces, memory, render timing. Required for any performance claim, **with variance reported, never a single sample.**
+6. **Visual / interaction** — screenshot and interaction-trace diffs. Expensive and flaky; reserve for explicit UI KEEP clauses. *(Not in MVP; doc B's "no visual regression testing" ruling stands for MVP and phase 2 alike unless evals demand it.)*
+
+**Characterization generation is where the engineering risk concentrates (doc B, adopted; the reason it is not in the MVP).** Generating tests that pin current behavior is easy to do badly: tests that are trivially true verify nothing; tests over non-deterministic surfaces (time, network, randomness, ordering) are flaky and destroy trust faster than no tests; tests too tight fail on legitimate intended change and train users to ignore them. Mitigations: prefer pure boundaries identified structurally; require each generated test to **demonstrably fail under a mutation of the code it covers** before admission to the baseline (a mutation-testing gate on our own oracle — a mutation tool per ecosystem, validating our baselines, not the user's code); **quarantine any test non-deterministic across two pre-change runs**. A characterization suite that has not been shown to detect change is decoration.
+
+**Weak-test verification theater is a named risk (doc A, retained).** Where test coverage is thin, "verified" is a claim the system cannot back; repo-level repair with weak tests is research-open. Verification confidence is stated explicitly, never implied. [APR survey](https://arxiv.org/html/2506.23749v1)
+
+**The honest limit on perceptual intent (doc B, adopted verbatim in substance).** The flagship example — "the preview feels laggy, make it feel instant" — is the case where this thesis is weakest, and that is not glossed over. "Feels instant" is perceptual. What is mechanically verifiable is input-to-paint latency, which is a *proxy*: a p95 of 22 ms does not prove the interaction feels good, and a user can reject a change that passes every check. The resolution is not to claim more than is true. It is to **verify the proxy, verify that nothing else moved, and hand the human a fast path to judge the feel** — because judging feel takes them four seconds and is the one thing they are better at than the machine. The system's job is to make everything except the taste judgment free.
+
+---
+
+## 18. Constitution & memory
+
+Doc B §24, adopted, with doc A's state-store requirement merged in.
+
+**Start with the correction (per ruling):** this concept exists, under this name. Spec Kit ships `constitution.md` and `/speckit-constitution`; Kiro ships steering files (product.md, tech.md, structure.md); AGENTS.md is a Linux Foundation format read by 30+ tools across 60k+ repositories. [Martin Fowler SDD survey](https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html), [Glukhov comparison](https://www.glukhov.org/ai-devtools/ai-coding-assistants/spec-kit-vs-kiro-vs-claude-code/) Code Director adopts **AGENTS.md as the substrate** rather than inventing a ninth competing file — portability is worth more than ownership, and a proprietary format is a migration tax users notice immediately.
+
+**The differentiation is enforcement, and one structural idea: split memory by whether it is verifiable.**
+
+| Store | Contains | Written by | Enforced? |
+|---|---|---|---|
+| **Constitution** (versioned, in-repo) | Durable rules: use SwiftUI; no third-party deps without approval; preserve navigation; prefer simple over abstract | **Human only.** The system may propose a diff; it never self-writes | Yes — compiled into DENY defaults and plan critique |
+| **Behavioral corpus** | Characterization baselines, traces, fixtures from past Locks | System, mechanically | Yes — it *is* the enforcement |
+| **Decision log** | Rejected approaches with reasons; past Locks; what broke last time | System, append-only | Advisory — surfaced as context, never binding |
+| **Preferences** | Disclosure depth, question tolerance, verbosity | System, observed | No — presentation only |
+
+**Only the human writes the binding store.** The system may say "I have seen this pattern three times — add to the Constitution?" and produce a one-line diff, but it cannot promote an observation into a rule. Everything the system writes autonomously is either mechanical evidence (self-correcting — re-run it) or advisory (cannot bind behavior). There is no path by which an inferred assumption becomes an enforced constraint without a human commit. This answers doc A's worry about memory silently accumulating wrong beliefs.
+
+**Memory that cannot be inspected cannot be corrected.** Everything durable is a file in the repository, in a readable format, in version control, with the ordinary review workflow around it. If the user opens a PR and sees their Constitution changed, the system has failed. Doc A's requirement is retained beneath this: a durable per-project intent/scope/decision store replaces the seed repo's flag-file state — cross-session by construction.
+
+---
+
+## 19. Human approval & rollback
+
+Merged: doc B §25's gate table (adopted) + doc A's confidence axis (§12) + doc A's git-native rollback detail (§16).
+
+**Approval fatigue is the failure mode, not under-approval.** A tool that asks for confirmation on everything is a tool with a confirmation reflex, and users click through reflexes. **Gate on reversibility and blast radius, not on action type:**
+
+| Situation | Gate |
+|---|---|
+| Read, search, analyze, measure | None |
+| Edit inside budget, inside a checkpoint | None — the checkpoint is the safety |
+| Plan with non-trivial blast radius | **Approve the Lock once, up front** |
+| Edit outside the declared budget | Block — explicit expansion |
+| KEEP clause would be violated | Halt — human relaxes or abandons |
+| Irreversible or external: migration, force push, deploy, data deletion, network write | Confirm with the specific consequence named |
+| Change budget exceeded by a wide margin | Checkpoint — "this is much bigger than planned, look?" |
+| Intent confidence below threshold *(doc A's axis)* | Clarify or confirm per §10 — regardless of action risk |
+
+**Approve intent once rather than approving steps many times:** one meaningful decision at the Lock beats twelve reflexive ones during execution. And **every block has a visible, logged, one-key override** — a boundary with no override is a boundary users route around by abandoning the tool. The override is a feature; the log is the point. Some users will override everything; that is fine so long as the log makes it visible.
+
+**Rollback is the safety net that makes low-friction approval defensible:** checkpoint before every execution, one command to restore, no understanding required. Aider's commit-per-change discipline is the proven model and costs nothing to adopt. [Aider](https://github.com/Aider-AI/aider) The honest limit is restated wherever rollback is offered: git cannot undo external side effects; those are categorically approval-gated. Human gates sit before irreversible actions — the highest-leverage intervention point per the agent design-pattern comparison (HITL + reflection scored highest across SWE-bench-style benchmarks in a single-source preprint; treat as indicative). [engrXiv 6738](https://engrxiv.org/preprint/download/6738/11022/9350)
+
+---
+
+## 20. Failure modes
+
+Merged table — doc B §26's rows (adopted) plus doc A §22's risk rows and doc A §13's error-handling failure modes, deduplicated:
+
+| Failure | Response |
+|---|---|
+| "Make it better" (criterial ambiguity) | Refuse to invent criteria. Inventory what exists; ask the human to mark what is load-bearing; convert to a KEEP set (journey F). Never silently pick a definition of better. |
+| Wrong assumption about intended behavior | Assumptions are recorded as an explicit ledger in the Lock. The user sees them before execution. Cheap to catch at the Lock; expensive to catch in a diff. Recovery is a designed flow: revert cleanly, restate the corrected interpretation, re-execute (§28, example 9). |
+| Fabricated confidence | The deepest risk — the system that exists to be honest about uncertainty manufactures it anyway. Mitigations: every causal claim carries an evidence class; confidence is a typed field, never a formatting style; eval cases reward calibrated hedging and penalize fluent certainty; every template slot is droppable and evals test that it gets dropped. [evals/RESULTS.md](https://raw.githubusercontent.com/the seed repository/main/evals/RESULTS.md) |
+| Clarification fatigue | If the gate is miscalibrated toward asking, Code Director becomes the tool that interrupts constantly. Mitigations: the asking bar (§10), batching and caps, "just fix it" as an explicit autonomy grant, gate precision/recall as a first-class eval dimension. [arXiv 2310.10996](https://arxiv.org/html/2310.10996v1) |
+| Silent error-dump loop | User pastes 2,400 lines; the system processes fully internally and surfaces extracted signal only (§14). The loop — error → huge response → confusion → more instructions → more errors — is the bug; every actor in it is behaving "normally." |
+| Debug spiral | Three "still broken" turns → hard stop, name the doubtful assumption, one diagnostic question; repair budget exhausted → automatic rollback + escalation. Never another silent retry. |
+| Huge repository | Structural graph is incremental and merkle-invalidated; anchor-first retrieval never scans globally; baseline capture is scoped to the KEEP surface, not the repo. Degrades to slower, not to wrong. |
+| Unknown framework | Say so. Read the dependency source if vendored; fall back to structural-only verification and mark behavioral claims Unchecked. Lower confidence, not silence. |
+| Request conflicts with the Constitution | Surface both sides; do not choose. "You asked for X; the Constitution says no new dependencies; X needs one. Add the dependency, implement it by hand (~2h), or change the rule?" |
+| Hidden dependency | Blast-radius analysis: co-change coupling from git catches couplings the call graph misses — the two are complementary and neither is sufficient. |
+| Hallucinated API or file | Caught structurally and immediately: symbols are resolved against the real graph before the plan is shown. A plan referencing a non-existent symbol never reaches the human. |
+| Regression | The central case. Characterization baseline catches it differentially; if a KEEP clause fails, execution halts and the checkpoint restores. The one failure the architecture is built around. |
+| Overengineering | Plan critique pass scores each step for necessity; unnecessary steps become findings. The Constitution can carry an explicit simplicity rule. |
+| Underengineering / fragile patch | Honestly only partly solvable. Signals: fix touches a symptom far from the blast-radius centroid; no test covers the path; the same area was patched recently (git). Flag as "this is a local patch; the cause may be upstream" rather than blocking. |
+| Context pollution | Anchored retrieval with explicit budget; DENY-listed files excluded entirely; context selection shown and correctable. |
+| User doesn't understand the explanation | Progressive disclosure with "explain this" on any term; rephrase without merely repeating in shorter words. Track which terms get expanded — a real signal about the user, and the only preference worth learning automatically. |
+| Contradictory instructions | Later instruction wins for the goal; KEEP clauses are never silently dropped. "That conflicts with KEEP: export unchanged, which you set in turn 2. Drop that constraint?" Contradiction is surfaced, never resolved by recency alone. |
+| Model uncertainty | Represented as evidence class, not hedging language. "Asserted, not measured" is precise; "might possibly" is noise. |
+| Agent games its own oracle | Baseline captured pre-execution, outside the writable tree; verifier has no write capability; any baseline modification during execution invalidates the run. [arXiv 2606.28430](https://arxiv.org/abs/2606.28430) |
+| Eval gaming / reward hacking | Any metric the product optimizes will be gamed by its own models — SWE-bench Pro showed agents recovering gold patches from git history. Mitigations: leakage controls, structural blinding, published gates, periodic human review of judge decisions. [arXiv 2609.08149](https://arxiv.org/html/2609.08149v1) |
+| Weak-test verification theater | Verification confidence stated explicitly; "verified" never implied beyond what ran (§17). |
+| Misreading "just fix it" | Experts granting autonomy expect expert judgment in return; a wrong silent assumption under an autonomy grant costs more trust than a wrong question. The assumption ledger still records what was assumed, even when no question is asked. |
+
+---
+
+## 21. Security & privacy
+
+Merged: doc B §§27–28's structure (adopted) + doc A §18's telemetry/local-model detail (retained).
+
+**Security.**
+
+- **Prompt injection via repository content is the primary threat.** Source files, dependency READMEs, issue text, and test fixtures are untrusted input. Content read from the repo can never alter the Lock, expand the file budget, or relax a DENY clause — the boundary is enforced in the tool layer, outside the model's reach, which is precisely why enforcement must not be prompt-based.
+- **Execution sandboxing.** Builds and tests run arbitrary repository code: container or VM isolation, no ambient credentials, explicit network policy (off by default in headless runs, as Codex does). OpenHands' runtime is the reference design; do not rebuild it. Assume bypass exists — CVE-2025-59532 is the standing reminder — and layer: sandbox limits blast radius, approvals gate side effects, git limits persistence of damage. [SentinelOne CVE](https://www.sentinelone.com/vulnerability-database/cve-2025-59532/)
+- **Secret hygiene / credential handling (merged).** Scan context before it leaves the machine; never include `.env`, key material, or credential-shaped strings; never inject credentials into agent context; approval-gate any command that reads credential stores or pushes/publishes. External side effects are categorically outside git-rollback's reach and must be explicitly confirmed.
+- **Supply chain.** New dependencies are a DENY default, not a judgment call — an agent that can add packages is an agent that can add a compromised package. MCP third-party server quality/security varies (10k+ public servers at the Linux Foundation donation); treat remote servers as untrusted input. [MCP donation/governance](https://github.blog/open-source/maintainers/mcp-joins-the-linux-foundation-what-this-means-for-developers-building-the-next-era-of-ai-tools-and-agents/)
+- **Blast radius of the tool itself.** No writes outside the repository without explicit, path-specific, documented opt-in. No shell profile edits, no global git config, no background processes.
+- **Eval/solution leakage (doc A, retained).** SWE-bench Pro demonstrated agents recovering gold patches from git history and network sources; Code Director's own eval harness must block leakage channels, and its sandbox design should assume agents will find them. [arXiv 2609.08149](https://arxiv.org/html/2609.08149v1)
+
+**Privacy.**
+
+- **Default: everything except inference runs locally.** Parsing, graph construction, ranking, baseline capture, test execution, diffing, reporting are local computation with no service dependency. This is a correctness argument before a privacy one — a repository model that depends on a remote service is stale during outages and wrong in ways the user cannot see.
+- **What necessarily leaves the machine is the selected context sent to an inference provider — which is exactly why selection is the privacy story:** "we send ranked excerpts of six files and show you which" is a defensible sentence; "we send your codebase" is not. Provide a redaction pass, per-repository provider pinning, an explicit local-only mode, and a log of what was transmitted per request. Retention and training policy stated per provider, not per product.
+- **Local vs. cloud models (doc A, retained).** Model abstraction with per-component choice lets privacy-sensitive code stay on local models (Ollama-class; Aider and Continue both demonstrate viable local operation). The honest trade-off: local models are weaker, and the intent layer is the most quality-sensitive component — ambiguity detection on a weak model may gate poorly. Ship cloud-default with an explicit, understandable local mode that genuinely works, if worse — not a checkbox.
+- **Deferring embeddings is partly a privacy decision:** no vector index means no code corpus on a third-party service, removing the single hardest objection in enterprise procurement (§15).
+- **Telemetry posture (doc A, retained).** Opt-in only; the opt-in copy states plainly what is collected (interaction-quality signals: clarification accept rates, depth expansions, scope violations, override frequency) and what is never collected (code content). The eval-driven moat depends on interaction telemetry, so the ask must be honest and the default off.
+
+---
+
+## 22. Surfaces: CLI, IDE extension, API/daemon, data model
+
+Doc B §§32–36, condensed; doc A's VS Code-first surface decision reconciled below.
+
+**Architecture:** a local daemon exposing the core loop over JSON-RPC (the LSP pattern), so CLI, IDE, and web are peers rather than layers. Everything except inference is local (§21).
+
+**CLI — the CLI is the product; everything else is a view onto it.** Scriptable and CI-usable, because the Change Report's second-best customer is a pull request.
+
+| Command | Does |
+|---|---|
+| `cd init` | Build structural index; draft a Constitution from observed conventions for human review |
+| `cd intent "<what you want>"` | Interactive Lock authoring — proposes GOAL/KEEP/DENY from blast-radius analysis |
+| `cd plan` | Plan with budget and blast radius; no writes |
+| `cd run` | Checkpoint, baseline, execute, verify |
+| `cd report` | Change Report; `--format=md` for PR comments |
+| `cd verify` | Re-run verification against an existing Lock — usable standalone in CI |
+| `cd undo` | Restore checkpoint |
+| `cd why <symbol>` | Blast radius and coupling for a symbol — useful with no agent involved |
+
+`cd why` and `cd verify` must be genuinely useful without any AI in the loop: a tool that earns its keep before the agent runs is a tool people keep installed. Setup cost kills tools: `cd why` must work in minute one with no Constitution and no Lock.
+
+**IDE — an extension, not a fork.** Forking an editor is a multi-year commitment buying control over a surface that is not the differentiator. The first surface is VS Code (largest install base, extension API sufficient for artifacts + diffs; doc A's decision) with JetBrains and Zed/ACP following. [Superset](https://superset.sh/compare/best-ide-for-ai-agents) Surfaces worth building: the **Lock panel** (goal, KEEP with live check status, budget) pinned while a task runs; inline scope indicators showing which files are in budget; the Change Report as a first-class view alongside the diff, not inside a chat transcript; and **gutter markers distinguishing verified-unchanged regions from changed ones** — the highest-value piece of UI in the product: showing a reviewer which parts of a file they do not need to read.
+
+**GUI — defer.** Justified only by one thing the CLI and IDE cannot do well: the Change Report as a *shareable artifact* — a URL a teammate, reviewer, or non-technical stakeholder can open. That is a phase-2 web surface, not a desktop application, and it is the natural place for team features to attach. Interface discipline throughout: calm, dense, professional; monospace for artifacts, real typography for prose; no gradients, no AI theatrics, no dashboards nobody asked for. The visual model is a build log and a camera report, not a chat product. (Doc A's explicit gimmick exclusion list — AI gradients, glowing buttons, sparkle icons, chatbot personas — is retained and enumerated so nobody "improves" them back in.)
+
+**API & integrations.** Two integrations matter early: a **GitHub Action that posts the Change Report on a PR** — the highest-leverage distribution surface, putting the artifact where review already happens (and directly into the Set-3 market's territory, §4) — and **MCP server exposure of `blast_radius`, `capture_baseline`, and `verify`**, so other agents can use the verification layer. MCP is MIT-licensed and Linux Foundation-governed since December 2025. [MCP standards](https://agenticcommerceprotocol.info/standards/mcp), [Linux Foundation donation](https://github.blog/open-source/maintainers/mcp-joins-the-linux-foundation-what-this-means-for-developers-building-the-next-era-of-ai-tools-and-agents/) Whether "be the verification substrate other agents call" is the endgame or a side bet is a strategic question with a stated fragility — see §26.
+
+**Data model** — the entities that hold the design together:
+
+| Entity | Key fields | Storage |
+|---|---|---|
+| Utterance | text (immutable), timestamp, surface | `.codedirector/locks/` |
+| IntentLock | id, utterance_ref, goal, interpretation, keep[], deny[], budget{files, symbols, magnitude}, acceptance[], assumptions[], status | Versioned, in-repo, human-readable |
+| KeepClause | description, kind, compiled_check, baseline_ref, result, evidence_class | Child of Lock |
+| Baseline | lock_ref, captured_at, commit, artifacts[] (tests, hashes, traces), determinism_verified | **Outside writable tree, content-addressed** |
+| Plan | lock_ref, steps[]{mechanism, blast_radius, reversibility}, budget, critique_result | Disposable |
+| Execution | plan_ref, checkpoint_ref, edits[], budget_violations[], retries | Log |
+| ChangeReport | claims[]{statement, evidence_class, artifact_ref}, unchecked[], findings[], provenance | Exportable md / JSON |
+| Constitution | rules[]{text, compiled_constraint?, source}, version | AGENTS.md + sidecar |
+| RepoGraph | symbols, edges, content hashes | Local cache, merkle-invalidated |
+
+**Two invariants hold the design together (doc B, adopted as schema law):** baselines are content-addressed and stored outside the writable tree, so an execution cannot alter its own oracle; and every claim references an artifact — **a claim without an artifact reference is automatically Asserted, enforced by the schema rather than by discipline.** If it is not representable in the type, it cannot be overstated in the prose. Provenance labeling (human / hybrid / AI authorship of each change record) follows the seed repo's CONTRIBUTING.md governance model (§2).
+
+**Suggested stack (doc B §§37–38, condensed):** core daemon in Rust (parsing, graph, hashing, diffing; single static binary; excellent tree-sitter bindings); tree-sitter + grammars for parsing; ast-grep for structural matching and symbol-level scope enforcement; petgraph/sparse linear algebra for the symbol graph and PageRank (no graph database — Aider proves this scale is fine); git2/gix for checkpoints and history mining; xxhash/blake3 for merkle content addressing; rusqlite for index storage; language-native characterization harnesses (insta, jest snapshots, approvaltests); a mutation-testing tool per ecosystem (to validate our own baselines); OpenHands Agent SDK or Claude Agent SDK as execution substrate; MCP SDK for exposure. The stack decision with the most consequence is using someone else's agent loop: building tool-calling, retries, compaction, and sandboxing consumes a year and produces a commodity; the contract layer around it is the whole thesis.
+
+---
+
+## 23. Open-source ecosystem
+
+Merged table: doc A §17's license-verified ledger + doc B §7's "read it for / steal" annotations. Licenses as verified in the tech-research dossier.
+
+| Project | What it does | License | Disposition | Key limitation / note |
+|---|---|---|---|---|
+| **tree-sitter** | Incremental, error-tolerant parsing; CSTs for 100+ languages | **MIT [verified]** ([LICENSE](https://github.com/tree-sitter/tree-sitter/blob/master/LICENSE)) | **Use directly** | Syntax only — no cross-file semantics; spot-check bundled grammar licenses |
+| **ast-grep** | Pattern-based structural search/replace | (per repo; re-check before shipping) | **Use directly** — structural scope enforcement and symbol-level diffing | Ecosystem fit per language varies |
+| **LSP servers** (rust-analyzer, pyright, gopls, TypeScript) | Compiler-grade defs/refs/diagnostics | rust-analyzer **MIT/Apache-2.0 [verified]**; pyright **MIT [verified]**; gopls BSD-3, TS Apache-2.0 (re-check before shipping) ([rust-analyzer](https://github.com/rust-lang/rust-analyzer)) | **Use directly / wrap** as agent tools (Serena is the reference: [pattern](https://github.com/cskwork/serena-mcp-quickstart)) | Per-language capability heterogeneity; lifecycle management is real engineering |
+| **universal-ctags** | Symbol indexes for 100+ languages | **GPL-2.0 [verified]** ([COPYING](https://github.com/universal-ctags/ctags/blob/master/COPYING)) | **Study; avoid in product** | **The one real licensing hazard.** Subprocess invocation is the conventional safe pattern, but tree-sitter makes the question moot |
+| **LanceDB** | Embedded local vector DB, hybrid search | **Apache-2.0 [verified]** ([repo](https://github.com/lancedb/lancedb)) | **Use directly — later**, only when evals show retrieval misses | Younger than pgvector/Qdrant; no strict ACID |
+| **Aider** | Git-native terminal pair programmer; ranked repo map | **Apache-2.0 [verified]** ([repo](https://github.com/Aider-AI/aider)) | **Study deeply — read `repomap.py` line by line; re-implement patterns** (repo map, git-as-rollback, read-before-edit) | Terminal UX; repo map degrades on huge monorepos; exact-string edit matching is brittle |
+| **github/spec-kit** | Constitution → specify → plan → tasks → implement artifact pipeline | (per repo) | **Study** — artifact-on-disk model, enforced ordering; and to understand exactly how much of the intent-capture surface is already taken | Prose artifacts, no runtime enforcement — the gap Code Director fills |
+| **Cline** | Plan/Act agent, approvals, checkpoints, MCP | Apache-2.0 (secondary, verified 2026-06-07 per ssojet) ([repo](https://github.com/cline/cline)) | **Study + benchmark against** — mode boundary as a tool-permission set, not a prompt; its Plan/Act is the market-validated baseline the gate must beat | Token-hungry; per-action binary approvals with no confidence semantics |
+| **Continue** | Open IDE assistant, Chat/Plan/Agent modes | Apache-2.0 (secondary sources) | **Study** the mode/tool-gating UX | Maintenance status changed in 2026 — do not depend on its roadmap ([report](https://www.eigent.ai/blog/best-open-source-ai-coding-agents-2026)) |
+| **Roo Code** | Cline fork; multi-mode workflows | Apache-2.0 (secondary) | **Study only** | Archived/re-organized in 2026 (reported, unverified) — fork-lineage risk |
+| **OpenHands** | Autonomous agent platform; Docker sandbox runtime; event-sourced loop | **MIT** (secondary, corroborated) ([repo](https://github.com/All-Hands-AI/OpenHands)) | **Wrap for execution sandbox; study event-sourced loop** (audit + rollback substrate; `StuckDetector`) | Heavyweight runtime images; unsandboxed local mode can expose host files |
+| **SWE-agent / mini-swe-agent** | Research agent; Agent-Computer Interface design; ~100-line harness | **MIT** (secondary) ([repo](https://github.com/SWE-agent/SWE-agent)) | **Study the ACI paper; reuse mini-swe-agent for internal evals** | Research-grade; Python-centric |
+| **approvaltests / jest snapshots / insta** | Characterization testing — pinning current behavior without specifying it | (per repos) | **Adopt as the KEEP baseline mechanism** (phase 1.5) | Per-ecosystem; non-determinism needs quarantine (§17) |
+| **xxHash / merkle libs** | Fast content addressing for incremental index invalidation | (per repos) | **Use directly** — index freshness without full re-scan | — |
+| **MCP** | Open tool-integration standard, Linux Foundation governance since Dec 2025 | **MIT** ([standards](https://agenticcommerceprotocol.info/standards/mcp), [donation](https://github.blog/open-source/maintainers/mcp-joins-the-linux-foundation-what-this-means-for-developers-building-the-next-era-of-ai-tools-and-agents/)) | **Use directly** as the tool bus, both directions | Third-party server quality/security varies — supply-chain risk; treat remote servers as untrusted input |
+| **anthropics/claude-code hooks** | PreToolUse interception — the documented community pattern for blocking edits outside a planned file list | (per repo) | **Study — proof the enforcement primitive exists; productize it** | Hook-based, prompt-adjacent; Code Director's enforcement must live in its own tool layer |
+| **Sandboxing: Seatbelt / bubblewrap / Docker / gVisor / Firecracker** | Tiered isolation from OS process to microVM | Seatbelt: macOS built-in; bubblewrap LGPL (subprocess/dynamic only); Docker/gVisor/Firecracker Apache-2.0 ([tier guide](https://www.digitalapplied.com/blog/ai-agent-sandboxing-isolation-patterns-2026)) | **MVP: Seatbelt + approval tiers; Docker headless**; gVisor/Firecracker deferred | Network egress = exfiltration channel; writable mounts = modification channel, at every tier |
+| **the seed repository** | The seed repo: output contract, escape hatches, eval harness, adapters, context markers | MIT (per repo) | **Study** — eval harness with structural blinding and a published failing gate; adapter shape; idempotent context markers | Prompt-only enforcement; its rules are the *manners*, not the product (§2) |
+
+Aggregate legal posture (doc A, retained): the entire recommended stack is permissively licensed except universal-ctags (GPL-2.0 — excluded by design) and bubblewrap (LGPL — subprocess use only). No copyleft contaminates the product core.
+
+---
+
