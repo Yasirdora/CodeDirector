@@ -721,3 +721,368 @@ Aggregate legal posture (doc A, retained): the entire recommended stack is permi
 
 ---
 
+# Part IV — Build & Honest Assessment
+
+## 24. MVP
+
+**Ruling applied:** doc B gated its MVP on characterization test generation — the very component it rates critical/research-grade risk ("if this does not work, the product does not exist"). The merged ruling rejects that: **the MVP must already differentiate without the riskiest component.** The merged MVP, six items:
+
+1. **Structural index + blast radius.** tree-sitter symbol graph, incremental, merkle-invalidated; `cd why <symbol>` — blast radius and coupling, genuinely useful with no AI involved. *(doc B's MVP item, retained.)*
+2. **Intent Lock authoring with system-proposed KEEP/DENY.** The system proposes GOAL/KEEP/DENY from blast-radius analysis; the human edits and approves. This is the moment the product must feel different. The ambiguity gate (§10 — heuristics + ClarifyGPT-style divergence check + the three-level confidence model) fires during authoring. *(Merge of doc B's item 3 and doc A's item 2.)*
+3. **File/symbol budget enforcement at the tool layer, with logged one-key override.** Out-of-budget writes refused; expansion is an explicit, timestamped decision. *(Both docs.)*
+4. **Evidence-classed Change Report over EXISTING tests + lockfile diff + signature diff + typecheck.** Four classes (Measured / Proven / Asserted / Unchecked), CLI and markdown, PR-postable. No characterization generation — the MVP's "Measured" evidence comes from the repo's own suite and from structural diffs; everything else is honestly Asserted or Unchecked. **This is the ruling's core edit:** the honest report differentiates *even when the honest answer is mostly "Unchecked,"* because naming what nobody checked is itself the product no competitor ships. *(Doc B's report, descoped per ruling.)*
+5. **Checkpoint / undo.** Git-native snapshot before execution; one command restores; no understanding required. *(Both docs.)*
+6. **Eval harness from commit one.** Paired conditions, blind grading (structural blinding, rubric isolation, runner isolation — the seed repo's harness philosophy), a release gate, and published negative results. Cases built around *intent translation* (vague prompts, underspecified scope, non-technical phrasing, multi-turn clarification, error dumps) — not style. [evals/README.md](https://raw.githubusercontent.com/the seed repository/main/evals/README.md)
+
+One language ecosystem first — TypeScript or Python, chosen because structural tooling is mature and pure-function boundaries are easy to identify (doc B's argument for characterization tractability applies to the MVP's structural checks too). Not Swift/SwiftUI, despite this document's examples: UI behavior is the hardest verification target and the MVP should not prove the thesis on its worst case. One surface: CLI first (it is the product, §22), VS Code extension as the second surface within the MVP window if and only if the Lock panel and gutter markers can be built without diluting items 1–6.
+
+**Explicitly NOT in the MVP (merged):** characterization baseline generation (phase 1.5 prototype, with the mutation gate); embeddings/vector search; visual regression testing; multi-language support (each ecosystem is a real tooling project, not a grammar swap); multi-agent orchestration beyond the three structurally-required roles (§16); fine-tuned classifiers (prompting + consistency check until logged data exists); an IDE fork; a GUI; memory that learns silently (the Constitution is human-written from day one); a custom model (not now, not in phase 3); an own agent loop (adopt an SDK); LSP deep integration (tree-sitter suffices initially); local models; worktree-parallel agents; Live-Prompting-style mid-task steering; dashboards, analytics, team features. Chat as a surface *is* in (a view onto the Lock) — refusing chat entirely is purity that loses users (§26).
+
+**The demos that must work (merged):** (1) a user states a vague request; the system asks *one* divergence-derived question — or states its interpretation and proceeds, correctly choosing which; (2) a user asks for a behavior change in a repo with mediocre test coverage; the system makes the change inside the budget and reports: "Changed 3 files. Existing suite: 41 pass. **Proven:** API unchanged, lockfile untouched. **Unchecked:** these 2 behaviors — no test exists; here they are"; (3) a second run where the agent tries to touch an out-of-budget file and is *blocked*, with the override logged. If those three moments do not land, there is no product.
+
+---
+
+## 25. Roadmap
+
+**Phase 0 — Eval infrastructure first (weeks 0–6).** Build the harness before the product: case schema for intent-translation scenarios; blind A/B judging with structural blinding and rubric isolation; weighted dimensions oriented to the merged claims — interpretation fidelity, gate precision/recall (asked when it should; didn't when it shouldn't), scope adherence, attention cost per task, **verification honesty (are Unchecked claims actually unchecked; are Measured claims actually measured)**. Leakage controls from day one (SWE-bench Pro's lesson: agents recover gold patches from git history; one model dropped 78.8% → 57.3% once controls were applied). [arXiv 2609.08149](https://arxiv.org/html/2609.08149v1)
+
+**Phase 1 — MVP (roughly months 1–4).** The six items of §24. Release gate: the eval suite, with published results — including failures.
+
+**Phase 1.5 — Characterization prototype (roughly months 4–6, fast-follow).** Auto-generated characterization tests over the KEEP surface, with the two gates that make them honest: each generated test must demonstrably fail under a mutation of the code it covers before admission to the baseline; any test non-deterministic across two pre-change runs is quarantined. Prototype in the MVP's one ecosystem. This is the riskiest component in the design and is deliberately *not* on the MVP's critical path — but it starts early because it is also where the corpus begins accruing (§26). If the prototype fails the mutation gate at acceptable cost, the roadmap below still stands on structural + existing-test evidence; the product narrows, it does not die.
+
+**Phase 2 — v1 (roughly months 6–10).** Second and third language ecosystems, chosen by customer pull; symbol-level scope budgets (MVP is file-level); performance verification (instrumented traces with variance reporting); LSP-wrapped code intelligence; the attention-budget accounting layer with session telemetry (opt-in); durable per-project intent/scope/decision store hardened; GitHub Action posting Change Reports on PRs — the distribution unlock; shareable Change Report URLs (the beginning of team surface); the IDE Lock panel and verified/unverified gutter markers; MCP server exposing `blast_radius`, `capture_baseline`, `verify` to other agents; mid-task steering; clarification-quality specialization driven by eval data — including the decision point on training a fine-tuned intent-clarity classifier once logged production data justifies it. [arXiv 2507.21285](https://arxiv.org/pdf/2507.21285)
+
+**Phase 3 — v2 (roughly months 10–18).** Cross-task **behavioral corpus**: the characterization baselines accumulated over many Locks become a standing regression suite for the repository — this is when the data asset starts compounding. Constitution mining with human-approved promotion; team Constitutions and shared verification standards; compliance-grade Change Reports (signed, auditable, "what changed and what was proven") for regulated environments; long-horizon tasks with intermediate verification gates; conditional on evals demanding them: local embeddings (LanceDB), worktree-parallel execution, CodePlan-style repo-level dependency-graph planning, gVisor/Firecracker tiers. [repo-RAG survey](https://arxiv.org/html/2510.04905v1)
+
+Sequencing logic (doc A, retained): every late-phase item is gated on demonstrated need — custom vector infra, code-graph DBs, microVM fleets, multi-agent swarms, fine-tuned classifiers before evals demand them are defer-or-never items, not ambitions.
+
+---
+
+## 26. Defensibility, risks, competitive threats
+
+### The honest defensibility ranking (doc B §48, adopted)
+
+Strongest first:
+
+1. **The accumulated behavioral corpus.** Real — after months of use, a repository holds hundreds of human-approved characterization baselines. Switching cost that lives in the customer's repo, grows with use, and cannot be reproduced by a competitor with a better model. **This is the only durable asset in the design.**
+2. **Characterization generation quality.** Real, temporary — genuinely hard per-ecosystem engineering with a mutation-validation loop. Buys 12–24 months, not forever.
+3. **Being the verification substrate other agents call.** Potential — strong if achieved; requires distribution the company may not get.
+4. **The Change Report as an organizational artifact.** Potential — if teams require it on PRs, it becomes process, and process is sticky. Depends entirely on the GitHub Action landing.
+5. **The ambiguity gate's calibration data (doc A's moat, slotted in).** Every answered or dismissed clarification question in production is training signal for the gate — a flywheel a fast-follower cannot shortcut, and the documented prerequisite for the fine-tuned classifier that beats prompting. Real, modest, compounding. [arXiv 2507.21285](https://arxiv.org/pdf/2507.21285)
+6. **Intent Lock as a format.** Weak — formats do not defend; Spec Kit's already exists.
+7. **Jargon translation and response design.** None — 7 KB of text; the seed repo proves it.
+8. **The metaphor and the name.** None — good positioning, zero moat.
+
+**The uncomfortable summary (doc B, adopted):** most of what makes Code Director distinctive as a concept is undefendable. The one durable asset — the behavioral corpus — is a byproduct of the hardest unsolved engineering problem in the design. **The moat and the technical risk are the same component.** That is not a reason not to build it; it is the reason to point the characterization prototype at the mutation gate in phase 1.5 and to treat everything else as packaging.
+
+### Technical risks (merged)
+
+- **Characterization test generation is harder than it looks.** Critical. Trivially-true tests verify nothing; flaky ones destroy trust faster than no tests; mutation-gating costs real compute. Mitigated by being a phase-1.5 prototype with explicit gates rather than an MVP dependency (ruling).
+- **Behavioral equivalence is undecidable.** Critical. Every "verified unchanged" is a claim over a sampled surface, not a proof. The honest framing — evidence classes, named limits — is the only defense, and it is a weaker claim than marketing would like.
+- **UI and "feel" resist verification.** High. Latency is measurable; "feels right" is not. Be explicit rather than degrade to Asserted-in-a-confident-tone (§17's honest limit).
+- **Calibration is research-grade (doc A).** "Should I act or ask?" confidence that is calibrated and user-actionable is an open problem; the gate ships heuristic and earns autonomy through evals. Overpromising here is the single easiest way to discredit the product. [arXiv 2506.07461](https://arxiv.org/html/2506.07461v1)
+- **Per-ecosystem cost.** High. Each language is a distinct characterization-harness project. Breadth is expensive; thin coverage is how this team dies.
+- **Baseline capture latency.** High (phase 1.5+). Capturing before every task adds seconds to minutes. If the loop feels slow, users bypass it — and a bypassed safety layer is worse than none, because it is still believed.
+- **Non-determinism.** Medium. Time, network, randomness, ordering, concurrency; quarantine handles some; concurrency-dependent behavior is largely out of reach.
+- **Model talks itself past constraints.** Medium. Mitigated by enforcing outside the model; requires constant vigilance that no constraint is prompt-only.
+- **A false assurance is worse than a missed regression (doc B).** The product's core claim is its honesty; when it says "verified unchanged" and something breaks anyway, the damage is proportional to the claim, not the bug. One high-profile false assurance outweighs fifty caught regressions.
+
+### Product risks (doc B §46, adopted; doc A's UX risks folded in)
+
+- **Friction versus the competition's magic.** Every competitor says "describe it and I'll do it"; this says "let's agree what must not change, and I'll prove it didn't." A harder sell in a demo; an easier sell after someone's second production regression. It will lose head-to-head comparisons run by people who have not yet been burned.
+- **"Unchecked" reads as weakness.** Honesty is the strategy and it will cost deals against a competitor claiming confident success. A real, recurring, unavoidable cost.
+- **Users will route around the boundary.** Blocked edits are annoying; the override must be one key and logged; some users will override everything — fine, so long as the log makes it visible.
+- **Refusing chat is a mistake.** Chat is one surface onto the Lock, not the product's definition; removing it entirely loses users.
+- **Setup cost.** Anything requiring configuration before value dies. `cd why` must work in minute one with no Constitution and no Lock.
+- **Wrong persona first.** The paying customer is the team already burned by a silent regression — not vibe coders and learners, who have the least money, the least tolerance for process, and the least ability to appreciate a verification report. Build for the burned team; the others benefit downstream (§8).
+- **(doc A) Prompt fatigue and the uncanny valley of calm.** A system that withholds detail can feel like a system that hides mistakes; expansion must be instant and complete — depth control as a right, not a ration. And an attention budget that *adds* decisions is self-defeating; audit against decision-count, not word-count. [Qodo on Cline](https://www.qodo.ai/blog/roo-code-vs-cline/)
+
+### Competitive threats (merged; the 18-month window)
+
+- **The platforms can build this (doc B).** Anthropic, OpenAI, Cursor, GitHub have every primitive — plan mode, hooks, PreToolUse interception already exist; the missing pieces are product decisions, not research. **Assume an 18-month window at best.** The defense is not technical: verification infrastructure is unglamorous, cuts against demo incentives, and requires per-ecosystem grinding a platform company is structurally reluctant to do. Real but modest. Do not plan around a technical moat that does not exist.
+- **The UX layer is copyable in a week (doc B).** Jargon translation and response shaping are a prompt file; the seed repo is the proof and it is MIT-licensed.
+- **SDD may absorb the category.** If Spec Kit or Kiro adds enforcement and post-hoc compliance checking to documents they already ship, the differentiation compresses. Kiro already does requirements analysis and property-based testing; extending toward runtime enforcement is not a large leap. [Augment Code: Kiro](https://www.augmentcode.com/tools/kiro-vs-augment-code)
+- **The code-quality market can move up the loop (added per ruling).** Sonar commissioned the trust survey and sells the remedy; CodeRabbit, Snyk, Graphite, and GitHub-native review features own the PR surface where the Change Report wants to live. They verify *after* the change against generic criteria; moving toward per-task, pre-execution intent verification is a strategic extension for them, not a research project. This threat is at least as direct as another agent adding a plan mode — and Code Director's best counter is to occupy the PR surface first with the GitHub Action.
+- **(doc A) Incumbent convergence on clarification UX.** Cursor, Junie, Jules, and Copilot are all investing in plan UX; a systematic clarification gate is a quarter's work for any of them. Defense: speed, calibration data, and the non-expert positioning incumbents structurally avoid.
+- **Model improvement erodes part of the premise (doc B).** If agents become reliable enough that regressions are rare, verification infrastructure matters less. Counter-argument: reliability increases throughput, which increases total change, which increases aggregate review burden. A genuine bet, not a certainty.
+- **Being a layer is structurally fragile (doc B §47).** Whoever owns the agent can absorb the layer.
+
+**On the substrate endgame (ruling applied).** Doc B's §44 proposed the long-term architecture as "be the verification substrate the industry's agents call into" — any agent requests a Lock, receives enforced boundaries, returns a Change Report. Doc B's own §47 concedes the fragility: platform owners own the tool layer, and whoever owns the agent can absorb the layer. The ruling: **the substrate strategy is presented as an option with its fragility stated, not the plan of record.** The plan of record is the product above. The substrate option is kept alive cheaply — the MCP exposure of `blast_radius`, `capture_baseline`, `verify` in phase 2 — precisely because if the product layer gets absorbed, the substrate is the fallback position; and if it doesn't, the substrate is upside. What the merged document rejects is betting the company on a position that requires the platforms' forbearance.
+
+---
+
+## 27. What NOT to build
+
+Merged list (doc A's 10 + doc B's 9, deduplicated, with reasons):
+
+1. **Another general-purpose coding agent.** The edit/run/test loop is a commodity in a red ocean against Copilot, Cursor, and Claude Code, with zero structural advantage. Wrap one; don't build one. [SWE-agent](https://github.com/SWE-agent/SWE-agent)
+2. **Custom vector DB / embedding infrastructure.** Symbol map + grep/BM25 first; LanceDB only when evals show retrieval misses. Cursor-scale Merkle pipelines answer a scale problem the product doesn't have. [Cursor indexing](https://zzet.org/gortex/how-cursor-indexes-codebase-embeddings-vs-graph/)
+3. **A code-graph database (SCIP/RepoGraph-style).** LSP-on-demand gets ~80% of the value without the maintenance burden. [Sourcegraph](https://sourcegraph.com/blog/lessons-from-building-ai-coding-assistants-context-retrieval-and-evaluation)
+4. **Multi-agent swarms.** Coordination overhead, modest absolute gains (MAGIS: 16.67% SWE-bench Lite). The only specialization is the three structurally-required roles (§16). [APR survey](https://arxiv.org/html/2506.23749v1)
+5. **Fine-tuned classifiers before evals demand them.** Prompting + consistency check first; fine-tune only with logged production data. [arXiv 2507.21285](https://arxiv.org/pdf/2507.21285)
+6. **A custom model.** Not now, not in phase 3.
+7. **An IDE fork.** An extension buys the surface that matters; a fork buys a multi-year maintenance commitment over a non-differentiator.
+8. **A standalone GUI (now).** The shareable Change Report URL is a phase-2 web surface, not a desktop app.
+9. **Visual regression testing (early).** Flaky, expensive, consumes the whole team; reserve for explicit UI KEEP clauses later.
+10. **Memory that learns silently.** The Constitution is human-written from day one; no path from inferred assumption to enforced constraint without a human commit (§18).
+11. **Firecracker microVM fleets** — until untrusted multi-tenant workloads exist. [sandboxing tiers](https://www.digitalapplied.com/blog/ai-agent-sandboxing-isolation-patterns-2026)
+12. **AI-gradient visual gimmicks and chatbot personas.** Enumerated so they can be explicitly rejected in every design review.
+13. **An attention-load-branded app.** The framing caps the market and invites trivialization criticism; the product is cognitive-load-aware design for everyone (§2).
+14. **A "Director Language" command syntax.** Director phrases must work as natural language; the moment users must learn syntax, the intent layer has failed its own premise.
+15. **Characterization generation in the MVP.** The ruling's addition: the riskiest component is prototyped in phase 1.5 with its mutation gate — never allowed to gate the first differentiated release.
+
+---
+
+## 28. Interaction examples
+
+Eleven scripted interactions covering the required set, each showing the merged product: intent-layer behaviors (gate, confidence, depth, attention) *and* the verification layer (Lock, evidence classes) where relevant.
+
+### 1. Vague request
+
+> **User:** Make this better.
+>
+> **Code Director:** "Better" can mean a few things here. Looking at this screen, the most likely candidates are the slow panel switching and some inconsistent spacing.
+>
+> What should improve most?
+> **A** Faster
+> **B** Easier to understand
+> **C** More polished visually
+> **D** More reliable
+>
+> *(Or tell me in your own words — or say "just pick one.")*
+
+*Mechanisms: ambiguity taxonomy (qualitative/criterial axes), low-confidence gate blocking coding, multiple-choice clarification in outcome vocabulary, codebase context narrowing the options, batched single interruption, implicit "just pick one" escape.*
+
+### 2. Non-technical description
+
+> **User:** I don't know what this thing is called, but when I click this it should remember what I was doing.
+>
+> **Code Director:** Got it — when someone leaves this screen and comes back, everything they entered should still be there.
+>
+> One question: if they close the whole app and reopen it tomorrow, should it still remember, or only while the app stays open?
+>
+> **A** Only while the app is open
+> **B** Forever, until they clear it
+>
+> **User:** B.
+>
+> **Code Director:** Locked: **Goal** — entries on this screen survive app restart. **Keep** — how saving works everywhere else; the file format on disk. **Budget** — 2 files. I'll verify by restarting the app twice in a row with test data. Working.
+
+*Mechanisms: intent translation from pure outcome language ("remember what I was doing" → state preservation/restoration), one batched behavioral question in user vocabulary, no jargon ("state," "persistence," "lifecycle" never appear), Intent Lock authored with KEEP set, verification approach declared up front.*
+
+### 3. Performance complaint
+
+> **User:** This feels slow.
+>
+> **Code Director:** Before I change anything I'll measure what's actually slow, so we can check the fix afterwards.
+>
+> *(measures)*
+>
+> Loading this screen takes about 3 seconds. Nearly all of it is one thing: it resizes every photo at full size before showing anything. **(Measured: 2.94 s median over 5 runs.)**
+>
+> I can make the screen appear almost immediately and fill in the photos as they're ready. Nothing else changes — same photos, same quality when they arrive.
+>
+> Want me to do that?
+
+*Mechanisms: journey E — refusal to proceed on an unmeasured claim; the baseline is the first unit of work and doubles as the oracle; silent technical diagnosis with plain-language signal extraction; high-confidence interpretation stated rather than asked (the gate: don't ask when context resolves it); implicit scope statement; single next decision. The follow-up report would read: "**Measured:** screen load 2.94 s → 0.31 s (5 runs, variance shown). **Proven:** export path untouched — signature diff empty. **Unchecked:** behavior with 500+ photos — no fixture that large."*
+
+### 4. UI/feel request — the honest perceptual limit
+
+> **User:** Make this feel more like a native iOS app.
+>
+> **Code Director:** I read that as: it should *behave* like an iOS app, not just look like one. Concretely I'd change three things: swipe back from the edge to go back, large title that shrinks as you scroll, and standard iOS sheets instead of custom popups.
+>
+> **I will not change:** your colors, fonts, or layout.
+>
+> Is that the "native" you mean — or is it more about the visual style?
+>
+> **User:** Yes, behavior. Go ahead.
+>
+> *(…after execution…)*
+>
+> **Code Director:** Done. Three behavior changes, 4 files. **Verified unchanged:** navigation structure, your theme, all 19 existing tests. **What I can't check is the part you actually asked about:** whether it *feels* native is your call, not a measurement. It's running in the simulator — swipe around for ten seconds and tell me if it's right. If not, undo is one click.
+
+*Mechanisms: interpretation of aesthetic intent into concrete platform conventions; medium-confidence gate (stated interpretation + one confirming question); explicit protected scope; and the honest limit on perceptual intent — the system verifies the proxy and everything around it, then hands the taste judgment to the human with a fast path to judge and a free path back. The Unchecked bucket named as the headline, not buried.*
+
+### 5. "Worked yesterday" bug
+
+> **User:** It worked yesterday and now it doesn't.
+>
+> **Code Director:** Something changed between yesterday and now — I'll find what.
+>
+> *(checks recent changes)*
+>
+> Found it. Yesterday evening a change to how dates are saved went in; this morning's entries are saved in the new format, and the history screen can only read the old one. *(Evidence: commit 4a9c2e1, 6:40 pm yesterday, touches the date writer; the history screen's reader was last changed three weeks ago.)*
+>
+> I can make the history screen read both formats. Two files, no changes to how anything is saved.
+>
+> Apply?
+
+*Mechanisms: git history as first diagnostic tool; causal claim with stated evidence — never the seed repo's fabricated-cause failure ("the log shows X, which usually means Y" vs. "Y is the cause"); scoped repair plan with budget; no blame; no stack trace at the top level.*
+
+### 6. Large error dump
+
+> **User:** *(pastes 2,400 lines of build log)*
+>
+> **Code Director:** **I found the problem.**
+>
+> One of your photo files has a name with a space in it, and the build step that copies it isn't expecting that.
+>
+> I can fix the build step so any filename works — one file changed.
+>
+> Want me to apply it?
+>
+> ▾ Technical detail (the full log and why this happens)
+
+*Mechanisms: signal extraction from massive input — full analysis internal, bounded presentation external; calm summary pattern; the raw log one click away, verbatim; scope contained to the actual cause.*
+
+### 7. Scope restriction
+
+> **User:** The save button doesn't work. Fix it but don't touch anything else.
+>
+> **Code Director:** Understood — I'll fix the save button and treat everything else as off-limits.
+>
+> Here's the problem: the button works, but it saves to a location the app no longer reads from. The minimal fix touches one file: `SaveButton.swift`.
+>
+> **Heads up:** the same wrong location is also used by auto-save. Fixing that too would mean touching a second file — outside the boundary you set. Your call:
+> **A** Fix only the button, exactly as you said
+> **B** Fix both, since it's the same bug
+
+*Mechanisms: protected scope taken literally and compiled into the Lock's DENY set; inferred-scope expansion detected and surfaced as a decision with a timestamp and an author — never executed; the findings list records the auto-save issue either way, so the observation survives even if the user chooses A.*
+
+### 8. User changes their mind
+
+> **User:** Make the export faster.
+> **Code Director:** *(locks intent — KEEP: export format, quality, and the progress UI; measures baseline; gets approval; executes; reports: "Export is about 3× faster. Measured: 8.2 s → 2.7 s over 5 runs. Verified unchanged: output bytes identical on 12 sample photos.")*
+> **User:** Actually, I liked how it showed the progress bar before. Can we keep that?
+>
+> **Code Director:** No problem. I'll keep the speed improvement and bring back the progress bar — it now shows real progress of the background work instead of holding up the export.
+>
+> If you'd rather undo the whole thing and go back to exactly how it was yesterday, say the word — that's one click.
+
+*Mechanisms: change-batch history with surgical partial revert vs. full rollback; intent layering — the new constraint ("keep the progress bar") is added to the Lock's KEEP set for subsequent work without restating the goal; re-verification after the adjustment; reversible-everything posture.*
+
+### 9. Wrong assumption recovery
+
+> **User:** When I tap this, it should remember what I was doing.
+> **Code Director:** *(interprets "this" as the currently selected notes screen — records it in the Lock's assumption ledger; implements; reports)*
+> **User:** No — I meant the camera screen. It keeps losing my photo edits.
+>
+> **Code Director:** My mistake — I applied it to the notes screen. Here's what I'll do:
+>
+> 1. Undo the notes change completely (back to exactly how it was).
+> 2. Apply the same idea to the camera screen: your photo edits survive when you leave and come back.
+>
+> Doing both now. I'll tell you when it's done.
+>
+> *(…)* Done. Notes screen restored exactly — verified by re-running the checks from before the change. Camera screen: edits now survive leaving and returning; **verified** for staying in the app, **unchecked** for full app restart — no fixture for that yet; try it once yourself.
+
+*Mechanisms: referential-ambiguity miss surfaced by the assumption ledger (the user could see what was assumed before execution — cheap to catch at the Lock, expensive in a diff); clean recovery via checkpoint restore; no defensiveness; restated correct interpretation before re-executing; the retry's report still evidence-classed and still honest about what nobody checked.*
+
+### 10. Complex architectural request
+
+> **User:** We're going to need to support video too, not just photos. Probably lots of other stuff later.
+>
+> **Code Director:** That's an architectural change, so let me lay out what it means before touching anything.
+>
+> Right now the whole app is built around "a photo." Supporting video — and leaving room for more later — means introducing one shared concept behind the scenes ("a piece of media") and teaching each part of the app to work with that instead of with photos directly.
+>
+> **What changes:** 11 files across the import, gallery, and export areas.
+> **What doesn't:** anything the user sees or does today — and I'd pin that as the KEEP set: every screen's behavior verified against a baseline before and after each stage.
+> **Cost:** this is the largest change we've made together; I'd do it in three stages, each one tested and reversible on its own.
+>
+> Worth it if video is really coming. Not worth it yet if it's a maybe. Which is it?
+
+*Mechanisms: scope-honesty at architectural scale — the system names the size of the request rather than absorbing it; the blast-radius map makes the 11-file footprint legible to a non-expert; staged plan with per-stage reversibility; the KEEP set reframed as behavioral continuity across a refactor (exactly where the characterization baseline matters most, phase 1.5+); and a rare recommendation against acting — the director still decides whether the scene is worth shooting.*
+
+### 11. "Just fix it" autonomy grant
+
+> **User:** The tests are failing again. Just fix it, I don't care how.
+>
+> **Code Director:** On it. *(Taking "it" as the 3 failing tests in the last run. Works silently through diagnosis, fix, test run — inside a checkpoint, no questions.)*
+>
+> Done. The failing tests expected dates in the old format; I updated the tests and the one function still producing it. 2 files.
+>
+> **Report:** all 86 tests pass **(Measured)**. No dependency or API change **(Proven)**. I assumed the old format is fully retired — that's from reading the code, not a check **(Asserted)**; if anything still writes old-format dates elsewhere, it would show up as new failures, and undo is one click.
+>
+> ▾ What I changed ▾ Why it broke
+
+*Mechanisms: explicit autonomy grant raising the confidence ceiling — no questions despite "I don't care how" being total scope ambiguity; referential resolution from state ("the 3 failing tests") stated in one line rather than asked; the assumption ledger still recorded even when nothing is asked; post-hoc reporting still depth-leveled and still evidence-classed — an autonomy grant waives interruptions, not honesty.*
+
+*Note on depth:* every example above shows Level-1-first communication with expansion available — the reader never had to read a diff, a log, or a mechanism to understand what happened and what to do next. And every report, however short, separates what was measured from what was assumed from what nobody checked.
+
+---
+
+## 29. Feasibility assessment
+
+Brutally honest, four buckets plus the fifth, merged and updated.
+
+**Technically achievable now (engineering, not science):**
+
+- Repo parsing, symbol indexing, call graphs, ranked repo maps — solved ecosystem (tree-sitter/LSP; Aider's repo map). [tree-sitter](https://tree-sitter.github.io/tree-sitter/), [Aider](https://github.com/Aider-AI/aider)
+- Agent loop patterns and git-native rollback — solved engineering. [IBM ReAct](https://www.ibm.com/think/topics/react-agent)
+- Ambiguity *detection* via behavioral divergence (ClarifyGPT's consistency check) — cheap, engineering-ready, published. [arXiv 2310.10996](https://arxiv.org/html/2310.10996v1)
+- Clarifying-question generation good enough to beat baselines — demonstrated (~78–82% preference). [arXiv 2507.21285](https://arxiv.org/pdf/2507.21285)
+- Tool-layer scope enforcement — the primitive exists as a community hook pattern; productizing it is engineering. Structural evidence classes (typecheck, signature diff, lockfile diff) — exact and cheap.
+- Test-in-the-loop verification with rollback-on-red over existing suites — proven pipelines (ContrastRepair: 143/337 Defects4J). [APR survey](https://arxiv.org/html/2506.23749v1)
+- Sandboxing at MVP tier (Seatbelt/Docker), MCP integration, context compaction/pruning patterns — all shipping somewhere today. [sandboxing](https://www.digitalapplied.com/blog/ai-agent-sandboxing-isolation-patterns-2026), [context rot mitigations](https://upsolve.ai/blog/context-rot)
+
+**Achievable with significant engineering:**
+
+- **The confidence gate as a reliable product behavior** — the pieces exist (heuristics, self-consistency, divergence checks); composing them into a gate with good precision/recall across real projects is quarters of eval-driven tuning, not weeks.
+- **Characterization test generation with the mutation gate** — the load-bearing phase-1.5 component. Doc B is right that it is closer to research than tooling: deciding what to pin, at what granularity, with what determinism guarantees, cheaply enough to run before every task. The ruling's MVP descoping means a failure here narrows the product; it does not kill it.
+- **The attention-budget accounting layer** — no literature to copy; the policy must be invented and tuned against telemetry. Direction supported, mechanism novel. [arXiv 2512.19926](https://arxiv.org/pdf/2512.19926)
+- **Depth-adaptive reporting that rewrites rather than truncates** — each level independently readable is an authoring problem at scale, solvable with an output contract + evals but genuinely laborious.
+- **LSP lifecycle management across heterogeneous language servers.** [Serena pattern](https://github.com/cskwork/serena-mcp-quickstart)
+- **Making the whole loop fast enough that people do not bypass it** — a bypassed safety layer is worse than none, because it is still believed.
+
+**Research-level problems (ship heuristics, publish humility):**
+
+- *Calibrated* "should I act or ask?" confidence — current UQ benchmarks mostly don't measure whether uncertainty information helps users decide. [arXiv 2506.07461](https://arxiv.org/html/2506.07461v1), [ICML 2025](https://icml.cc/virtual/2025/poster/40147)
+- Question prioritization under an attention budget — ClarifyCodeBench shows degradation as ambiguity count grows. [arXiv 2607.00711](https://arxivtldr.org/abs/2607.00711)
+- Repo-level *semantic* understanding — why code is the way it is. [maintainer analysis](https://dailycodesolutions.com/blog/for-open-source-programs-ai-coding-tools-are-a-mixed-blessing/)
+- Repo-level repair with weak test coverage; cost-aware agentic repair. [APR survey](https://arxiv.org/html/2506.23749v1)
+- Behavioral equivalence in general — undecidable; every "verified unchanged" is a claim over a sampled surface, and the honest framing is the only defense.
+- A benchmark for human-collaboration quality (attention cost, trust calibration) — no accepted standard; Code Director builds its own evals. [ClarifyCodeBench](https://arxivtldr.org/abs/2607.00711)
+
+**Probably unrealistic (do not promise):**
+
+- Reliable silent inference of non-functional intent ("make it feel instant") with no clarification, across arbitrary users and codebases. [arXiv 2507.21285](https://arxiv.org/pdf/2507.21285)
+- Fully autonomous architectural change with correctness guarantees — bad-plan propagation is the known failure mode of plan-and-execute. [plan patterns](https://nomadx.ae/blog/ai-agent-reasoning-react-plan-execute-tree-of-thought-2026/)
+- Sandbox infallibility — CVE-2025-59532 stands as the permanent caveat. [SentinelOne](https://www.sentinelone.com/vulnerability-database/cve-2025-59532/)
+- Verification of perceptual intent ("feels right") — the proxy is verifiable; the taste judgment belongs to the human, permanently (§17).
+
+**Things that sound impressive but provide little value:**
+
+- Custom vector infrastructure at Cursor scale before evals show retrieval misses; code-graph databases; multi-agent swarms; fine-tuned classifiers trained on synthetic data before production logs exist; visual "AI presence" (gradients, sparkles, HUDs) — decoration that spends the user's attention budget on the product's vanity; per-user expertise *profiles* (per-message adaptation replaces them); an IDE fork; and — the subtlest entry — **a Change Report with more evidence classes than the evidence supports**: four classes are enough, and inflating the vocabulary is itself a form of manufactured confidence.
+
+---
+
+## 30. Final verdict
+
+**Is Code Director a new product category, a nicer UX layer over existing agents, or a fantasy?** The merged answer: **neither a skin nor a fantasy — a narrow, buildable product whose defensible core is exactly one component wide, plus an intent layer that is genuinely unbuilt but lightly defensible.**
+
+Doc A's verdict survives with its center of gravity shifted. It was right that the intent half is structurally unbuilt — no shipping product has an intent-clarity gate, an attention budget, or adaptive explanation depth — and right that those are behavioral claims that can be measured, gated, and improved. Doc B was right that capture-without-enforcement is prose: Spec Kit and Kiro already write intent down [Martin Fowler SDD survey](https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html), and "Building to the Test" shows what happens to verification without oracle separation. [arXiv 2606.28430](https://arxiv.org/abs/2606.28430) The ruling's merge — **two gaps, both real, compounding** — produces a product neither document described alone: an intent layer that establishes what was meant, compiled into a contract that a verification layer can hold execution to, reported in evidence classes that make trust cheap.
+
+**What is verifiably true about the opportunity:** the trust gap is measured, not anecdotal — 96% of developers don't fully trust AI code, 48% always verify, 61% report code that "looks correct but isn't reliable" (Sonar 2026, n=1,149). [VMblog](https://vmblog.com/news/sonar-data-reveals-critical-verification-gap-in-ai-coding-96-dont-fully-trust-output-yet-only-48-verify-it/) The clarification gate is research-backed and absent from every shipping product. [arXiv 2310.10996](https://arxiv.org/html/2310.10996v1), [arXiv 2605.25284](https://arxiv.org/html/2605.25284v1) The negative-space verification column is empty across all three competitive sets. The MVP differentiates without its riskiest component. The components are all buildable with 2026 engineering.
+
+**What is honestly narrow:** the only *durable* asset is the accumulated behavioral corpus, and it is a byproduct of the hardest engineering problem in the design — **the moat and the technical risk are the same component** — which is why the MVP ruling matters: the product must earn users with the gate, the Lock, the budget enforcement, and the honest report *before* the corpus exists. The intent layer (gate, attention budget, depth system) is real and unbuilt but copyable in a quarter by a determined incumbent; its defense is calibration data and the design conviction to ship *less visible capability* — a willingness to not show the diff — which incumbents monetizing capability demos will struggle to match. The window is roughly 18 months (§26).
+
+**The honest third bucket is the brand.** Every competitor's report says "Done." Code Director's says what was measured, what was proven, what is merely believed, and what nobody checked. Competitors are structurally reluctant to copy this because it makes demos look weaker — which is precisely why it is worth more than any single mechanism in this document.
+
+**What would make this fail, enumerated:**
+
+1. **Building the interface instead of the verification.** Both feel like progress for the first two months; only one is a company. (Doc B's sharpest test, retained.)
+2. **Gating the MVP on characterization generation** — the ruling's correction exists because doc B's own risk table says this component can fail; an MVP that requires it bets the company on a research problem.
+3. **Manufactured confidence.** One high-profile "verified unchanged" that wasn't destroys the trust the product trades on; the damage is proportional to the claim, not the bug. Every mitigation in §20 exists for this.
+4. **Clarification fatigue** — a miscalibrated gate recreates the always-ask failure at product level and gets disabled within a week.
+5. **Platform absorption within the window** — Claude Code with plan mode, a good AGENTS.md, and a PreToolUse hook already delivers ~70% of the interaction model for free; the remaining 30% (pre-captured baseline, differential check, honest report) is the product, and it must ship before the platforms notice the column is empty.
+6. **Losing the discipline** — shipping a Lock that is a Markdown file pasted into context, a report without schema-enforced artifact references, or an eval gate that cannot actually fail. Each is a quiet reversion to being a skin.
+
+**Bottom line.** Build it, narrowly and honestly: CLI-first, one ecosystem, evals before product, the gate and the Lock and the evidence-classed report in the MVP, characterization baselines as a gated fast-follow, the corpus as the compounding asset. Doc A's closing stands, amended: this is the first serious productization of *intent engineering* — and now also of *verified execution* — the pre-coding and post-coding layers the market skipped while racing to automate the middle. The realistic success case: own the "delegation you can actually govern" niche, define the vocabulary (ambiguity gates, KEEP sets, attention budgets, evidence classes) that becomes standard within two to three years, and be the reference implementation — and the acquisition target — when it does. The realistic failure case: a well-reviewed feature inside Cursor, or a beautiful chat surface that never built the oracle separation. Both outcomes start from the same MVP, and the difference is execution discipline: the eval harness, the refusal to manufacture confidence, and the willingness to spend engineering on what the user never sees.
+
+Doc B's one line survives the merge because it is the verification layer's truth: *everyone else tells you what they changed; Code Director tells you what they didn't — and proves it.* Doc A's one line survives because it is the intent layer's truth: *you direct; it translates.* The merged product needs both sentences, and this document's claim is that they are the same sentence, seen from the two ends of the loop: **the human states what must be true; the system finds out whether it is; neither pretends to be the other.**
+
+---
+
+*Unverified-claims ledger (per the rulings): the seed-repo star count (39.6k, doc B) — reported, unverified; Faros change-size figures (+51.3% PR size, +54% bugs/PR, doc B) — reported, unverified, used directionally only; "~35% → 4% scope leakage field data" (doc B) — reported, unverified; "Stack Overflow trust fell to 29%" (doc B) — reported, unverified; Kiro "SMT-based contradiction detection" (doc B) — could not be verified, omitted from the body; "~19.8% of top SWE-bench solves semantically incorrect" (doc B) — reported, unverified; "When Help Hurts" CHI 2026 and AssumptionMiner 2026 — cited via doc B's source list, not independently verified in the dossiers; Roo Code archival and Continue maintenance status — reported, unverified.*
