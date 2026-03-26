@@ -20,11 +20,13 @@ export interface CoChangeResult {
 }
 
 export function coChange(rootDir: string, relFile: string, limit = 5, maxCommits = 500): CoChangeResult {
+  // Note: `git log --name-only -- <file>` would filter the name list to
+  // <file> as well, so we take (capped) full history and filter in-process.
   let out: string;
   try {
     out = execFileSync(
       "git",
-      ["log", `--max-count=${maxCommits}`, "--pretty=format:--COMMIT--", "--name-only", "--", relFile],
+      ["log", `--max-count=${maxCommits}`, "--pretty=format:--COMMIT--", "--name-only"],
       { cwd: rootDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15000 },
     );
   } catch (err) {
@@ -35,6 +37,21 @@ export function coChange(rootDir: string, relFile: string, limit = 5, maxCommits
     return { available: false, reason, commitsExamined: 0, top: [] };
   }
 
+  // Paths from git log are relative to the git work-tree root, which may
+  // be a parent of rootDir. Compute the prefix and translate both ways.
+  let prefix = "";
+  try {
+    prefix = execFileSync("git", ["rev-parse", "--show-prefix"], {
+      cwd: rootDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 5000,
+    }).trim();
+  } catch {
+    /* ignore — keep empty prefix */
+  }
+  const gitRelFile = prefix ? prefix + relFile : relFile;
+
   const counts = new Map<string, number>();
   let commits = 0;
   for (const chunk of out.split("--COMMIT--")) {
@@ -43,10 +60,14 @@ export function coChange(rootDir: string, relFile: string, limit = 5, maxCommits
       .map((l) => l.trim())
       .filter(Boolean);
     if (files.length === 0) continue;
-    commits++;
     const unique = new Set(files);
-    unique.delete(relFile);
-    for (const f of unique) counts.set(f, (counts.get(f) ?? 0) + 1);
+    if (!unique.has(gitRelFile)) continue;
+    commits++;
+    unique.delete(gitRelFile);
+    for (const f of unique) {
+      const rel = prefix && f.startsWith(prefix) ? f.slice(prefix.length) : f;
+      counts.set(rel, (counts.get(rel) ?? 0) + 1);
+    }
   }
 
   const top = [...counts.entries()]
