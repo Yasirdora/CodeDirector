@@ -61,3 +61,82 @@ export {
 } from "./core/why";
 
 export { coChange, isGitRepo, type CoChangeResult } from "./core/git";
+
+// Stage 2 — Intent Lock
+export {
+  LOCK_SCHEMA_VERSION,
+  DEPENDENCY_MANIFESTS,
+  clauseCheckability,
+  CHECKABILITY_MARK,
+  type LockStatus,
+  type KeepClauseKind,
+  type KeepClause,
+  type LockBudget,
+  type LockAssumption,
+  type IntentLock,
+  type ClauseCheckability,
+} from "./lock/types";
+export { lockToYaml, lockFromYaml, LockParseError } from "./lock/yaml";
+export { globToRegExp, matchPath, validateGlob, hasGlobChars } from "./lock/glob";
+export {
+  locksDir,
+  nextLockId,
+  loadLock,
+  listLocks,
+  saveLock,
+  lockPathFor,
+  slugify,
+} from "./lock/store";
+export { draftLock, parseKeepClause, type DraftOptions, type DraftResult } from "./lock/draft";
+export {
+  checkLock,
+  signatureHash,
+  type LockCheckResult,
+  type ClauseCheck,
+} from "./lock/check";
+export { formatLock, formatLockLine } from "./lock/show";
+
+// Stage 2 — checkpoint / undo
+export {
+  createCheckpoint,
+  latestCheckpoint,
+  undo,
+  dirtyPaths,
+  gitStatusPorcelain,
+  gitPrefix,
+  toRootRelative,
+  workTreeStatusPorcelain,
+  checkpointsPath,
+  CheckpointError,
+  type Checkpoint,
+  type UndoRecord,
+  type UndoResult,
+  type UndoOptions,
+} from "./checkpoint";
+
+// Stage 2 — baseline + scope enforcement + run wrapper
+export {
+  captureBaseline,
+  saveBaseline,
+  baselinesDir,
+  type Baseline,
+} from "./run/baseline";
+export {
+  classifyChanges,
+  classifyPath,
+  changedFiles,
+  changedLineCount,
+  type ChangeClass,
+  type ClassifiedChange,
+} from "./run/classify";
+export {
+  runWithLock,
+  formatRunReport,
+  runsDir,
+  RunError,
+  type RunRecord,
+  type RunOutcome,
+  type RunOptions,
+  type KeepResult,
+  type BudgetStats,
+} from "./run/run";
