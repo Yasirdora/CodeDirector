@@ -57,6 +57,7 @@ export function lockToYaml(lock: IntentLock): string {
     keep: lock.keep.map(clauseToYaml),
     deny: lock.deny,
     change: lock.change,
+    ...(lock.verifyCommand !== undefined ? { verifyCommand: lock.verifyCommand } : {}),
     budget: budgetToYaml(lock.budget),
     accept: lock.accept,
     assumptions: lock.assumptions.map(assumptionToYaml),
@@ -162,6 +163,9 @@ export function lockFromYaml(text: string): IntentLock {
     keep: keepRaw.map(parseClause),
     deny: strList(raw.deny, "deny"),
     change: reqString(raw, "change", "lock"),
+    ...(raw.verifyCommand !== undefined
+      ? { verifyCommand: reqString(raw, "verifyCommand", "lock") }
+      : {}),
     budget,
     accept: strList(raw.accept, "accept"),
     assumptions: assumptionsRaw.map(parseAssumption),

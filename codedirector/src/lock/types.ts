@@ -34,10 +34,11 @@ export const KEEP_CLAUSE_KINDS: KeepClauseKind[] = [
 
 /**
  * A KEEP clause. Which optional fields are meaningful depends on `kind`:
- *  - output-unchanged:  command + fixtures (stored; executed in Stage 3)
- *  - api-unchanged:     symbols (symbol ids; checkable NOW via signature hash)
- *  - no-new-dependency: (no payload; lockfile/manifest diff, Stage 3 runner)
- *  - tests-pass:        glob (test glob; executed by the Stage 3 runner)
+ *  - output-unchanged:  command + fixtures (differential: sha256 of stdout,
+ *                       captured at baseline time and re-run at verify time)
+ *  - api-unchanged:     symbols (symbol ids; signature hash, structural)
+ *  - no-new-dependency: (no payload; manifest/lockfile sha256 diff)
+ *  - tests-pass:        glob (test glob; executed via `node --test`)
  *  - custom:            text (free text; never machine-checkable)
  */
 export interface KeepClause {
@@ -84,6 +85,12 @@ export interface IntentLock {
   deny: string[];
   /** One-line scope description. */
   change: string;
+  /**
+   * Optional user-specified verification harness (e.g. "npm test"), executed
+   * by the verification ladder after the built-in checks; pass/fail is
+   * measured evidence.
+   */
+  verifyCommand?: string;
   budget: LockBudget;
   /** Acceptance signals (text in v1). */
   accept: string[];
@@ -94,8 +101,9 @@ export interface IntentLock {
 
 /**
  * Checkability of a KEEP clause — drives the markers in `cdir lock show`:
- *  - "now":      ✓ machine-checkable against the current index / baselines
- *  - "deferred": stored now, executed by the Stage 3 verification runner
+ *  - "now":      ✓ machine-checkable (structural diff or executed check)
+ *  - "deferred": stored now, executed by a later-stage runner (unused since
+ *                the verification engine landed; kept for schema stability)
  *  - "custom":   ? not machine-checkable — human judges
  */
 export type ClauseCheckability = "now" | "deferred" | "custom";
@@ -104,10 +112,9 @@ export function clauseCheckability(clause: KeepClause): ClauseCheckability {
   switch (clause.kind) {
     case "api-unchanged":
     case "no-new-dependency":
-      return "now";
     case "output-unchanged":
     case "tests-pass":
-      return "deferred";
+      return "now";
     case "custom":
       return "custom";
   }

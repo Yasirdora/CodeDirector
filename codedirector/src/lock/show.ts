@@ -1,8 +1,7 @@
 /**
  * Human-readable Lock rendering (`cdir lock show`), modeled on the
  * blueprint's Intent Lock panel: per-clause checkability markers
- *   ✓ machine-checkable now
- *   ~ stored, executed by the Stage 3 verification runner
+ *   ✓ machine-checkable (structural diff or executed by the verifier)
  *   ? not machine-checkable — human judges
  */
 
@@ -53,6 +52,7 @@ export function formatLock(lock: IntentLock, check?: LockCheckResult): string {
 
   lines.push(``);
   lines.push(`Change  ${lock.change}`);
+  if (lock.verifyCommand) lines.push(`Verify  ${lock.verifyCommand}  (user harness — measured)`);
   if (lock.deny.length > 0) {
     lines.push(`Do not`);
     for (const d of lock.deny) lines.push(`  ✗ ${d}`);

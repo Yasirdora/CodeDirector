@@ -58,7 +58,7 @@ function checkClause(clause: KeepClause, index: RepoIndex | null): ClauseCheck {
     }
     case "output-unchanged":
       if (!clause.command) errors.push("output-unchanged clause has no command");
-      note = "stored; executed by the Stage 3 verification runner";
+      note = "differential stdout hash — captured at baseline, re-run by the verifier";
       break;
     case "no-new-dependency":
       note = "manifest/lockfile diff — checkable against a captured baseline";
@@ -70,7 +70,7 @@ function checkClause(clause: KeepClause, index: RepoIndex | null): ClauseCheck {
         const g = validateGlob(clause.glob);
         if (g) errors.push(`tests-pass glob invalid: ${g}`);
       }
-      if (errors.length === 0) note = "stored; executed by the Stage 3 verification runner";
+      if (errors.length === 0) note = "executed by the verifier via `node --test`";
       break;
     case "custom":
       if (!clause.text) errors.push("custom clause has no text");

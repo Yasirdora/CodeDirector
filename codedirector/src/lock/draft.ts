@@ -27,6 +27,8 @@ export interface DraftOptions {
   deny?: string[];
   /** Pre-filled budget files. */
   budgetFiles?: string[];
+  /** Optional user verification harness (e.g. "npm test"), run by the verifier. */
+  verifyCommand?: string;
   /** Cap on auto-proposed budget files (default 6). */
   maxProposedFiles?: number;
   /** For tests: override createdAt / createdBy. */
@@ -160,6 +162,7 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
     keep: opts.keep ?? [],
     deny: opts.deny && opts.deny.length > 0 ? opts.deny : suggestedDeny,
     change: "TODO — one-line scope description",
+    ...(opts.verifyCommand !== undefined ? { verifyCommand: opts.verifyCommand } : {}),
     budget: {
       files: budgetFiles,
       symbols: [],

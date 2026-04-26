@@ -24,15 +24,17 @@ import { buildGraph } from "../core/graph";
 import { indexDir, stableStringify } from "../core/store";
 import { createCheckpoint, Checkpoint } from "../checkpoint";
 import { IntentLock } from "../lock/types";
-import { loadLock } from "../lock/store";
+import { loadLock, saveLock } from "../lock/store";
 import { signatureHash } from "../lock/check";
 import { Baseline, captureBaseline, saveBaseline } from "./baseline";
 import { changedFiles, changedLineCount, ClassifiedChange, classifyChanges } from "./classify";
+import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
+import { VerificationReport } from "../verify/types";
 
 export interface KeepResult {
   kind: string;
   detail: string;
-  /** ok = verified held · violated = proven broken · deferred = Stage 3 · custom = human judges */
+  /** ok = verified held · violated = proven broken · deferred = no check could run · custom = human judges */
   status: "ok" | "violated" | "deferred" | "custom";
 }
 
@@ -57,6 +59,8 @@ export interface RunRecord {
   violations: string[];
   /** True when --allow-expand downgraded scope violations to logged overrides. */
   allowExpand: boolean;
+  /** Full verification-ladder result (present unless run with verify disabled). */
+  verification?: VerificationReport;
 }
 
 export class RunError extends Error {}
@@ -69,6 +73,12 @@ export interface RunOptions {
   allowExpand?: boolean;
   /** stdio for the child command (default "inherit"; tests may use "pipe"). */
   stdio?: "inherit" | "pipe";
+  /** Run the verification ladder after execution (default true). */
+  verify?: boolean;
+  /** Options passed through to the verifier (timeouts, env, typecheck toggle). */
+  verifyOptions?: VerifyOptions;
+  /** Update the Lock's status after the run (verified/failed; default true). */
+  updateStatus?: boolean;
 }
 
 export interface RunOutcome {
@@ -151,6 +161,23 @@ function checkKeepClauses(
   return results;
 }
 
+/** Map verification items back onto the Stage 2 KeepResult record shape. */
+function keepResultsFromVerification(report: VerificationReport): KeepResult[] {
+  return report.items
+    .filter((i) => i.source === "keep-clause")
+    .map((i) => {
+      const kind = i.clauseKind ?? "custom";
+      if (i.verdict === "held") return { kind, detail: i.detail, status: "ok" as const };
+      if (i.verdict === "violated") return { kind, detail: i.detail, status: "violated" as const };
+      if (kind === "custom") {
+        const text = i.subject.replace(/^custom · /, "");
+        return { kind, detail: `${text} — not machine-checkable; human judges`, status: "custom" as const };
+      }
+      const label = i.subject.includes(" · ") ? i.subject.slice(i.subject.indexOf(" · ") + 3) : i.subject;
+      return { kind, detail: `${label} — unchecked: ${i.reason ?? i.detail}`, status: "deferred" as const };
+    });
+}
+
 export async function runWithLock(
   rootDir: string,
   lockId: string,
@@ -164,8 +191,8 @@ export async function runWithLock(
   if (lock.status === "draft") {
     throw new RunError(`lock ${lockId} is a draft — review it and run \`cdir lock activate ${lockId}\` first`);
   }
-  if (lock.status !== "active") {
-    throw new RunError(`lock ${lockId} has status "${lock.status}" — only active locks can run`);
+  if (lock.status === "abandoned") {
+    throw new RunError(`lock ${lockId} has status "abandoned" — it cannot run again`);
   }
 
   // 1. checkpoint before anything
@@ -199,9 +226,19 @@ export async function runWithLock(
     maxLines: lock.budget.maxLines,
   };
 
-  // 5. KEEP checks against the baseline
+  // 5. verification ladder against the baseline (Stage 3): structural diffs,
+  //    typecheck, tests, verifyCommand, output hashes, custom. keepResults on
+  //    the record are derived from it; with verify disabled we fall back to
+  //    the Stage 2 structural-only diff.
   const { index: indexAfter } = await buildIndex(rootDir);
-  const keepResults = checkKeepClauses(rootDir, lock, baseline, indexAfter);
+  const baselineRel = path.relative(rootDir, baselinePath).split(path.sep).join("/");
+  const verification =
+    opts.verify === false
+      ? undefined
+      : verifyWithBaseline(rootDir, lock, baseline, baselineRel, indexAfter, opts.verifyOptions);
+  const keepResults = verification
+    ? keepResultsFromVerification(verification)
+    : checkKeepClauses(rootDir, lock, baseline, indexAfter);
 
   const scopeViolations: string[] = [];
   for (const c of changed) {
@@ -217,9 +254,11 @@ export async function runWithLock(
   if (budget.linesChanged > budget.maxLines) {
     scopeViolations.push(`BUDGET: ${budget.linesChanged} lines changed > maxLines ${budget.maxLines}`);
   }
-  const keepViolations = keepResults
-    .filter((r) => r.status === "violated")
-    .map((r) => `KEEP ${r.kind}: ${r.detail}`);
+  const keepViolations = verification
+    ? verification.violations
+    : keepResults
+        .filter((r) => r.status === "violated")
+        .map((r) => `KEEP ${r.kind}: ${r.detail}`);
 
   const allowExpand = opts.allowExpand === true;
   // --allow-expand is the logged override for SCOPE growth only; a broken
@@ -239,6 +278,7 @@ export async function runWithLock(
     keepResults,
     violations,
     allowExpand,
+    ...(verification ? { verification } : {}),
   };
   fs.mkdirSync(runsDir(rootDir), { recursive: true });
   const ts = startedAt.replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
@@ -246,6 +286,14 @@ export async function runWithLock(
   fs.writeFileSync(recordPath, stableStringify(record), "utf8");
 
   const exitCode = commandExit === 0 && violations.length === 0 ? 0 : 1;
+
+  // The Lock's status reflects the latest verdict: everything passed →
+  // verified; any violation or a failed command → failed.
+  if (opts.updateStatus !== false) {
+    lock.status = exitCode === 0 ? "verified" : "failed";
+    saveLock(rootDir, lock);
+  }
+
   return { record, recordPath, exitCode };
 }
 
