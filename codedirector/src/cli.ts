@@ -14,6 +14,8 @@
  *   cdir checkpoint                    Git checkpoint (tag + dirty-state record)
  *   cdir undo [--force]                Restore the latest checkpoint
  *   cdir run <lock-id> -- <cmd...>     Verified execution inside the Lock
+ *   cdir verify <lock-id>              Re-run the verification ladder
+ *   cdir report <lock-id> [--format]   Change Report (terminal · md · json)
  *   cdir help                          This help
  *
  * Exit codes: 0 success, 1 runtime failure, 2 usage error.
@@ -32,6 +34,9 @@ import { checkLock } from "./lock/check";
 import { formatLock, formatLockLine } from "./lock/show";
 import { createCheckpoint, latestCheckpoint, undo, CheckpointError } from "./checkpoint";
 import { formatRunReport, runWithLock, RunError } from "./run/run";
+import { VerifyError } from "./verify/verify";
+import { buildReport, finalizeLockStatus, ReportError } from "./report/report";
+import { formatReport, formatReportJson, formatReportMarkdown } from "./report/format";
 
 const HELP = `cdir — Code Director: the contract/verification layer around coding agents
 
@@ -50,8 +55,8 @@ Usage:
                                           tests-pass:<glob>, output-unchanged:<cmd>,
                                           no-new-dependency, custom:<text>
   cdir lock ls [--root DIR]               List Locks
-  cdir lock show <id> [--root DIR]        Render a Lock (✓ checkable now ·
-                                          ~ Stage 3 runner · ? human judges)
+  cdir lock show <id> [--root DIR]        Render a Lock (✓ machine-checkable ·
+                                          ? human judges)
   cdir lock check <id> [--root DIR]       Validate against the current index;
                                           exit 1 when invalid
   cdir lock activate <id> [--root DIR]    draft → active (requires check to pass)
@@ -64,17 +69,30 @@ Usage:
 
   cdir run <lock-id> [--root DIR]         Verified execution: checkpoint, capture
           [--allow-expand] -- <cmd...>    baseline, run the command, enforce
-                                          budget + deny, diff KEEP surface,
-                                          write a run record. Exit 0 only when
-                                          the command succeeded AND no violations.
+          [--no-report]                   budget + deny, then verify every KEEP
+                                          clause (structural diffs, typecheck,
+                                          tests, output hashes) and emit the
+                                          Change Report. Exit 0 only when the
+                                          command succeeded AND no violations.
                                           Without a lock id: refused (the whole
                                           point is the contract).
+
+  cdir verify <lock-id> [--root DIR]      Re-run the verification ladder against
+                                          the latest baseline (tests, typecheck,
+                                          output hashes) without re-running the
+                                          change command
+  cdir report <lock-id> [--root DIR]      Render the Change Report: violations
+          [--format=terminal|md|json]     first, then verified claims with
+                                          evidence classes + artifact refs,
+                                          then the Unchecked bucket (always
+                                          visible), then asserted findings
 
   cdir help                               Show this help
 
 Options:
   --root DIR        Repository root (default: current directory)
   --json            Machine-readable output (why)
+  --format FMT      Report format: terminal (default), md, json
   --top N           Max entries in map output (default 30)
   --max-tokens N    Approximate token budget for map output (default 1024)
 
@@ -133,6 +151,21 @@ function fail(message: string, code = 1): never {
   process.exit(code);
 }
 
+function renderReport(report: import("./report/report").ChangeReport, fmt: string): string {
+  switch (fmt) {
+    case "terminal":
+    case "text":
+      return formatReport(report);
+    case "md":
+    case "markdown":
+      return formatReportMarkdown(report);
+    case "json":
+      return formatReportJson(report);
+    default:
+      fail(`unknown report format "${fmt}" (terminal · md · json)`, 2);
+  }
+}
+
 function rootFrom(flags: Map<string, Array<string | true>>): string {
   return path.resolve(flagStr(flags, "root") ?? process.cwd());
 }
@@ -181,6 +214,7 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
         keep: keep.length > 0 ? keep : undefined,
         deny: flagList(flags, "deny"),
         budgetFiles: flagList(flags, "budget-files"),
+        verifyCommand: flagStr(flags, "verify-command"),
       });
       const lines: string[] = [];
       lines.push(`drafted ${result.lock.id} → ${path.relative(root, result.path)}`);
@@ -373,9 +407,49 @@ async function main(): Promise<number> {
           allowExpand: flags.has("allow-expand"),
         });
         process.stdout.write(formatRunReport(outcome) + "\n");
+        // The Change Report is auto-emitted at the end of every run.
+        if (!flags.has("no-report")) {
+          const report = await buildReport(root, lockId, {
+            verification: outcome.record.verification,
+            run: outcome.record,
+            runRecordPath: outcome.recordPath,
+          });
+          const fmt = flagStr(flags, "format") ?? "terminal";
+          process.stdout.write("\n" + renderReport(report, fmt) + "\n");
+        }
         return outcome.exitCode;
       } catch (e) {
         if (e instanceof RunError || e instanceof CheckpointError) fail(e.message);
+        throw e;
+      }
+    }
+
+    case "verify": {
+      const lockId = positional[0];
+      if (!lockId) fail("verify requires a lock id, e.g. cdir verify IL-0001", 2);
+      try {
+        const report = await buildReport(root, lockId);
+        finalizeLockStatus(root, report);
+        const fmt = flagStr(flags, "format") ?? "terminal";
+        process.stdout.write(renderReport(report, fmt) + "\n");
+        return report.verdict === "verified" ? 0 : 1;
+      } catch (e) {
+        if (e instanceof VerifyError || e instanceof ReportError) fail(e.message);
+        throw e;
+      }
+    }
+
+    case "report": {
+      const lockId = positional[0];
+      if (!lockId) fail("report requires a lock id, e.g. cdir report IL-0001", 2);
+      try {
+        const report = await buildReport(root, lockId);
+        finalizeLockStatus(root, report);
+        const fmt = flagStr(flags, "format") ?? "terminal";
+        process.stdout.write(renderReport(report, fmt) + "\n");
+        return report.verdict === "verified" ? 0 : 1;
+      } catch (e) {
+        if (e instanceof VerifyError || e instanceof ReportError) fail(e.message);
         throw e;
       }
     }

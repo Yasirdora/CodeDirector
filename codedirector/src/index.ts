@@ -118,9 +118,14 @@ export {
 export {
   captureBaseline,
   saveBaseline,
+  loadBaseline,
+  latestBaselinePath,
   baselinesDir,
   type Baseline,
+  type BaselineOutput,
+  type BaselineOptions,
 } from "./run/baseline";
+export { runShellProbe, runArgvProbe, sha256, type ProbeResult } from "./run/probe";
 export {
   classifyChanges,
   classifyPath,
@@ -140,3 +145,28 @@ export {
   type KeepResult,
   type BudgetStats,
 } from "./run/run";
+
+// Stage 3 — verification engine (evidence classes are the product)
+export {
+  EVIDENCE_CLASSES,
+  countByClass,
+  enforceArtifactRule,
+  type EvidenceClass,
+  type Verdict,
+  type VerificationSource,
+  type VerificationItem,
+  type VerificationReport,
+} from "./verify/types";
+export { verifyLock, verifyWithBaseline, VerifyError, type VerifyOptions } from "./verify/verify";
+
+// Stage 3 — Change Report
+export {
+  buildReport,
+  latestRunRecord,
+  finalizeLockStatus,
+  ReportError,
+  type ChangeReport,
+  type Finding,
+  type BuildReportOptions,
+} from "./report/report";
+export { formatReport, formatReportMarkdown, formatReportJson } from "./report/format";
