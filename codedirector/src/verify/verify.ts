@@ -187,6 +187,14 @@ function localTsc(rootDir: string): string | null {
   return fs.existsSync(p) ? p : null;
 }
 
+/** First diagnostic lines from compiler output (error lines preferred). */
+function compilerDiagnostics(stdout: string, stderr: string): string {
+  const errorLines = stdout.split("\n").filter((l) => l.includes("error TS")).slice(0, 5);
+  if (errorLines.length > 0) return `: ${errorLines.join(" · ")}`;
+  const any = `${stdout}\n${stderr}`.split("\n").filter((l) => l.trim()).slice(0, 3);
+  return any.length > 0 ? ` — output: ${any.join(" · ").slice(0, 300)}` : "";
+}
+
 function verifyTypecheck(rootDir: string, opts: VerifyOptions): VerificationItem[] {
   if (opts.typecheck === false) return [];
   if (!fs.existsSync(path.join(rootDir, "tsconfig.json"))) return [];
@@ -204,32 +212,32 @@ function verifyTypecheck(rootDir: string, opts: VerifyOptions): VerificationItem
     if (probe.exitCode === 0) {
       return [{ source: "typecheck", subject, verdict: "held", evidenceClass: "proven", detail: "tsc --noEmit clean", artifactRef: `node node_modules/typescript/bin/tsc --noEmit -p . → exit 0` }];
     }
-    const firstErrors = probe.stdout.split("\n").filter((l) => l.includes("error TS")).slice(0, 5);
+    const firstErrors = compilerDiagnostics(probe.stdout, probe.stderr);
     return [{
       source: "typecheck",
       subject,
       verdict: "violated",
       evidenceClass: "measured",
-      detail: `tsc --noEmit failed (exit ${probe.exitCode})${firstErrors.length > 0 ? `: ${firstErrors.join(" · ")}` : ""}`,
-      artifactRef: `tsc --noEmit -p . → exit ${probe.exitCode}`,
+      detail: `tsc --noEmit failed (exit ${probe.exitCode})${firstErrors}`,
+      artifactRef: `node node_modules/typescript/bin/tsc --noEmit -p . → exit ${probe.exitCode}`,
     }];
   }
   // No local install: probe npx without allowing downloads.
   const probe = runShellProbe(rootDir, "npx --no-install tsc --noEmit", timeout, opts.env);
   const out = `${probe.stdout}\n${probe.stderr}`;
-  if (probe.error || probe.timedOut || /could not determine executable|npm error|not installed/i.test(out)) {
-    return [uncheckedItem("typecheck", subject, "typescript compiler unavailable (no node_modules/typescript; `npx --no-install tsc` found nothing)")];
+  if (probe.error || probe.timedOut || /could not determine executable|npm error|not installed|not the tsc command/i.test(out)) {
+    return [uncheckedItem("typecheck", subject, "typescript compiler unavailable (no node_modules/typescript; `npx --no-install tsc` found no real compiler)")];
   }
   if (probe.exitCode === 0) {
     return [{ source: "typecheck", subject, verdict: "held", evidenceClass: "proven", detail: "tsc --noEmit clean", artifactRef: `npx --no-install tsc --noEmit → exit 0` }];
   }
-  const firstErrors = probe.stdout.split("\n").filter((l) => l.includes("error TS")).slice(0, 5);
+  const firstErrors = compilerDiagnostics(probe.stdout, probe.stderr);
   return [{
     source: "typecheck",
     subject,
     verdict: "violated",
     evidenceClass: "measured",
-    detail: `tsc --noEmit failed (exit ${probe.exitCode})${firstErrors.length > 0 ? `: ${firstErrors.join(" · ")}` : ""}`,
+    detail: `tsc --noEmit failed (exit ${probe.exitCode})${firstErrors}`,
     artifactRef: `npx --no-install tsc --noEmit → exit ${probe.exitCode}`,
   }];
 }
@@ -259,7 +267,7 @@ function verifyTestsPass(rootDir: string, lock: IntentLock, opts: VerifyOptions)
       items.push(uncheckedItem("keep-clause", subject, `glob matched no test files: ${glob}`, clause.kind));
       continue;
     }
-    const probe = runArgvProbe(rootDir, [process.execPath, "--test", ...files], timeout, opts.env);
+    const probe = runArgvProbe(rootDir, [process.execPath, "--test", "--test-reporter=tap", ...files], timeout, opts.env);
     const artifactRef = `node --test ${glob} (${files.length} file(s)) → exit ${probe.exitCode ?? "?"}`;
     if (probe.timedOut) {
       items.push(uncheckedItem("keep-clause", subject, `test run timed out after ${timeout}ms`, clause.kind));

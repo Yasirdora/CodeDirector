@@ -1,0 +1,282 @@
+/**
+ * Verification-engine tests: every rung of the ladder — structural (proven),
+ * typecheck (proven/unavailable), tests (measured pass/fail/missing),
+ * output-unchanged (measured round-trip/violation/no-baseline), and custom
+ * (always unchecked). Runs against small temp git repos of plain JS.
+ */
+
+import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import test from "node:test";
+import { buildIndex } from "../src/core/builder";
+import { draftLock } from "../src/lock/draft";
+import { loadLock, saveLock } from "../src/lock/store";
+import { IntentLock, KeepClause } from "../src/lock/types";
+import { captureBaseline, saveBaseline, latestBaselinePath, loadBaseline } from "../src/run/baseline";
+import { runWithLock } from "../src/run/run";
+import { verifyLock, verifyWithBaseline } from "../src/verify/verify";
+import { VerificationItem } from "../src/verify/types";
+import { git, makeGitRepo } from "./helpers";
+
+const NODE = process.execPath;
+const append = (file: string, text: string) =>
+  `require("fs").appendFileSync(${JSON.stringify(file)},${JSON.stringify(text)})`;
+
+const MATH_JS = `export function add(a, b) { return a + b; }\n`;
+const RENDER_JS = `import { add } from "./math.js";\nconsole.log(\`sum=\${add(2, 3)}\`);\n`;
+const MATH_TEST = `import test from "node:test";\nimport assert from "node:assert/strict";\nimport { add } from "../src/math.js";\ntest("add works", () => assert.equal(add(2, 3), 5));\n`;
+
+function fixtureFiles(): Record<string, string> {
+  return {
+    "src/math.js": MATH_JS,
+    "src/render.js": RENDER_JS,
+    "test/math.test.js": MATH_TEST,
+    "package.json": '{"name":"fixture","type":"module","dependencies":{}}\n',
+  };
+}
+
+async function setup(keep: KeepClause[], customize?: (lock: IntentLock) => void): Promise<{ root: string; lock: IntentLock }> {
+  const root = makeGitRepo(fixtureFiles());
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "make math faster", {
+    now: "2026-09-11T00:00:00.000Z",
+    createdBy: "test",
+  });
+  lock.keep = keep;
+  lock.budget = { files: ["src/math.js"], symbols: [], maxFiles: 2, maxLines: 400 };
+  lock.change = "math internals only";
+  lock.goal = "same behavior, faster";
+  customize?.(lock);
+  lock.status = "active";
+  saveLock(root, lock);
+  return { root, lock };
+}
+
+function find(items: VerificationItem[], kind: string): VerificationItem[] {
+  return items.filter((i) => i.clauseKind === kind || i.subject.startsWith(kind));
+}
+
+test("verify: api-unchanged held is proven with a baseline artifact reference", async () => {
+  const { root, lock } = await setup([{ kind: "api-unchanged", symbols: ["src/math.js#add"] }]);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// faster\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0);
+  const item = find(outcome.record.verification!.items, "api-unchanged")[0];
+  assert.equal(item.verdict, "held");
+  assert.equal(item.evidenceClass, "proven");
+  assert.ok(item.artifactRef?.includes("#signatures[src/math.js#add]"), `artifactRef: ${item.artifactRef}`);
+});
+
+test("verify: api-unchanged signature change is a proven violation", async () => {
+  const { root, lock } = await setup([{ kind: "api-unchanged", symbols: ["src/math.js#add"] }]);
+  const breakSig =
+    'const fs=require("fs");fs.writeFileSync("src/math.js",fs.readFileSync("src/math.js","utf8").replace("add(a, b)","add(a, b, c)"))';
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", breakSig], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 1);
+  const item = find(outcome.record.verification!.items, "api-unchanged")[0];
+  assert.equal(item.verdict, "violated");
+  assert.equal(item.evidenceClass, "proven");
+  assert.ok(outcome.record.violations.some((v) => v.includes("KEEP api-unchanged")));
+  assert.equal(loadLock(root, lock.id)!.status, "failed", "lock status updated to failed");
+});
+
+test("verify: tests-pass is measured — pass and fail", async () => {
+  const { root, lock } = await setup([{ kind: "tests-pass", glob: "test/*.test.js" }]);
+
+  const pass = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(pass.exitCode, 0);
+  const passItem = find(pass.record.verification!.items, "tests-pass")[0];
+  assert.equal(passItem.verdict, "held");
+  assert.equal(passItem.evidenceClass, "measured");
+  assert.ok(passItem.artifactRef?.includes("node --test"), `artifactRef: ${passItem.artifactRef}`);
+
+  const breakBehavior =
+    'const fs=require("fs");fs.writeFileSync("src/math.js",fs.readFileSync("src/math.js","utf8").replace("return a + b","return a - b"))';
+  const fail = await runWithLock(root, lock.id, [NODE, "-e", breakBehavior], { stdio: "pipe" });
+  assert.equal(fail.exitCode, 1);
+  const failItem = find(fail.record.verification!.items, "tests-pass")[0];
+  assert.equal(failItem.verdict, "violated");
+  assert.equal(failItem.evidenceClass, "measured");
+  assert.ok(failItem.detail.includes("add works"), `failing test named: ${failItem.detail}`);
+});
+
+test("verify: tests-pass with an empty glob is unchecked, reason named", async () => {
+  const { root, lock } = await setup([{ kind: "tests-pass", glob: "test/**/*.spec.js" }]);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0, "unchecked is not a violation");
+  const item = find(outcome.record.verification!.items, "tests-pass")[0];
+  assert.equal(item.verdict, "unchecked");
+  assert.equal(item.evidenceClass, "unchecked");
+  assert.ok(item.reason?.includes("matched no test files"), `reason: ${item.reason}`);
+});
+
+test("verify: output-unchanged round-trips and detects change", async () => {
+  const { root, lock } = await setup([{ kind: "output-unchanged", command: "node src/render.js" }]);
+
+  const same = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(same.exitCode, 0);
+  const sameItem = find(same.record.verification!.items, "output-unchanged")[0];
+  assert.equal(sameItem.verdict, "held");
+  assert.equal(sameItem.evidenceClass, "measured");
+
+  const changeOutput =
+    'const fs=require("fs");fs.writeFileSync("src/render.js",fs.readFileSync("src/render.js","utf8").replace("sum=","total="));' +
+    append("src/math.js", "// in-budget\n");
+  const changed = await runWithLock(root, lock.id, [NODE, "-e", changeOutput], {
+    stdio: "pipe",
+    allowExpand: true, // src/render.js is out of budget; accept scope to isolate the KEEP check
+  });
+  assert.equal(changed.exitCode, 1);
+  const changedItem = find(changed.record.verification!.items, "output-unchanged")[0];
+  assert.equal(changedItem.verdict, "violated");
+  assert.equal(changedItem.evidenceClass, "measured");
+  assert.ok(changedItem.detail.includes("output changed"), `detail: ${changedItem.detail}`);
+});
+
+test("verify: output-unchanged without a baseline capture is unchecked, not held", async () => {
+  const root = makeGitRepo(fixtureFiles());
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "make math faster", { now: "2026-09-11T00:00:00.000Z", createdBy: "test" });
+  lock.keep = [{ kind: "output-unchanged", command: "node src/render.js" }];
+  lock.budget = { files: ["src/math.js"], symbols: [], maxFiles: 2, maxLines: 400 };
+  lock.status = "active";
+  saveLock(root, lock);
+
+  // Baseline captured BEFORE the clause is added (simulates a lock edited
+  // after the run started): no outputs entry for the command.
+  const baseline = captureBaseline(root, { ...lock, keep: [] }, index);
+  saveBaseline(root, baseline);
+
+  const report = await verifyLock(root, lock.id);
+  const item = find(report.items, "output-unchanged")[0];
+  assert.equal(item.verdict, "unchecked");
+  assert.ok(item.reason?.includes("no pre-change baseline"), `reason: ${item.reason}`);
+  assert.equal(report.violations.length, 0);
+});
+
+test("verify: custom clauses are always unchecked — human judges", async () => {
+  const { root, lock } = await setup([{ kind: "custom", text: "still feels snappy" }]);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0);
+  const item = find(outcome.record.verification!.items, "custom")[0];
+  assert.equal(item.verdict, "unchecked");
+  assert.ok(item.reason?.includes("human judges"));
+  const kr = outcome.record.keepResults.find((k) => k.kind === "custom");
+  assert.equal(kr?.status, "custom");
+});
+
+test("verify: lock-level verifyCommand is measured", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.verifyCommand = "node --test test/math.test.js";
+  });
+  const pass = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(pass.exitCode, 0);
+  const item = pass.record.verification!.items.find((i) => i.source === "verify-command");
+  assert.equal(item?.verdict, "held");
+  assert.equal(item?.evidenceClass, "measured");
+
+  const failLock = { ...lock, verifyCommand: "node -e \"process.exit(2)\"" };
+  saveLock(root, { ...failLock, status: "active" });
+  const fail = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// more\n")], { stdio: "pipe" });
+  assert.equal(fail.exitCode, 1);
+  assert.ok(fail.record.violations.some((v) => v.includes("VERIFY verify-command")), `violations: ${fail.record.violations.join("; ")}`);
+});
+
+test("verify: typecheck proven-clean with a local compiler, unchecked without one", async () => {
+  // Repo WITH a compiler: symlink the codedirector node_modules in.
+  // (__dirname is dist/test once compiled — up two levels to the package root.)
+  const codedirModules = path.join(__dirname, "..", "..", "node_modules");
+  const root = makeGitRepo({
+    "tsconfig.json": '{"compilerOptions":{"strict":true,"noEmit":true},"include":["src"]}\n',
+    "src/ok.ts": "export const x: number = 1;\n",
+  });
+  fs.symlinkSync(codedirModules, path.join(root, "node_modules"), "dir");
+  // commit the symlink so the classifier does not see it as an untracked change
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-qm", "link node_modules"]);
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "tidy types", { now: "2026-09-11T00:00:00.000Z", createdBy: "test" });
+  lock.budget = { files: ["src/ok.ts"], symbols: [], maxFiles: 1, maxLines: 100 };
+  lock.status = "active";
+  saveLock(root, lock);
+
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/ok.ts", "export const y: number = 2;\n")], { stdio: "pipe" });
+  assert.equal(
+    outcome.exitCode,
+    0,
+    `violations: ${JSON.stringify(outcome.record.violations)} · items: ` +
+      JSON.stringify(outcome.record.verification?.items?.map((i) => [i.subject, i.verdict, i.detail])) +
+      ` · changed: ${JSON.stringify(outcome.record.changed)}`,
+  );
+  const tc = outcome.record.verification!.items.find((i) => i.source === "typecheck");
+  assert.ok(tc, "typecheck item present (tsconfig exists)");
+  assert.equal(tc!.verdict, "held");
+  assert.equal(tc!.evidenceClass, "proven");
+
+  // Type error → measured violation.
+  const broken = await runWithLock(root, lock.id, [NODE, "-e", append("src/ok.ts", 'const z: number = "nope";\n')], { stdio: "pipe" });
+  assert.equal(broken.exitCode, 1);
+  const tc2 = broken.record.verification!.items.find((i) => i.source === "typecheck");
+  assert.equal(tc2!.verdict, "violated");
+  assert.equal(tc2!.evidenceClass, "measured");
+  assert.ok(broken.record.violations.some((v) => v.includes("VERIFY typecheck")));
+
+  // Repo with tsconfig but NO compiler → unchecked with a named reason.
+  const root2 = makeGitRepo({
+    "tsconfig.json": '{"compilerOptions":{"strict":true},"include":["src"]}\n',
+    "src/ok.ts": "export const x: number = 1;\n",
+  });
+  const { index: index2 } = await buildIndex(root2);
+  const d2 = draftLock(root2, index2, "tidy types", { now: "2026-09-11T00:00:00.000Z", createdBy: "test" });
+  d2.lock.budget = { files: ["src/ok.ts"], symbols: [], maxFiles: 1, maxLines: 100 };
+  d2.lock.status = "active";
+  saveLock(root2, d2.lock);
+  const outcome2 = await runWithLock(root2, d2.lock.id, [NODE, "-e", append("src/ok.ts", "// ok\n")], { stdio: "pipe" });
+  const tc3 = outcome2.record.verification!.items.find((i) => i.source === "typecheck");
+  assert.ok(tc3, "typecheck item present");
+  assert.equal(tc3!.verdict, "unchecked");
+  assert.ok(tc3!.reason!.length > 0, "unavailability reason named");
+});
+
+test("verify: no tsconfig means no typecheck item at all", async () => {
+  const { root, lock } = await setup([]);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.ok(!outcome.record.verification!.items.some((i) => i.source === "typecheck"));
+});
+
+test("verify: standalone verifyLock uses the latest baseline", async () => {
+  const { root, lock } = await setup([{ kind: "api-unchanged", symbols: ["src/math.js#add"] }]);
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  const p = latestBaselinePath(root, lock.id);
+  assert.ok(p, "baseline exists after run");
+  const baseline = loadBaseline(p!);
+  assert.ok(baseline.signatures["src/math.js#add"], "signature pinned in baseline");
+
+  const report = await verifyLock(root, lock.id);
+  const item = find(report.items, "api-unchanged")[0];
+  assert.equal(item.verdict, "held");
+  assert.equal(report.baselinePath !== undefined, true);
+});
+
+test("verify: standalone verifyLock with NO baseline marks structural checks unchecked", async () => {
+  const root = makeGitRepo(fixtureFiles());
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "make math faster", { now: "2026-09-11T00:00:00.000Z", createdBy: "test" });
+  lock.keep = [
+    { kind: "api-unchanged", symbols: ["src/math.js#add"] },
+    { kind: "no-new-dependency" },
+    { kind: "tests-pass", glob: "test/*.test.js" },
+  ];
+  lock.budget = { files: ["src/math.js"], symbols: [], maxFiles: 2, maxLines: 400 };
+  lock.status = "active";
+  saveLock(root, lock);
+
+  const { index: indexNow } = await buildIndex(root);
+  const report = verifyWithBaseline(root, lock, null, undefined, indexNow);
+  assert.equal(find(report.items, "api-unchanged")[0].verdict, "unchecked");
+  assert.equal(find(report.items, "no-new-dependency")[0].verdict, "unchecked");
+  // tests are self-contained — they run even without a baseline
+  assert.equal(find(report.items, "tests-pass")[0].verdict, "held");
+  // and the run record was never written, so git stays clean for classify
+  git(root, ["status", "--porcelain"]);
+});

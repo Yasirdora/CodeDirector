@@ -25,6 +25,19 @@ export interface ProbeResult {
   error?: string;
 }
 
+/**
+ * Environment for probes: the inherited environment minus test-runner
+ * context markers. Without this, `node --test` spawned from inside another
+ * `node --test` process (e.g. `cdir run` invoked by an npm test script)
+ * silently refuses to run and exits 0 — a false "held". Stripping the marker
+ * makes the nested run real.
+ */
+function probeEnv(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out = { ...(env ?? process.env) };
+  delete out.NODE_TEST_CONTEXT;
+  return out;
+}
+
 export function runShellProbe(
   rootDir: string,
   command: string,
@@ -37,7 +50,7 @@ export function runShellProbe(
     encoding: "utf8",
     timeout: timeoutMs,
     maxBuffer: 16 * 1024 * 1024,
-    env: env ?? process.env,
+    env: probeEnv(env),
     stdio: ["ignore", "pipe", "pipe"],
   });
   const timedOut = child.error !== undefined && (child.error as NodeJS.ErrnoException).code === "ETIMEDOUT";
@@ -70,7 +83,7 @@ export function runArgvProbe(
     encoding: "utf8",
     timeout: timeoutMs,
     maxBuffer: 16 * 1024 * 1024,
-    env: env ?? process.env,
+    env: probeEnv(env),
     stdio: ["ignore", "pipe", "pipe"],
   });
   const timedOut = child.error !== undefined && (child.error as NodeJS.ErrnoException).code === "ETIMEDOUT";
