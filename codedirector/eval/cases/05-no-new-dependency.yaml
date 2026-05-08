@@ -1,0 +1,24 @@
+name: no-new-dependency
+# Adding a dependency to the manifest must trip the lockfile/manifest diff.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: make math faster, no new deps
+  goal: same behavior, faster
+  change: math internals only
+  keep:
+    - kind: no-new-dependency
+  budget:
+    files: ["src/math.js"]
+    maxFiles: 2
+command: node -e 'require("fs").writeFileSync("package.json",JSON.stringify({name:"eval-fixture",type:"module",dependencies:{lodash:"*"}}))'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "KEEP no-new-dependency"
+  items:
+    - { match: no-new-dependency, class: proven, verdict: violated }

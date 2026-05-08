@@ -113,6 +113,15 @@ function parseArgs(argv: string[]): ParsedArgs {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg.startsWith("--")) {
+      const eq = arg.indexOf("=");
+      if (eq !== -1) {
+        // --key=value form
+        const key = arg.slice(2, eq);
+        const list = flags.get(key) ?? [];
+        list.push(arg.slice(eq + 1));
+        flags.set(key, list);
+        continue;
+      }
       const key = arg.slice(2);
       const next = argv[i + 1];
       const value: string | true = next !== undefined && !next.startsWith("--") ? (i++, next) : true;

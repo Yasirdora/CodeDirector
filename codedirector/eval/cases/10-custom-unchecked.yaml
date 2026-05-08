@@ -1,0 +1,24 @@
+name: custom-unchecked
+# A custom clause is never machine-checked: the run passes, and the clause
+# lands in the Unchecked bucket — visible, with its reason.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: make math faster
+  goal: same behavior, faster
+  change: math internals only
+  keep:
+    - kind: custom
+      text: the code still reads well
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").appendFileSync("src/math.js","// faster\n")'
+expect:
+  exitCode: 0
+  status: verified
+  uncheckedMin: 1
+  items:
+    - { match: custom, class: unchecked, verdict: unchecked }

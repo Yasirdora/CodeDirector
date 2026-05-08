@@ -1,0 +1,25 @@
+name: output-unchanged-pass
+# A comment-only edit to the renderer must leave its stdout byte-identical.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  fixtures/fragment.txt: |
+    hello export
+  src/render.js: |
+    import { readFileSync } from "node:fs";
+    process.stdout.write(readFileSync("fixtures/fragment.txt", "utf8"));
+lock:
+  utterance: refactor the renderer, output must not change
+  goal: identical stdout
+  change: src/render.js internals
+  keep:
+    - kind: output-unchanged
+      command: node src/render.js
+  budget:
+    files: ["src/render.js"]
+command: node -e 'require("fs").appendFileSync("src/render.js","// tidy\n")'
+expect:
+  exitCode: 0
+  status: verified
+  items:
+    - { match: output-unchanged, class: measured, verdict: held }

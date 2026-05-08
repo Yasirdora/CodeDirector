@@ -1,0 +1,21 @@
+name: out-of-budget
+# Editing a file outside budget.files must fail with the offending path named.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/a.js: |
+    export const a = 1;
+  src/b.js: |
+    export const b = 2;
+lock:
+  utterance: tidy a
+  goal: a reads better
+  change: src/a.js only
+  budget:
+    files: ["src/a.js"]
+command: node -e 'require("fs").appendFileSync("src/b.js","// scope creep\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "OUT-OF-BUDGET: src/b.js"

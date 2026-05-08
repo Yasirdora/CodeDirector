@@ -1,0 +1,20 @@
+name: deny-violation
+# Touching a DENY-listed file must fail the run and name the pattern.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: make math faster
+  goal: same behavior, faster
+  change: math internals only
+  deny: ["package.json"]
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").appendFileSync("package.json","\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "DENY: package.json"

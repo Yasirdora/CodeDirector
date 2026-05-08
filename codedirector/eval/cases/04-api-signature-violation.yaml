@@ -1,0 +1,24 @@
+name: api-signature-violation
+# Changing a watched function's signature must be caught by the structural diff.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: optimize add without changing its API
+  goal: same signature, faster body
+  change: src/math.js body only
+  keep:
+    - kind: api-unchanged
+      symbols: ["src/math.js#add"]
+  budget:
+    files: ["src/math.js"]
+command: node -e 'const fs=require("fs");fs.writeFileSync("src/math.js",fs.readFileSync("src/math.js","utf8").replace("add(a, b)","add(a, b, c)"))'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "KEEP api-unchanged"
+  items:
+    - { match: api-unchanged, class: proven, verdict: violated }

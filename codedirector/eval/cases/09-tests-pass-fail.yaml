@@ -1,0 +1,30 @@
+name: tests-pass-fail
+# A behavior change that breaks the suite must be a measured violation naming the test.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+  test/math.test.js: |
+    import test from "node:test";
+    import assert from "node:assert/strict";
+    import { add } from "../src/math.js";
+    test("add works", () => assert.equal(add(2, 3), 5));
+lock:
+  utterance: make math faster
+  goal: same behavior, faster
+  change: math internals only
+  keep:
+    - kind: tests-pass
+      glob: test/*.test.js
+  budget:
+    files: ["src/math.js"]
+command: node -e 'const fs=require("fs");fs.writeFileSync("src/math.js",fs.readFileSync("src/math.js","utf8").replace("return a + b","return a - b"))'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "KEEP tests-pass"
+    - "add works"
+  items:
+    - { match: tests-pass, class: measured, verdict: violated }

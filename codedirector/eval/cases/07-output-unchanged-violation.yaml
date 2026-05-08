@@ -1,0 +1,27 @@
+name: output-unchanged-violation
+# Changing the fixture the renderer reads must change stdout — a measured violation.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  fixtures/fragment.txt: |
+    hello export
+  src/render.js: |
+    import { readFileSync } from "node:fs";
+    process.stdout.write(readFileSync("fixtures/fragment.txt", "utf8"));
+lock:
+  utterance: update the fragment, output must not change
+  goal: identical stdout
+  change: fixtures/fragment.txt content
+  keep:
+    - kind: output-unchanged
+      command: node src/render.js
+  budget:
+    files: ["fixtures/fragment.txt"]
+command: node -e 'require("fs").appendFileSync("fixtures/fragment.txt","changed\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "KEEP output-unchanged"
+  items:
+    - { match: output-unchanged, class: measured, verdict: violated }

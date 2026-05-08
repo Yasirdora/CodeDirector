@@ -1,0 +1,33 @@
+name: in-budget-clean
+# An in-budget, behavior-preserving edit: every checkable clause must verify.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+  test/math.test.js: |
+    import test from "node:test";
+    import assert from "node:assert/strict";
+    import { add } from "../src/math.js";
+    test("add works", () => assert.equal(add(2, 3), 5));
+lock:
+  utterance: make math faster
+  goal: same behavior, faster
+  change: math internals only
+  keep:
+    - kind: api-unchanged
+      symbols: ["src/math.js#add"]
+    - kind: tests-pass
+      glob: test/*.test.js
+    - kind: custom
+      text: code stays readable
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").appendFileSync("src/math.js","// faster\n")'
+expect:
+  exitCode: 0
+  status: verified
+  items:
+    - { match: api-unchanged, class: proven, verdict: held }
+    - { match: tests-pass, class: measured, verdict: held }
+  uncheckedMin: 1
