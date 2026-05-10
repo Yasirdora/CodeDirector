@@ -9,24 +9,26 @@ change could affect, enforces the scope the human approved, and reports
 every claim with an evidence class.
 
 This repository contains **Stage 1** (CLI scaffold, incremental structural
-index, ranked repo map, blast-radius analysis) and **Stage 2** (Intent Lock
+index, ranked repo map, blast-radius analysis), **Stage 2** (Intent Lock
 authoring/validation, checkpoint/undo, and the `cdir run` scope-enforcing
-execution wrapper). Later stages (verification runner, Change Report, eval
-harness) build on the APIs exported here.
+execution wrapper), and **Stage 3** (the verification ladder over evidence
+classes, the Change Report, and the eval harness).
 
 ## Evidence classes
 
 Every claim the system makes is one of:
 
-| Class | Meaning |
-|---|---|
-| **Measured** | Directly observed with instrumentation (traces, runs, diffs of artifacts) |
-| **Proven** | Structurally guaranteed (signature hash match, lockfile diff empty, typecheck) |
-| **Asserted** | Claimed by an agent or inferred, not differentially observed |
-| **Unchecked** | Nobody checked. Naming this bucket honestly is a feature. |
+| Class | Meaning | Produced by |
+|---|---|---|
+| **Measured** | Observed differentially, pre and post, same harness | test runs, output stdout hashes, `verifyCommand` |
+| **Proven** | Structurally guaranteed, no execution needed | signature hash match, manifest/lockfile diff, clean typecheck |
+| **Asserted** | Claimed without a differential check — always labeled | findings, any claim that lost its artifact reference |
+| **Unchecked** | No check exists or none could run — named, with the reason | custom clauses, missing baselines, unavailable compilers |
 
 Conservatism is policy: anything not differentially observed is Asserted at
-best. A claim without an artifact reference is automatically Asserted.
+best. **A claim without an artifact reference is automatically Asserted —
+enforced in code** (`enforceArtifactRule`), not by discipline. The Unchecked
+bucket is always rendered, even when empty; a report that hides it is lying.
 
 ## Install
 
@@ -83,16 +85,17 @@ files). The draft is written with `status: draft` — edit it, then
 
 The Lock schema (v1): `utterance` (your exact words, immutable), `goal`,
 `interpretation` (the system's operationalization — editable), `keep[]`,
-`deny[]`, `change`, `budget {files, symbols, maxFiles, maxLines}`,
-`accept[]`, `assumptions[]`. KEEP clause kinds:
+`deny[]`, `change`, `verifyCommand` (optional user test harness, e.g.
+`npm test` — run as measured evidence), `budget {files, symbols, maxFiles,
+maxLines}`, `accept[]`, `assumptions[]`. KEEP clause kinds:
 
-| Kind | Payload | Checkability |
+| Kind | Payload | Checked how |
 |---|---|---|
-| `api-unchanged` | symbol ids | ✓ now — signature hash from the index |
-| `no-new-dependency` | — | ✓ now — manifest/lockfile diff vs baseline |
-| `output-unchanged` | entry command + fixtures | ~ stored; executed by the Stage 3 runner |
-| `tests-pass` | test glob | ~ stored; executed by the Stage 3 runner |
-| `custom` | free text | ? not machine-checkable — human judges |
+| `api-unchanged` | symbol ids | ✓ signature hash, diffed against the pre-change baseline (proven) |
+| `no-new-dependency` | — | ✓ sha256 of manifests/lockfiles vs baseline (proven) |
+| `output-unchanged` | entry command + fixtures | ✓ stdout sha256, captured at baseline, re-run at verify (measured) |
+| `tests-pass` | test glob | ✓ `node --test <glob>` (measured) |
+| `custom` | free text | ? not machine-checkable — always Unchecked, human judges |
 
 A Lock **rejects** clauses it cannot even in principle check, unless
 `kind: custom` — and custom clauses are always flagged as human-judged.
@@ -103,7 +106,7 @@ A Lock **rejects** clauses it cannot even in principle check, unless
 
 ### `cdir lock ls` · `cdir lock show <id>` · `cdir lock check <id>` · `cdir lock activate <id>`
 
-`show` renders the Lock with per-clause checkability markers (✓ / ~ / ?).
+`show` renders the Lock with per-clause checkability markers (✓ machine-checkable / ? human judges).
 `check` validates against the current index — budget files exist, symbols
 resolve, deny globs valid, `maxFiles >= files.length` — and exits non-zero
 on invalid. `activate` moves draft → active only when check passes.
@@ -119,26 +122,115 @@ and says precisely what will be lost; every undo is logged. Untracked files
 are left in place and reported. Honest limit: git cannot undo external side
 effects.
 
-### `cdir run <lock-id> [--allow-expand] -- <command...>`
+### `cdir run <lock-id> [--allow-expand] [--no-report] -- <command...>`
 
 Verified execution inside an active Lock:
 
 1. auto-checkpoint (git tag) before anything;
 2. refresh the index and capture the KEEP baseline — signature hashes of
-   every `api-unchanged` symbol, sha256 of dependency manifests, git-status
-   baseline — to `.codedirector/baselines/` (gitignored: outside the source
-   tree the command can modify);
+   every `api-unchanged` symbol, sha256 of dependency manifests, **stdout
+   hashes of every `output-unchanged` command**, git-status baseline — to
+   `.codedirector/baselines/` (gitignored: outside the source tree the
+   command can modify);
 3. run the command (spawned, stdio inherited);
 4. classify every changed file against the Lock — in-budget / out-of-budget /
-   denied — and diff the KEEP surface against the baseline. Denied or
-   out-of-budget changes are violations with exact offending paths; nothing
-   is auto-reverted (`cdir undo` is offered). `--allow-expand` is the logged
-   override for scope growth only — a broken KEEP clause still fails;
-5. write the run record to `.codedirector/runs/<lock-id>-<ts>.json`.
+   denied. Denied or out-of-budget changes are violations with exact
+   offending paths; nothing is auto-reverted (`cdir undo` is offered).
+   `--allow-expand` is the logged override for scope growth only — a broken
+   KEEP clause still fails;
+5. **run the verification ladder** (see below) against the baseline;
+6. write the run record (including the full verification result) to
+   `.codedirector/runs/`, update the lock status (`verified` / `failed`), and
+   emit the Change Report (`--no-report` suppresses the rendering, not the
+   verification).
 
 Exit code: `0` only if the command succeeded AND no violations. `cdir run`
 without a lock id is refused — ad-hoc mode is a later phase; the whole point
 is the contract.
+
+### The verification ladder
+
+After execution, every KEEP clause and every lock-level claim is verified as
+far as possible, in ladder order (cheapest/strongest first):
+
+1. **Structural (proven)** — re-index; each `api-unchanged` symbol's
+   signature hash compared pre/post; `no-new-dependency` as a sha256 diff of
+   `package.json` / lockfiles. Both produce `proven` held or violated.
+2. **Typecheck (proven when clean)** — if `tsconfig.json` exists and a
+   compiler is available (`node_modules/typescript`, else
+   `npx --no-install tsc`), run `tsc --noEmit` with a 120s timeout. Clean →
+   proven; errors → measured violation; no compiler → Unchecked with the
+   reason named.
+3. **Tests (measured)** — each `tests-pass` glob is expanded and run via
+   `node --test` with a timeout; pass → measured, fail → measured violation
+   with the failing test names, empty glob or dead runner → Unchecked with
+   the reason. A Lock-level `verifyCommand` (e.g. `npm test`) runs the same
+   way. (Probes strip the `NODE_TEST_CONTEXT` marker so a `cdir run` invoked
+   from inside another `node --test` process really executes — otherwise the
+   nested runner silently skips and exits 0, a false "held".)
+4. **Output (measured)** — each `output-unchanged` command is re-run and its
+   stdout sha256 compared to the baseline capture. If the lock was edited
+   after the baseline was captured, the clause is Unchecked — "no pre-change
+   baseline" — never silently held.
+5. **Custom (unchecked)** — always `unchecked — human judges`, listed by
+   text. This honesty is the feature.
+
+The verifier writes nothing to the repository (the index refresh touches only
+`.codedirector/`). The probed commands themselves run with normal repo
+permissions — a fully sandboxed verifier is a later phase.
+
+### `cdir verify <lock-id>`
+
+Re-runs the ladder without re-running the change command: latest baseline for
+the lock, fresh index, all rungs. Without any baseline, structural and output
+checks report Unchecked ("no pre-change baseline") while tests and typecheck
+still run. Updates the lock status; exit 0 only when verified.
+
+### `cdir report <lock-id> [--format=terminal|md|json]`
+
+Renders the **Change Report** — the product's signature artifact:
+
+- lock id + the original utterance, verbatim and immutable;
+- changed files with classification (in-budget / out-of-budget / denied) and
+  the budget they were measured against;
+- every KEEP clause and lock-level check with verdict, evidence class, and
+  artifact reference (which baseline file, which command, which exit code) —
+  violations first, then verified-held, then the Unchecked bucket (always
+  visible, each item with its reason);
+- findings: incidental observations (e.g. "src/x.ts changed in-budget but no
+  test file references it — behavioral coverage unknown"), always Asserted
+  and labeled;
+- a footer with counts per evidence class.
+
+`--format=md` is PR-postable markdown; `--format=json` is deterministic
+(`stableStringify`). The report builder downgrades any held claim lacking an
+artifact reference to Asserted — schema-enforced, per the blueprint. Report
+verdicts update the lock status, so `cdir lock show` reflects them.
+
+Sample (clean run):
+
+```
+CHANGE REPORT · IL-0001 · verdict: VERIFIED
+Said   "make the preview feel instant"
+Goal   input-to-paint under 50ms during drag
+Run    node scripts/inline-debounce.js · record .codedirector/runs/IL-0001-….json
+
+Changed files (1 changed · budget 1/2 files, 3/400 lines):
+  ✓ src/preview.ts  in-budget
+
+Violations: none
+
+Checks (violations first):
+  ✓ proven   api-unchanged · src/pipeline.ts#ImagePipeline.renderExport — signature unchanged
+             artifact: .codedirector/baselines/IL-0001-….json#signatures[src/pipeline.ts#…]
+  ✓ measured tests-pass · test/*.test.ts — 1 test file(s) pass under node --test
+             artifact: node --test test/*.test.ts (1 file(s)) → exit 0
+
+Unchecked (1) — named, not silently dropped:
+  ? custom · feels right above 8K sources — not machine-checkable — human judges
+
+Counts: proven 1 · measured 1 · asserted 0 · unchecked 1
+```
 
 ## Design principles
 
@@ -152,6 +244,34 @@ is the contract.
    configuration and no model in the loop.
 5. **Local-first.** The index lives in the repo at `.codedirector/`; nothing
    leaves the machine.
+
+## Eval harness
+
+`npm run eval` runs the cases in `eval/cases/*.yaml` against the real CLI in
+temp git repos and scores them against explicit expectations (exit codes,
+violation substrings, per-clause evidence class + verdict, minimum Unchecked
+bucket size). It is a **regression gate**: any failed case exits non-zero.
+It is deliberately not more than that — no LLM judge, no statistics, not
+blind. See [eval/README.md](eval/README.md).
+
+## What this is NOT yet
+
+Per the blueprint's phasing, honestly:
+
+- **No LLM agent loop.** `cdir run` wraps a command you (or your agent)
+  provide; it does not plan, edit, or repair by itself.
+- **No sandboxed verifier.** Probed commands run with repo permissions; our
+  code writes nothing, but a compromised test script could. Sandboxing is a
+  later phase.
+- **No characterization generation.** `output-unchanged` pins the output of
+  commands you name; it does not auto-generate behavior-pinning tests over
+  the KEEP surface (blueprint phase 1.5+, with a mutation-testing gate).
+- **No performance measurement rung.** Latency/memory claims are not
+  measurable yet — such clauses belong in `custom` (human judges) for now.
+- **No symbol-level budget enforcement.** `budget.symbols` is advisory;
+  enforcement is file-level.
+- **Heuristic parsing.** Call edges are name-resolved, not type-resolved;
+  compiler-grade precision (LSP) is a later phase.
 
 ## Architecture
 
@@ -183,7 +303,17 @@ src/
   run/
     baseline.ts     pre-run KEEP surface capture (outside the source tree)
     classify.ts     changed-file classification: denied/out-of-budget/in-budget
-    run.ts          cdir run — checkpoint → baseline → execute → enforce → record
+    run.ts          cdir run — checkpoint → baseline → execute → enforce → verify → record
+    probe.ts        read-only command probes (bounded timeout, sanitized env)
+  verify/
+    types.ts        EvidenceClass / VerificationItem / artifact-reference rule
+    verify.ts       the ladder: structural → typecheck → tests → output → custom
+  report/
+    report.ts       Change Report builder + findings + lock status transitions
+    format.ts       terminal / markdown / deterministic-JSON renderers
+eval/
+  cases/*.yaml      regression-gate cases (repo setup, lock, command, expect)
+  run.ts            npm run eval — executes cases against the real CLI, gates
 ```
 
 ### Parsing choice
@@ -235,6 +365,21 @@ Import from the package root (`codedirector` / `dist/src/index.js`):
   types `Baseline`, `RunRecord`, `RunOutcome`, `ClassifiedChange`,
   `KeepResult`, `BudgetStats`.
 
+**Stage 3 additions (verification + Change Report + eval):**
+
+- Verify: `verifyLock(rootDir, lockId, opts)`,
+  `verifyWithBaseline(rootDir, lock, baseline, baselineRel, index, opts)`,
+  `enforceArtifactRule(items)` (a held claim without an artifactRef becomes
+  Asserted), `runShellProbe` / `runArgvProbe` (read-only probes),
+  `loadBaseline`, `latestBaselinePath`; types `EvidenceClass`, `Verdict`,
+  `VerificationItem`, `VerificationReport`, `VerifyOptions`.
+- Report: `buildReport(rootDir, lockId, opts)`, `finalizeLockStatus`,
+  `latestRunRecord`, `formatReport` / `formatReportMarkdown` /
+  `formatReportJson`; types `ChangeReport`, `Finding`, `BuildReportOptions`.
+- Lock schema gained an optional `verifyCommand` field (user harness, run as
+  measured evidence); `Baseline` gained optional `outputs` (stdout hashes of
+  `output-unchanged` commands, captured pre-change).
+
 **Schema law for later stages:** derived structures (edges, rankings,
 reports) are computed from `RepoIndex` and never persisted, so a partial
 re-index can never leave stale derived state. Keep it that way.
@@ -244,6 +389,7 @@ re-index can never leave stale derived state. Keep it that way.
 ```sh
 npm run build     # tsc → dist/
 npm test          # build + node --test dist/test/
+npm run eval      # build + regression gate over eval/cases/*.yaml
 node dist/src/cli.js why ImagePipeline --root examples/demo-repo
 ```
 
