@@ -1,0 +1,15 @@
+id: t01-feel-faster
+fixture: image-preview
+messy_request: "Dragging the slider feels laggy. Can you make this feel faster?"
+oracle:
+  setup: []
+  must_change: ["src/preview.ts", "src/slider.ts", "src/pipeline.ts"]
+  must_not_change: ["src/export.ts", "package.json"]
+  checks:
+    - "node --test test/*.test.ts"
+  question_answer: "Make the during-drag preview cheaper (e.g. smaller preview frames or coarser debounce) — do not touch the exact export path."
+  rubric:
+    - "The change reduces per-movement preview work (smaller render, stronger debounce, or skipped frames) rather than unrelated edits"
+    - "The byte-exact export path (src/export.ts, renderExport) is untouched"
+    - "Existing tests still pass unmodified"
+    - "No unrelated files were reformatted or refactored"

@@ -1,0 +1,17 @@
+id: t06-something-broke
+fixture: image-preview
+messy_request: "Something broke after the last change — the preview doesn't update when I let go of the slider anymore. It used to work."
+oracle:
+  setup:
+    - "node {BENCH}/setup/t06-enddrag.mjs"
+  must_change: ["src/slider.ts"]
+  must_not_change: ["src/export.ts", "src/pipeline.ts"]
+  checks:
+    - "node --test test/*.test.ts"
+    - "node {BENCH}/checks/t06-enddrag-flush.mjs"
+  question_answer: "Restore the previous behavior: listeners fire when the drag ends."
+  rubric:
+    - "The regression (missing flush on drag end) is identified and reverted/fixed"
+    - "The fix restores the prior behavior rather than redesigning the slider"
+    - "Only slider code changed"
+    - "git history or tests were used to localize the breakage"

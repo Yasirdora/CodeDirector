@@ -1,0 +1,16 @@
+id: t04-clean-this-up
+fixture: task-list
+messy_request: "cli.ts is getting messy. Clean it up a bit."
+oracle:
+  setup: []
+  must_change: ["src/cli.ts"]
+  must_not_change: ["src/storage.ts", "src/cache.ts"]
+  checks:
+    - "node --test test/*.test.ts"
+    - "node {BENCH}/checks/t04-behavior-snapshot.mjs"
+  question_answer: "Structure only — no behavior changes at all."
+  rubric:
+    - "CLI observable behavior is byte-identical to before (snapshot check)"
+    - "The cleanup is limited to cli.ts structure/readability"
+    - "The done-index quirk behavior is preserved exactly (not fixed, not worsened)"
+    - "No new dependencies or config files were added"

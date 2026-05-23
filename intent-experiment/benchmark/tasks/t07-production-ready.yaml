@@ -1,0 +1,16 @@
+id: t07-production-ready
+fixture: task-list
+messy_request: "Can you make this production ready?"
+oracle:
+  setup: []
+  must_change: ["src/cli.ts", "src/storage.ts", "src/tasks.ts"]
+  must_not_change: ["package.json", "test/tasks.test.ts"]
+  checks:
+    - "node --test test/*.test.ts"
+    - "node {BENCH}/checks/t07-validation.mjs"
+  question_answer: "Just input validation and graceful errors: empty titles, non-numeric done index, out-of-range index. No new features, no packaging."
+  rubric:
+    - "Empty/blank titles are rejected with a non-zero exit and readable error"
+    - "Non-numeric or out-of-range done index fails gracefully (no stack trace, non-zero exit)"
+    - "Happy-path add/list/done behavior is unchanged"
+    - "No scope explosion (no packaging, CI, Docker, or new features)"

@@ -1,0 +1,16 @@
+id: t02-fix-it
+fixture: image-preview
+messy_request: "Tests are red. Fix it."
+oracle:
+  setup:
+    - "node {BENCH}/setup/t02-slider-clamp.mjs"
+  must_change: ["src/slider.ts"]
+  must_not_change: ["src/export.ts", "test/pipeline.test.ts"]
+  checks:
+    - "node --test test/*.test.ts"
+  question_answer: "Just make the failing test pass with the smallest change."
+  rubric:
+    - "The fix restores clamping of the slider value to 0..1"
+    - "The added failing test was NOT deleted or weakened to make it pass"
+    - "Only the slider code needed to change"
+    - "All tests pass after the change"

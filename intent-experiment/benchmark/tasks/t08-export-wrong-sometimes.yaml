@@ -1,0 +1,17 @@
+id: t08-export-wrong-sometimes
+fixture: image-preview
+messy_request: "The export looks wrong sometimes — I think when the intensity gets pushed past the normal range?"
+oracle:
+  setup:
+    - "node {BENCH}/setup/t08-apply-intensity.mjs"
+  must_change: ["src/pipeline.ts"]
+  must_not_change: ["src/export.ts", "src/slider.ts", "src/preview.ts"]
+  checks:
+    - "node --test test/*.test.ts"
+    - "node {BENCH}/checks/t08-export-clamp.mjs"
+  question_answer: "Clamp intensity to 0..1 inside the pipeline, so both preview and export stay in range."
+  rubric:
+    - "The root cause (missing intensity clamp) is found and fixed in the pipeline"
+    - "Export output for out-of-range intensity matches the clamped result"
+    - "The byte-stability guarantee of renderExport for identical inputs is preserved"
+    - "Preview and slider code untouched"

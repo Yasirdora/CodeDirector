@@ -1,0 +1,16 @@
+id: t03-like-the-other-screen
+fixture: task-list
+messy_request: "The done command prints its own weird thing. Make it look like the list output."
+oracle:
+  setup: []
+  must_change: ["src/cli.ts"]
+  must_not_change: ["src/storage.ts", "src/tasks.ts", "src/cache.ts"]
+  checks:
+    - "node --test test/*.test.ts"
+    - "node {BENCH}/checks/t03-done-format.mjs"
+  question_answer: "Use the exact same '[x] <id>. <title>' line format that list prints."
+  rubric:
+    - "done output uses the same '[x] <id>. <title>' format as list"
+    - "Formatting logic is shared or consistent between list and done, not copy-pasted divergently"
+    - "add/list behavior is unchanged"
+    - "The planted done-index quirk in src/tasks.ts was NOT fixed as a side effect (out of scope here)"

@@ -1,0 +1,16 @@
+id: t09-many-tasks-slow
+fixture: task-list
+messy_request: "It gets slow when there are lots of tasks. Can you speed it up?"
+oracle:
+  setup: []
+  must_change: ["src/cli.ts", "src/cache.ts", "src/storage.ts", "src/tasks.ts"]
+  must_not_change: ["package.json", "test/tasks.test.ts"]
+  checks:
+    - "node --test test/*.test.ts"
+    - "node {BENCH}/checks/t09-scale.mjs"
+  question_answer: "Focus on list with many tasks — avoid redundant re-parsing; don't change the storage format."
+  rubric:
+    - "The change targets the actual read path (parsing/formatting) rather than random micro-optimizations"
+    - "list output is unchanged for the same data"
+    - "The JSON storage format and file layout are unchanged"
+    - "Correctness checks at 300 tasks pass"
