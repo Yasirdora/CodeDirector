@@ -9,6 +9,7 @@ oracle:
     - "node --test test/*.test.ts"
     - "node {BENCH}/checks/t07-validation.mjs"
   question_answer: "Just input validation and graceful errors: empty titles, non-numeric done index, out-of-range index. No new features, no packaging."
+  question_necessary: true
   rubric:
     - "Empty/blank titles are rejected with a non-zero exit and readable error"
     - "Non-numeric or out-of-range done index fails gracefully (no stack trace, non-zero exit)"

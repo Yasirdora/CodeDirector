@@ -9,6 +9,7 @@ oracle:
     - "node --test test/*.test.ts"
     - "node {BENCH}/checks/t09-scale.mjs"
   question_answer: "Focus on list with many tasks — avoid redundant re-parsing; don't change the storage format."
+  question_necessary: true
   rubric:
     - "The change targets the actual read path (parsing/formatting) rather than random micro-optimizations"
     - "list output is unchanged for the same data"

@@ -244,12 +244,14 @@ async function git(workdir: string, args: string[]): Promise<string> {
 import { execFile } from "node:child_process";
 const execFileP2 = promisify(execFile);
 
-/** Diff of the working tree (incl. untracked files) against HEAD. */
+/** Diff of the working tree (incl. untracked files) against HEAD.
+ *  `.codedirector/` is excluded: the intent layer's cdir index writes there
+ *  and it is tooling state, not an agent change. */
 export async function gitDiff(workdir: string): Promise<{ diff: string; changedFiles: string[] }> {
   try {
     await git(workdir, ["add", "-A"]);
-    const diff = await git(workdir, ["diff", "--cached", "--no-color"]);
-    const names = await git(workdir, ["diff", "--cached", "--name-only"]);
+    const diff = await git(workdir, ["diff", "--cached", "--no-color", "--", ".", ":!.codedirector"]);
+    const names = await git(workdir, ["diff", "--cached", "--name-only", "--", ".", ":!.codedirector"]);
     return { diff, changedFiles: names.split("\n").map((s) => s.trim()).filter(Boolean) };
   } catch {
     return { diff: "", changedFiles: [] };

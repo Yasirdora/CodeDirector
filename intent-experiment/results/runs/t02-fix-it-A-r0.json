@@ -1,0 +1,72 @@
+{
+  "record": {
+    "taskId": "t02-fix-it",
+    "condition": "A",
+    "repeat": 0,
+    "checksPass": false,
+    "checkResults": [
+      {
+        "command": "node --test test/*.test.ts",
+        "exitCode": 1,
+        "outputTail": ")\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1201:25)\n      at Test.start (node:internal/test_runner/test:1096:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 1.7,\n    expected: 1,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+      }
+    ],
+    "unintendedChanges": [],
+    "changedFiles": [],
+    "turns": 1,
+    "wallTimeMs": 38,
+    "agentTokens": {
+      "prompt": 130,
+      "completion": 0,
+      "total": 130
+    },
+    "intentTokens": {
+      "prompt": 0,
+      "completion": 0,
+      "total": 0
+    },
+    "judgeTokens": {
+      "prompt": 191,
+      "completion": 4,
+      "total": 195
+    },
+    "questionAsked": false,
+    "questionNecessary": false,
+    "judgeAccuracy": null,
+    "judgeJudged": false,
+    "mechanicalProxy": false,
+    "doneSummary": "mock: no-op",
+    "error": null
+  },
+  "diff": "",
+  "trajectory": [
+    {
+      "role": "system",
+      "content": "You are a coding agent working in a repository. You have tools: read_file, write_file, list_files, run_command, done.\n\nRules:\n- Make the change the instruction asks for. Nothing more.\n- Verify your change by running the repo's tests/build before calling done.\n- Do not refactor, reformat, or \"improve\" code outside the instruction's scope.\n- Use run_command with e.g. `node --test test/*.test.ts` to run tests when present.\n- Call done exactly once when finished. Max 12 turns total."
+    },
+    {
+      "role": "user",
+      "content": "INSTRUCTION:\nTests are red. Fix it."
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "mock-call-1",
+          "type": "function",
+          "function": {
+            "name": "done",
+            "arguments": "{\"summary\":\"mock: no-op\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "done acknowledged",
+      "tool_call_id": "mock-call-1",
+      "name": "done"
+    }
+  ]
+}

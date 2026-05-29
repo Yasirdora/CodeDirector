@@ -8,16 +8,19 @@ import { promisify } from "node:util";
 
 const execP = promisify(exec);
 
+const GS = ""; // placeholder for globstar
+const SS = ""; // placeholder for single star
+
 /** Minimal glob: supports `*` (within a segment), `**` (any depth), and exact paths. */
 export function matchPath(glob: string, rel: string): boolean {
-  const re = glob
-    .split("/")
-    .map((seg) => {
-      if (seg === "**") return "(?:[^/]+/)*?";
-      return seg.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "/";
-    })
-    .join("")
-    .replace(/\/$/, "");
+  let re = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  re = re.replace(/\*\*\//g, GS + "/"); // **/ = any leading depth, optional
+  re = re.replace(/\*\*/g, GS); // remaining ** = anything
+  re = re.replace(/\*/g, SS); // * = within a segment
+  re = re
+    .split(GS + "/").join("(?:.*/)?")
+    .split(GS).join(".*")
+    .split(SS).join("[^/]*");
   try {
     return new RegExp(`^${re}$`).test(rel);
   } catch {

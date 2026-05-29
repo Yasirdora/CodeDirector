@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-09-11T17:07:44.212Z",
+  "mock": true,
+  "repeats": 1,
+  "records": [
+    {
+      "taskId": "t02-fix-it",
+      "condition": "A",
+      "repeat": 0,
+      "checksPass": false,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 1,
+          "outputTail": ")\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1201:25)\n      at Test.start (node:internal/test_runner/test:1096:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 1.7,\n    expected: 1,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [],
+      "turns": 1,
+      "wallTimeMs": 38,
+      "agentTokens": {
+        "prompt": 130,
+        "completion": 0,
+        "total": 130
+      },
+      "intentTokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "judgeTokens": {
+        "prompt": 191,
+        "completion": 4,
+        "total": 195
+      },
+      "questionAsked": false,
+      "questionNecessary": false,
+      "judgeAccuracy": null,
+      "judgeJudged": false,
+      "mechanicalProxy": false,
+      "doneSummary": "mock: no-op",
+      "error": null
+    },
+    {
+      "taskId": "t02-fix-it",
+      "condition": "B",
+      "repeat": 0,
+      "checksPass": false,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 1,
+          "outputTail": ")\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1201:25)\n      at Test.start (node:internal/test_runner/test:1096:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 1.7,\n    expected: 1,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [],
+      "turns": 1,
+      "wallTimeMs": 37,
+      "agentTokens": {
+        "prompt": 141,
+        "completion": 0,
+        "total": 141
+      },
+      "intentTokens": {
+        "prompt": 810,
+        "completion": 102,
+        "total": 912
+      },
+      "judgeTokens": {
+        "prompt": 191,
+        "completion": 4,
+        "total": 195
+      },
+      "questionAsked": false,
+      "questionNecessary": false,
+      "judgeAccuracy": null,
+      "judgeJudged": false,
+      "mechanicalProxy": false,
+      "doneSummary": "mock: no-op",
+      "error": null
+    }
+  ]
+}

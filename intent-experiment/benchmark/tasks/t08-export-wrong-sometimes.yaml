@@ -10,6 +10,7 @@ oracle:
     - "node --test test/*.test.ts"
     - "node {BENCH}/checks/t08-export-clamp.mjs"
   question_answer: "Clamp intensity to 0..1 inside the pipeline, so both preview and export stay in range."
+  question_necessary: true
   rubric:
     - "The root cause (missing intensity clamp) is found and fixed in the pipeline"
     - "Export output for out-of-range intensity matches the clamped result"

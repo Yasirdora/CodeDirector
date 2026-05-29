@@ -9,6 +9,7 @@ oracle:
     - "node --test test/*.test.ts"
     - "node {BENCH}/checks/t03-done-format.mjs"
   question_answer: "Use the exact same '[x] <id>. <title>' line format that list prints."
+  question_necessary: true
   rubric:
     - "done output uses the same '[x] <id>. <title>' format as list"
     - "Formatting logic is shared or consistent between list and done, not copy-pasted divergently"

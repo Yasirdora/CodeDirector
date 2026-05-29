@@ -13,17 +13,18 @@ exports.mechanicalProxy = mechanicalProxy;
 const node_child_process_1 = require("node:child_process");
 const node_util_1 = require("node:util");
 const execP = (0, node_util_1.promisify)(node_child_process_1.exec);
+const GS = ""; // placeholder for globstar
+const SS = ""; // placeholder for single star
 /** Minimal glob: supports `*` (within a segment), `**` (any depth), and exact paths. */
 function matchPath(glob, rel) {
-    const re = glob
-        .split("/")
-        .map((seg) => {
-        if (seg === "**")
-            return "(?:[^/]+/)*?";
-        return seg.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "/";
-    })
-        .join("")
-        .replace(/\/$/, "");
+    let re = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    re = re.replace(/\*\*\//g, GS + "/"); // **/ = any leading depth, optional
+    re = re.replace(/\*\*/g, GS); // remaining ** = anything
+    re = re.replace(/\*/g, SS); // * = within a segment
+    re = re
+        .split(GS + "/").join("(?:.*/)?")
+        .split(GS).join(".*")
+        .split(SS).join("[^/]*");
     try {
         return new RegExp(`^${re}$`).test(rel);
     }

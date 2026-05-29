@@ -10,6 +10,7 @@ oracle:
     - "node --test test/*.test.ts"
     - "node {BENCH}/checks/t06-enddrag-flush.mjs"
   question_answer: "Restore the previous behavior: listeners fire when the drag ends."
+  question_necessary: false
   rubric:
     - "The regression (missing flush on drag end) is identified and reverted/fixed"
     - "The fix restores the prior behavior rather than redesigning the slider"

@@ -9,6 +9,7 @@ oracle:
     - "node --test test/*.test.ts"
     - "node {BENCH}/checks/t05-done-index.mjs"
   question_answer: "The index the user means is the one shown by `list` (newest first)."
+  question_necessary: false
   rubric:
     - "done <n> resolves n against the displayed (visible, newest-first) list"
     - "Only src/tasks.ts changed (plus optionally tests)"

@@ -7,7 +7,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "npm run build && node --test dist/test/",
+    "test": "npm run build && node --test dist/test/*.test.js",
     "build": "tsc",
     "bench": "npm run build && node dist/src/run.js",
     "analyze": "node dist/src/analyze.js"

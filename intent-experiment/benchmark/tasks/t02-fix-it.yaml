@@ -9,6 +9,7 @@ oracle:
   checks:
     - "node --test test/*.test.ts"
   question_answer: "Just make the failing test pass with the smallest change."
+  question_necessary: false
   rubric:
     - "The fix restores clamping of the slider value to 0..1"
     - "The added failing test was NOT deleted or weakened to make it pass"

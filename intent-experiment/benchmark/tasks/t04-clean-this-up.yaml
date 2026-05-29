@@ -9,6 +9,7 @@ oracle:
     - "node --test test/*.test.ts"
     - "node {BENCH}/checks/t04-behavior-snapshot.mjs"
   question_answer: "Structure only — no behavior changes at all."
+  question_necessary: true
   rubric:
     - "CLI observable behavior is byte-identical to before (snapshot check)"
     - "The cleanup is limited to cli.ts structure/readability"

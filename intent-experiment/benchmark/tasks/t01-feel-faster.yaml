@@ -8,6 +8,7 @@ oracle:
   checks:
     - "node --test test/*.test.ts"
   question_answer: "Make the during-drag preview cheaper (e.g. smaller preview frames or coarser debounce) — do not touch the exact export path."
+  question_necessary: true
   rubric:
     - "The change reduces per-movement preview work (smaller render, stronger debounce, or skipped frames) rather than unrelated edits"
     - "The byte-exact export path (src/export.ts, renderExport) is untouched"
