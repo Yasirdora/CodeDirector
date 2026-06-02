@@ -183,7 +183,7 @@ export async function runAgent(
   let turns = 0;
   while (turns < maxTurns && doneSummary === null) {
     turns++;
-    const res = await chat(messages, { tools: AGENT_TOOLS, temperature: 0.2 }, cfg);
+    const res = await chat(messages, { tools: AGENT_TOOLS }, cfg);
     agentTokens = sumUsage(agentTokens, res.usage);
     messages.push({
       role: "assistant",

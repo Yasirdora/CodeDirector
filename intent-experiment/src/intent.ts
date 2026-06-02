@@ -270,7 +270,7 @@ export async function runIntentLayer(
     },
   ];
 
-  const res = await chat(messages, { temperature: 0.1 }, cfg);
+  const res = await chat(messages, {}, cfg);
   intentTokens = sumUsage(intentTokens, res.usage);
   const parsed = extractJson(res.text);
   const errs = validateIntentObject(parsed);
@@ -291,7 +291,7 @@ export async function runIntentLayer(
         content: `REFINED-DIRECTIVE-RECOMPILE\nYou asked: "${intent.question.text}"\nThe user answered: "${questionAnswer}"\n(Your recommended option was: ${rec ? `${rec.id}) ${rec.label}` : intent.question.recommended})\nRewrite the final refinedDirective only — precise instruction for the coding agent: goal + boundaries + expected verification. Reply with the directive text only, no JSON.`,
       },
     ];
-    const res2 = await chat(recompile, { temperature: 0.1 }, cfg);
+    const res2 = await chat(recompile, {}, cfg);
     intentTokens = sumUsage(intentTokens, res2.usage);
     directive = res2.text.trim() || intent.refinedDirective;
   }

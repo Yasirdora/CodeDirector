@@ -1,28 +1,30 @@
 {
-  "generatedAt": "2026-09-11T17:07:44.212Z",
-  "mock": true,
+  "generatedAt": "2026-09-11T17:13:55.949Z",
+  "mock": false,
   "repeats": 1,
   "records": [
     {
       "taskId": "t02-fix-it",
       "condition": "A",
       "repeat": 0,
-      "checksPass": false,
+      "checksPass": true,
       "checkResults": [
         {
           "command": "node --test test/*.test.ts",
-          "exitCode": 1,
-          "outputTail": ")\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1201:25)\n      at Test.start (node:internal/test_runner/test:1096:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 1.7,\n    expected: 1,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+          "exitCode": 0,
+          "outputTail": "✔ renderExport is byte-identical for identical input (0.849ms)\n✔ renderPreview downscales to maxDim (2.61775ms)\n✔ slider emits after debounce and on drag end (1.130041ms)\n✔ slider clamps value to 0..1 (0.415708ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 85.678875\n"
         }
       ],
       "unintendedChanges": [],
-      "changedFiles": [],
-      "turns": 1,
-      "wallTimeMs": 38,
+      "changedFiles": [
+        "src/slider.ts"
+      ],
+      "turns": 8,
+      "wallTimeMs": 75652,
       "agentTokens": {
-        "prompt": 130,
-        "completion": 0,
-        "total": 130
+        "prompt": 12276,
+        "completion": 1000,
+        "total": 13276
       },
       "intentTokens": {
         "prompt": 0,
@@ -30,55 +32,57 @@
         "total": 0
       },
       "judgeTokens": {
-        "prompt": 191,
-        "completion": 4,
-        "total": 195
+        "prompt": 390,
+        "completion": 362,
+        "total": 752
       },
       "questionAsked": false,
       "questionNecessary": false,
-      "judgeAccuracy": null,
-      "judgeJudged": false,
-      "mechanicalProxy": false,
-      "doneSummary": "mock: no-op",
+      "judgeAccuracy": 0.75,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Fixed SliderBinding.setValue to clamp values to 0..1 using the existing clamp01 helper; all 4 tests pass.",
       "error": null
     },
     {
       "taskId": "t02-fix-it",
       "condition": "B",
       "repeat": 0,
-      "checksPass": false,
+      "checksPass": true,
       "checkResults": [
         {
           "command": "node --test test/*.test.ts",
-          "exitCode": 1,
-          "outputTail": ")\n      at Test.runInAsyncScope (node:async_hooks:227:14)\n      at Test.run (node:internal/test_runner/test:1201:25)\n      at Test.start (node:internal/test_runner/test:1096:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: 1.7,\n    expected: 1,\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+          "exitCode": 0,
+          "outputTail": "✔ renderExport is byte-identical for identical input (1.034334ms)\n✔ renderPreview downscales to maxDim (3.400333ms)\n✔ slider emits after debounce and on drag end (1.145875ms)\n✔ slider clamps value to 0..1 (0.397916ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 102.300167\n"
         }
       ],
       "unintendedChanges": [],
-      "changedFiles": [],
-      "turns": 1,
-      "wallTimeMs": 37,
+      "changedFiles": [
+        "src/slider.ts"
+      ],
+      "turns": 8,
+      "wallTimeMs": 90593,
       "agentTokens": {
-        "prompt": 141,
-        "completion": 0,
-        "total": 141
+        "prompt": 21020,
+        "completion": 1223,
+        "total": 22243
       },
       "intentTokens": {
-        "prompt": 810,
-        "completion": 102,
-        "total": 912
+        "prompt": 2563,
+        "completion": 1410,
+        "total": 3973
       },
       "judgeTokens": {
-        "prompt": 191,
-        "completion": 4,
-        "total": 195
+        "prompt": 390,
+        "completion": 665,
+        "total": 1055
       },
-      "questionAsked": false,
+      "questionAsked": true,
       "questionNecessary": false,
-      "judgeAccuracy": null,
-      "judgeJudged": false,
-      "mechanicalProxy": false,
-      "doneSummary": "mock: no-op",
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Clamped SliderBinding.setValue input to 0..1 using the existing clamp01 helper in src/slider.ts; all 4 tests now pass with npm test (exit 0, no skips).",
       "error": null
     }
   ]

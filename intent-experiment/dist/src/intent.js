@@ -216,7 +216,7 @@ async function runIntentLayer(messyRequest, repoRoot, opts = {}) {
             content: `MESSY REQUEST:\n${messyRequest}\n\n${context}`,
         },
     ];
-    const res = await (0, backend_1.chat)(messages, { temperature: 0.1 }, cfg);
+    const res = await (0, backend_1.chat)(messages, {}, cfg);
     intentTokens = (0, backend_1.sumUsage)(intentTokens, res.usage);
     const parsed = extractJson(res.text);
     const errs = validateIntentObject(parsed);
@@ -236,7 +236,7 @@ async function runIntentLayer(messyRequest, repoRoot, opts = {}) {
                 content: `REFINED-DIRECTIVE-RECOMPILE\nYou asked: "${intent.question.text}"\nThe user answered: "${questionAnswer}"\n(Your recommended option was: ${rec ? `${rec.id}) ${rec.label}` : intent.question.recommended})\nRewrite the final refinedDirective only — precise instruction for the coding agent: goal + boundaries + expected verification. Reply with the directive text only, no JSON.`,
             },
         ];
-        const res2 = await (0, backend_1.chat)(recompile, { temperature: 0.1 }, cfg);
+        const res2 = await (0, backend_1.chat)(recompile, {}, cfg);
         intentTokens = (0, backend_1.sumUsage)(intentTokens, res2.usage);
         directive = res2.text.trim() || intent.refinedDirective;
     }

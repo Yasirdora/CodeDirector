@@ -60,7 +60,7 @@ export async function judgeDiff(
         content: `RUBRIC CRITERIA:\n${criteriaList}\n\nReply with a JSON object "scores" containing exactly these keys: ${keysExample}\n\nGIT DIFF:\n${diff.slice(0, 30_000) || "(empty diff)"}`,
       },
     ],
-    { temperature: 0 },
+    {},
     cfg,
   );
   const scores = parseJudgeOutput(res.text, rubric);

@@ -1,78 +1,78 @@
 {
-  "generatedAt": "2026-09-11T17:07:44.212Z",
-  "mock": true,
+  "generatedAt": "2026-09-11T17:13:55.949Z",
+  "mock": false,
   "repeats": 1,
   "perTask": [
     {
       "taskId": "t02-fix-it",
       "A": {
         "n": 1,
-        "checksPassRate": 0,
+        "checksPassRate": 1,
         "unintendedMean": 0,
-        "turnsMean": 1,
-        "wallTimeMeanMs": 38,
-        "agentTokensMean": 130,
+        "turnsMean": 8,
+        "wallTimeMeanMs": 75652,
+        "agentTokensMean": 13276,
         "intentTokensMean": 0,
-        "totalTokensMean": 130,
+        "totalTokensMean": 13276,
         "questionRate": 0,
         "unnecessaryQuestions": 0,
         "missedQuestions": 0,
-        "judgeAccuracyMean": null,
-        "mechanicalProxyRate": 0
+        "judgeAccuracyMean": 0.75,
+        "mechanicalProxyRate": 1
       },
       "B": {
         "n": 1,
-        "checksPassRate": 0,
+        "checksPassRate": 1,
         "unintendedMean": 0,
-        "turnsMean": 1,
-        "wallTimeMeanMs": 37,
-        "agentTokensMean": 141,
-        "intentTokensMean": 912,
-        "totalTokensMean": 1053,
-        "questionRate": 0,
-        "unnecessaryQuestions": 0,
+        "turnsMean": 8,
+        "wallTimeMeanMs": 90593,
+        "agentTokensMean": 22243,
+        "intentTokensMean": 3973,
+        "totalTokensMean": 26216,
+        "questionRate": 1,
+        "unnecessaryQuestions": 1,
         "missedQuestions": 0,
-        "judgeAccuracyMean": null,
-        "mechanicalProxyRate": 0
+        "judgeAccuracyMean": 1,
+        "mechanicalProxyRate": 1
       }
     }
   ],
   "overall": {
     "A": {
       "n": 1,
-      "checksPassRate": 0,
+      "checksPassRate": 1,
       "unintendedMean": 0,
-      "turnsMean": 1,
-      "wallTimeMeanMs": 38,
-      "agentTokensMean": 130,
+      "turnsMean": 8,
+      "wallTimeMeanMs": 75652,
+      "agentTokensMean": 13276,
       "intentTokensMean": 0,
-      "totalTokensMean": 130,
+      "totalTokensMean": 13276,
       "questionRate": 0,
       "unnecessaryQuestions": 0,
       "missedQuestions": 0,
-      "judgeAccuracyMean": null,
-      "mechanicalProxyRate": 0
+      "judgeAccuracyMean": 0.75,
+      "mechanicalProxyRate": 1
     },
     "B": {
       "n": 1,
-      "checksPassRate": 0,
+      "checksPassRate": 1,
       "unintendedMean": 0,
-      "turnsMean": 1,
-      "wallTimeMeanMs": 37,
-      "agentTokensMean": 141,
-      "intentTokensMean": 912,
-      "totalTokensMean": 1053,
-      "questionRate": 0,
-      "unnecessaryQuestions": 0,
+      "turnsMean": 8,
+      "wallTimeMeanMs": 90593,
+      "agentTokensMean": 22243,
+      "intentTokensMean": 3973,
+      "totalTokensMean": 26216,
+      "questionRate": 1,
+      "unnecessaryQuestions": 1,
       "missedQuestions": 0,
-      "judgeAccuracyMean": null,
-      "mechanicalProxyRate": 0
+      "judgeAccuracyMean": 1,
+      "mechanicalProxyRate": 1
     }
   },
   "fewers": {
-    "misunderstandings": "A mechanical-proxy 0.00 vs B 0.00; LLM-judged intent accuracy A n/a (judge could not parse) vs B n/a (judge could not parse).",
-    "unnecessaryQuestions": "B asked questions in 0% of runs; 0 unnecessary, 0 missed (per oracle necessity labels). A asks none by construction.",
-    "tokens": "mean agent tokens A 130 vs B 141; B additionally spends 912 intent tokens (total A 130 vs B 1053).",
+    "misunderstandings": "A mechanical-proxy 1.00 vs B 1.00; LLM-judged intent accuracy A 0.75 vs B 1.00.",
+    "unnecessaryQuestions": "B asked questions in 100% of runs; 1 unnecessary, 0 missed (per oracle necessity labels). A asks none by construction.",
+    "tokens": "mean agent tokens A 13276 vs B 22243; B additionally spends 3973 intent tokens (total A 13276 vs B 26216).",
     "unintendedChanges": "mean unintended changed files A 0.00 vs B 0.00."
   },
   "caveats": [

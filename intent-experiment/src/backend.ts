@@ -175,8 +175,10 @@ async function liveChat(
   const body: Record<string, unknown> = {
     model: cfg.model,
     messages: toApiMessages(messages),
-    temperature: opts.temperature ?? 0.2,
   };
+  // Only send temperature when explicitly requested — some models (e.g.
+  // gpt-4o) reject any value other than their own default.
+  if (opts.temperature !== undefined) body.temperature = opts.temperature;
   if (opts.tools && opts.tools.length > 0) {
     body.tools = toApiTools(opts.tools);
     body.tool_choice = "auto";
