@@ -1,8 +1,90 @@
 {
-  "generatedAt": "2026-09-11T17:13:55.949Z",
+  "generatedAt": "2026-09-11T17:45:53.270Z",
   "mock": false,
   "repeats": 1,
   "records": [
+    {
+      "taskId": "t01-feel-faster",
+      "condition": "A",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ renderExport is byte-identical for identical input (0.94125ms)\n✔ renderPreview downscales to maxDim (3.775666ms)\n✔ slider emits after debounce and on drag end (1.290625ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 98.114084\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/slider.ts"
+      ],
+      "turns": 6,
+      "wallTimeMs": 129654,
+      "agentTokens": {
+        "prompt": 12378,
+        "completion": 1819,
+        "total": 14197
+      },
+      "intentTokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "judgeTokens": {
+        "prompt": 779,
+        "completion": 406,
+        "total": 1185
+      },
+      "questionAsked": false,
+      "questionNecessary": true,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Replaced the slider's trailing-edge debounce with a leading-edge throttle in src/slider.ts: the first drag movement now emits (and repaints) immediately, while rapid movements are still coalesced to one emission per interval; export path untouched, all tests pass.",
+      "error": null
+    },
+    {
+      "taskId": "t01-feel-faster",
+      "condition": "B",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ renderExport is byte-identical for identical input (0.962583ms)\n✔ renderPreview downscales to maxDim (2.955666ms)\n✔ slider emits after debounce and on drag end (1.358791ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 87.12375\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/preview.ts"
+      ],
+      "turns": 7,
+      "wallTimeMs": 28552,
+      "agentTokens": {
+        "prompt": 17663,
+        "completion": 1190,
+        "total": 18853
+      },
+      "intentTokens": {
+        "prompt": 2802,
+        "completion": 1430,
+        "total": 4232
+      },
+      "judgeTokens": {
+        "prompt": 624,
+        "completion": 810,
+        "total": 1434
+      },
+      "questionAsked": true,
+      "questionNecessary": true,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "PreviewView.onSlider now renders at maxDim=256 while SliderState.dragging is true and at 512 otherwise, so during-drag updates are cheap and endDrag/non-drag changes produce one full-quality frame; export path untouched, tests pass.",
+      "error": null
+    },
     {
       "taskId": "t02-fix-it",
       "condition": "A",
@@ -83,6 +165,193 @@
       "judgeJudged": true,
       "mechanicalProxy": true,
       "doneSummary": "Clamped SliderBinding.setValue input to 0..1 using the existing clamp01 helper in src/slider.ts; all 4 tests now pass with npm test (exit 0, no skips).",
+      "error": null
+    },
+    {
+      "taskId": "t05-dont-change-anything-else",
+      "condition": "A",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ add + list shows newest first (4.571542ms)\n✔ nextId increments past max id (0.079375ms)\n✔ done tasks are hidden from default list (1.349583ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 150.707417\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t05-done-index.mjs",
+          "exitCode": 0,
+          "outputTail": "t05 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/tasks.ts"
+      ],
+      "turns": 10,
+      "wallTimeMs": 73021,
+      "agentTokens": {
+        "prompt": 25421,
+        "completion": 1428,
+        "total": 26849
+      },
+      "intentTokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "judgeTokens": {
+        "prompt": 634,
+        "completion": 239,
+        "total": 873
+      },
+      "questionAsked": false,
+      "questionNecessary": false,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Fixed completeTask in src/tasks.ts to index the visible (newest-first, incomplete-filtered) list matching what `list` displays, so `done 1` completes the correct task.",
+      "error": null
+    },
+    {
+      "taskId": "t05-dont-change-anything-else",
+      "condition": "B",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ add + list shows newest first (3.469292ms)\n✔ nextId increments past max id (0.08575ms)\n✔ done tasks are hidden from default list (1.412208ms)\n✔ done 1 completes the newest visible task (first in default list) (2.129375ms)\n✔ done 2 completes the second task in newest-first order (1.265834ms)\nℹ tests 5\nℹ suites 0\nℹ pass 5\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 83.365208\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t05-done-index.mjs",
+          "exitCode": 0,
+          "outputTail": "t05 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/tasks.ts",
+        "test/tasks.test.ts"
+      ],
+      "turns": 7,
+      "wallTimeMs": 92099,
+      "agentTokens": {
+        "prompt": 21505,
+        "completion": 1912,
+        "total": 23417
+      },
+      "intentTokens": {
+        "prompt": 2909,
+        "completion": 1605,
+        "total": 4514
+      },
+      "judgeTokens": {
+        "prompt": 1342,
+        "completion": 305,
+        "total": 1647
+      },
+      "questionAsked": true,
+      "questionNecessary": false,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Fixed completeTask in src/tasks.ts to resolve the 1-based `done <n>` argument against the visible, newest-first list (visibleTasks) instead of indexing the raw insertion-ordered array, matching the target by id; added tests in test/tasks.test.ts covering `done 1` (newest visible, with a hidden completed task) and `done 2` positional correctness. All 5 tests pass.",
+      "error": null
+    },
+    {
+      "taskId": "t07-production-ready",
+      "condition": "A",
+      "repeat": 0,
+      "checksPass": false,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ add + list shows newest first (2.186833ms)\n✔ nextId increments past max id (0.053458ms)\n✔ done tasks are hidden from default list (1.208625ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 83.596083\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t07-validation.mjs",
+          "exitCode": 1,
+          "outputTail": "FAIL: `add \"\"` succeeded; expected validation error\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/tasks.ts"
+      ],
+      "turns": 7,
+      "wallTimeMs": 101430,
+      "agentTokens": {
+        "prompt": 17849,
+        "completion": 1738,
+        "total": 19587
+      },
+      "intentTokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "judgeTokens": {
+        "prompt": 744,
+        "completion": 466,
+        "total": 1210
+      },
+      "questionAsked": false,
+      "questionNecessary": true,
+      "judgeAccuracy": 0.5,
+      "judgeJudged": true,
+      "mechanicalProxy": false,
+      "doneSummary": "Fixed production-blocking bug in completeTask (src/tasks.ts): it now indexes the same sorted/filtered visibleTasks() list shown by `list`, so `done <n>` completes the correct task; removed stale planted-bug comments. All tests pass and CLI behavior verified end-to-end.",
+      "error": null
+    },
+    {
+      "taskId": "t07-production-ready",
+      "condition": "B",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "ge (0.83725ms)\n✔ non-numeric / non-integer index is rejected and storage is untouched (0.643625ms)\n✔ negative and zero indices are rejected and storage is untouched (0.850625ms)\n✔ index beyond list length is rejected and storage is untouched (1.380917ms)\n✔ valid add and done still work (2.502917ms)\nℹ tests 10\nℹ suites 0\nℹ pass 10\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 97.503167\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t07-validation.mjs",
+          "exitCode": 0,
+          "outputTail": "t07 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/cli.ts",
+        "src/tasks.ts",
+        "test/validation.test.ts"
+      ],
+      "turns": 10,
+      "wallTimeMs": 226337,
+      "agentTokens": {
+        "prompt": 40288,
+        "completion": 6193,
+        "total": 46481
+      },
+      "intentTokens": {
+        "prompt": 2315,
+        "completion": 1648,
+        "total": 3963
+      },
+      "judgeTokens": {
+        "prompt": 1792,
+        "completion": 276,
+        "total": 2068
+      },
+      "questionAsked": true,
+      "questionNecessary": true,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Added input validation: addTask rejects empty/whitespace titles (stores trimmed value), completeTask validates integer and in-range indices before any write, CLI strictly parses the done index and catches errors to print them to stderr with exit code 1; added test/validation.test.ts (all 10 tests pass, storage byte-identical after each rejection, verified via CLI exercise).",
       "error": null
     }
   ]

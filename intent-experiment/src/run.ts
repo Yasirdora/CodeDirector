@@ -160,13 +160,42 @@ async function main(): Promise<void> {
   }
 
   console.log(`benchmark: ${tasks.length} task(s) × 2 conditions × ${repeats} repeat(s) · mock=${cfg.mock}`);
-  const records: RunRecord[] = [];
+  const outDir = path.join(repoRoot(), "results");
+  await fs.mkdir(outDir, { recursive: true });
+  const rawPath = path.join(outDir, "results.raw.json");
+
+  // Incremental persistence: load existing records and upsert after EVERY
+  // run, keyed by (taskId, condition, repeat), so a killed invocation never
+  // loses completed runs and separate invocations accumulate.
+  let existing: RunRecord[] = [];
+  try {
+    existing = (JSON.parse(await fs.readFile(rawPath, "utf8")) as { records: RunRecord[] }).records ?? [];
+  } catch { /* first run */ }
+  const byKey = new Map<string, RunRecord>();
+  for (const r of existing) byKey.set(`${r.taskId}|${r.condition}|${r.repeat}`, r);
+
+  const persist = async (): Promise<void> => {
+    const records = [...byKey.values()].sort(
+      (a, b) => a.taskId.localeCompare(b.taskId) || a.condition.localeCompare(b.condition) || a.repeat - b.repeat,
+    );
+    await fs.writeFile(
+      rawPath,
+      JSON.stringify({ generatedAt: new Date().toISOString(), mock: cfg.mock, repeats, records }, null, 2),
+    );
+  };
+
   for (const task of tasks) {
     for (let r = 0; r < repeats; r++) {
       for (const condition of ["A", "B"] as const) {
+        const key = `${task.id}|${condition}|${r}`;
+        if (byKey.has(key) && !byKey.get(key)!.error) {
+          console.log(`${task.id} [${condition}] r${r}: already recorded, skipping`);
+          continue;
+        }
         const t0 = Date.now();
         const rec = await runOne(task, condition, r, cfg);
-        records.push(rec);
+        byKey.set(key, rec);
+        await persist();
         console.log(
           `${rec.taskId} [${condition}] r${r}: checks=${rec.checksPass} unintended=${rec.unintendedChanges.length} ` +
             `turns=${rec.turns} agentTok=${rec.agentTokens.total} intentTok=${rec.intentTokens.total} ` +
@@ -177,16 +206,11 @@ async function main(): Promise<void> {
     }
   }
 
-  const outDir = path.join(repoRoot(), "results");
-  await fs.mkdir(outDir, { recursive: true });
-  await fs.writeFile(
-    path.join(outDir, "results.raw.json"),
-    JSON.stringify({ generatedAt: new Date().toISOString(), mock: cfg.mock, repeats, records }, null, 2),
-  );
-  console.log(`wrote ${path.join(outDir, "results.raw.json")}`);
+  await persist();
+  console.log(`wrote ${rawPath} (${byKey.size} records)`);
 
   const { analyzeFile } = await import("./analyze");
-  await analyzeFile(path.join(outDir, "results.raw.json"));
+  await analyzeFile(rawPath);
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);

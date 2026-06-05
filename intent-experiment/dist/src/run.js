@@ -135,13 +135,36 @@ async function main() {
         process.exit(2);
     }
     console.log(`benchmark: ${tasks.length} task(s) × 2 conditions × ${repeats} repeat(s) · mock=${cfg.mock}`);
-    const records = [];
+    const outDir = node_path_1.default.join(repoRoot(), "results");
+    await node_fs_1.promises.mkdir(outDir, { recursive: true });
+    const rawPath = node_path_1.default.join(outDir, "results.raw.json");
+    // Incremental persistence: load existing records and upsert after EVERY
+    // run, keyed by (taskId, condition, repeat), so a killed invocation never
+    // loses completed runs and separate invocations accumulate.
+    let existing = [];
+    try {
+        existing = JSON.parse(await node_fs_1.promises.readFile(rawPath, "utf8")).records ?? [];
+    }
+    catch { /* first run */ }
+    const byKey = new Map();
+    for (const r of existing)
+        byKey.set(`${r.taskId}|${r.condition}|${r.repeat}`, r);
+    const persist = async () => {
+        const records = [...byKey.values()].sort((a, b) => a.taskId.localeCompare(b.taskId) || a.condition.localeCompare(b.condition) || a.repeat - b.repeat);
+        await node_fs_1.promises.writeFile(rawPath, JSON.stringify({ generatedAt: new Date().toISOString(), mock: cfg.mock, repeats, records }, null, 2));
+    };
     for (const task of tasks) {
         for (let r = 0; r < repeats; r++) {
             for (const condition of ["A", "B"]) {
+                const key = `${task.id}|${condition}|${r}`;
+                if (byKey.has(key) && !byKey.get(key).error) {
+                    console.log(`${task.id} [${condition}] r${r}: already recorded, skipping`);
+                    continue;
+                }
                 const t0 = Date.now();
                 const rec = await runOne(task, condition, r, cfg);
-                records.push(rec);
+                byKey.set(key, rec);
+                await persist();
                 console.log(`${rec.taskId} [${condition}] r${r}: checks=${rec.checksPass} unintended=${rec.unintendedChanges.length} ` +
                     `turns=${rec.turns} agentTok=${rec.agentTokens.total} intentTok=${rec.intentTokens.total} ` +
                     `q=${rec.questionAsked} judge=${rec.judgeAccuracy ?? "n/a"} proxy=${rec.mechanicalProxy} ` +
@@ -149,12 +172,10 @@ async function main() {
             }
         }
     }
-    const outDir = node_path_1.default.join(repoRoot(), "results");
-    await node_fs_1.promises.mkdir(outDir, { recursive: true });
-    await node_fs_1.promises.writeFile(node_path_1.default.join(outDir, "results.raw.json"), JSON.stringify({ generatedAt: new Date().toISOString(), mock: cfg.mock, repeats, records }, null, 2));
-    console.log(`wrote ${node_path_1.default.join(outDir, "results.raw.json")}`);
+    await persist();
+    console.log(`wrote ${rawPath} (${byKey.size} records)`);
     const { analyzeFile } = await Promise.resolve().then(() => __importStar(require("./analyze")));
-    await analyzeFile(node_path_1.default.join(outDir, "results.raw.json"));
+    await analyzeFile(rawPath);
 }
 const isMain = process.argv[1] && node_path_1.default.resolve(process.argv[1]) === node_path_1.default.resolve(__filename);
 if (isMain) {

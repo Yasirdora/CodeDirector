@@ -1,14 +1,14 @@
 # Code Director intent-layer experiment — results
 
-Generated: 2026-09-11T17:13:55.949Z · mock backend: false
+Generated: 2026-09-11T17:45:53.270Z · mock backend: false
 
 > **Pilot signal, not proof.** n=1 per cell; variance is unmeasured. Run with `--repeats N` (N≥5) before concluding anything.
 
 ## Headline: the four "fewers"
 
-1. **Fewer misunderstandings** — A mechanical-proxy 1.00 vs B 1.00; LLM-judged intent accuracy A 0.75 vs B 1.00.
-2. **Fewer unnecessary questions** — B asked questions in 100% of runs; 1 unnecessary, 0 missed (per oracle necessity labels). A asks none by construction.
-3. **Fewer tokens** — mean agent tokens A 13276 vs B 22243; B additionally spends 3973 intent tokens (total A 13276 vs B 26216).
+1. **Fewer misunderstandings** — A mechanical-proxy 0.75 vs B 1.00; LLM-judged intent accuracy A 0.81 vs B 1.00.
+2. **Fewer unnecessary questions** — B asked questions in 100% of runs; 2 unnecessary, 0 missed (per oracle necessity labels). A asks none by construction.
+3. **Fewer tokens** — mean agent tokens A 18477 vs B 27749; B additionally spends 4171 intent tokens (total A 18477 vs B 31919).
 4. **Fewer unintended changes** — mean unintended changed files A 0.00 vs B 0.00.
 
 \* judge acc = mean rubric pass fraction, LLM-judged. proxy = mechanical (checksPass AND zero unintended changes).
@@ -17,22 +17,28 @@ Generated: 2026-09-11T17:13:55.949Z · mock backend: false
 
 | task | cond | checks | unintended | turns | wall s | agent tok | intent tok | asked? | judge acc* | proxy |
 |---|---|---|---|---|---|---|---|---|---|---|
+| t01-feel-faster | A | 100% | 0.0 | 6.0 | 129.7 | 14197 | 0 | 0% | 1.00 | 100% |
+| t01-feel-faster | B | 100% | 0.0 | 7.0 | 28.6 | 18853 | 4232 | 100% | 1.00 | 100% |
 | t02-fix-it | A | 100% | 0.0 | 8.0 | 75.7 | 13276 | 0 | 0% | 0.75 | 100% |
 | t02-fix-it | B | 100% | 0.0 | 8.0 | 90.6 | 22243 | 3973 | 100% | 1.00 | 100% |
+| t05-dont-change-anything-else | A | 100% | 0.0 | 10.0 | 73.0 | 26849 | 0 | 0% | 1.00 | 100% |
+| t05-dont-change-anything-else | B | 100% | 0.0 | 7.0 | 92.1 | 23417 | 4514 | 100% | 1.00 | 100% |
+| t07-production-ready | A | 0% | 0.0 | 7.0 | 101.4 | 19587 | 0 | 0% | 0.50 | 0% |
+| t07-production-ready | B | 100% | 0.0 | 10.0 | 226.3 | 46481 | 3963 | 100% | 1.00 | 100% |
 
 ## Aggregates
 
 | metric | A (raw request) | B (intent layer) |
 |---|---|---|
-| checks pass rate | 100% | 100% |
+| checks pass rate | 75% | 100% |
 | mean unintended changes | 0.00 | 0.00 |
-| mean turns | 8.0 | 8.0 |
-| mean wall time (s) | 75.7 | 90.6 |
-| mean agent tokens | 13276 | 22243 |
-| mean intent tokens | 0 | 3973 |
-| mean total tokens | 13276 | 26216 |
-| mechanical proxy rate | 100% | 100% |
-| LLM-judged intent accuracy | 0.75 | 1.00 |
+| mean turns | 7.8 | 8.0 |
+| mean wall time (s) | 94.9 | 109.4 |
+| mean agent tokens | 18477 | 27749 |
+| mean intent tokens | 0 | 4171 |
+| mean total tokens | 18477 | 31919 |
+| mechanical proxy rate | 75% | 100% |
+| LLM-judged intent accuracy | 0.81 | 1.00 |
 
 ## Caveats
 

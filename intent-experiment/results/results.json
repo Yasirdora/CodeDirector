@@ -1,8 +1,41 @@
 {
-  "generatedAt": "2026-09-11T17:13:55.949Z",
+  "generatedAt": "2026-09-11T17:45:53.270Z",
   "mock": false,
   "repeats": 1,
   "perTask": [
+    {
+      "taskId": "t01-feel-faster",
+      "A": {
+        "n": 1,
+        "checksPassRate": 1,
+        "unintendedMean": 0,
+        "turnsMean": 6,
+        "wallTimeMeanMs": 129654,
+        "agentTokensMean": 14197,
+        "intentTokensMean": 0,
+        "totalTokensMean": 14197,
+        "questionRate": 0,
+        "unnecessaryQuestions": 0,
+        "missedQuestions": 1,
+        "judgeAccuracyMean": 1,
+        "mechanicalProxyRate": 1
+      },
+      "B": {
+        "n": 1,
+        "checksPassRate": 1,
+        "unintendedMean": 0,
+        "turnsMean": 7,
+        "wallTimeMeanMs": 28552,
+        "agentTokensMean": 18853,
+        "intentTokensMean": 4232,
+        "totalTokensMean": 23085,
+        "questionRate": 1,
+        "unnecessaryQuestions": 0,
+        "missedQuestions": 0,
+        "judgeAccuracyMean": 1,
+        "mechanicalProxyRate": 1
+      }
+    },
     {
       "taskId": "t02-fix-it",
       "A": {
@@ -35,44 +68,110 @@
         "judgeAccuracyMean": 1,
         "mechanicalProxyRate": 1
       }
+    },
+    {
+      "taskId": "t05-dont-change-anything-else",
+      "A": {
+        "n": 1,
+        "checksPassRate": 1,
+        "unintendedMean": 0,
+        "turnsMean": 10,
+        "wallTimeMeanMs": 73021,
+        "agentTokensMean": 26849,
+        "intentTokensMean": 0,
+        "totalTokensMean": 26849,
+        "questionRate": 0,
+        "unnecessaryQuestions": 0,
+        "missedQuestions": 0,
+        "judgeAccuracyMean": 1,
+        "mechanicalProxyRate": 1
+      },
+      "B": {
+        "n": 1,
+        "checksPassRate": 1,
+        "unintendedMean": 0,
+        "turnsMean": 7,
+        "wallTimeMeanMs": 92099,
+        "agentTokensMean": 23417,
+        "intentTokensMean": 4514,
+        "totalTokensMean": 27931,
+        "questionRate": 1,
+        "unnecessaryQuestions": 1,
+        "missedQuestions": 0,
+        "judgeAccuracyMean": 1,
+        "mechanicalProxyRate": 1
+      }
+    },
+    {
+      "taskId": "t07-production-ready",
+      "A": {
+        "n": 1,
+        "checksPassRate": 0,
+        "unintendedMean": 0,
+        "turnsMean": 7,
+        "wallTimeMeanMs": 101430,
+        "agentTokensMean": 19587,
+        "intentTokensMean": 0,
+        "totalTokensMean": 19587,
+        "questionRate": 0,
+        "unnecessaryQuestions": 0,
+        "missedQuestions": 1,
+        "judgeAccuracyMean": 0.5,
+        "mechanicalProxyRate": 0
+      },
+      "B": {
+        "n": 1,
+        "checksPassRate": 1,
+        "unintendedMean": 0,
+        "turnsMean": 10,
+        "wallTimeMeanMs": 226337,
+        "agentTokensMean": 46481,
+        "intentTokensMean": 3963,
+        "totalTokensMean": 50444,
+        "questionRate": 1,
+        "unnecessaryQuestions": 0,
+        "missedQuestions": 0,
+        "judgeAccuracyMean": 1,
+        "mechanicalProxyRate": 1
+      }
     }
   ],
   "overall": {
     "A": {
-      "n": 1,
-      "checksPassRate": 1,
+      "n": 4,
+      "checksPassRate": 0.75,
       "unintendedMean": 0,
-      "turnsMean": 8,
-      "wallTimeMeanMs": 75652,
-      "agentTokensMean": 13276,
+      "turnsMean": 7.75,
+      "wallTimeMeanMs": 94939.25,
+      "agentTokensMean": 18477.25,
       "intentTokensMean": 0,
-      "totalTokensMean": 13276,
+      "totalTokensMean": 18477.25,
       "questionRate": 0,
       "unnecessaryQuestions": 0,
-      "missedQuestions": 0,
-      "judgeAccuracyMean": 0.75,
-      "mechanicalProxyRate": 1
+      "missedQuestions": 2,
+      "judgeAccuracyMean": 0.8125,
+      "mechanicalProxyRate": 0.75
     },
     "B": {
-      "n": 1,
+      "n": 4,
       "checksPassRate": 1,
       "unintendedMean": 0,
       "turnsMean": 8,
-      "wallTimeMeanMs": 90593,
-      "agentTokensMean": 22243,
-      "intentTokensMean": 3973,
-      "totalTokensMean": 26216,
+      "wallTimeMeanMs": 109395.25,
+      "agentTokensMean": 27748.5,
+      "intentTokensMean": 4170.5,
+      "totalTokensMean": 31919,
       "questionRate": 1,
-      "unnecessaryQuestions": 1,
+      "unnecessaryQuestions": 2,
       "missedQuestions": 0,
       "judgeAccuracyMean": 1,
       "mechanicalProxyRate": 1
     }
   },
   "fewers": {
-    "misunderstandings": "A mechanical-proxy 1.00 vs B 1.00; LLM-judged intent accuracy A 0.75 vs B 1.00.",
-    "unnecessaryQuestions": "B asked questions in 100% of runs; 1 unnecessary, 0 missed (per oracle necessity labels). A asks none by construction.",
-    "tokens": "mean agent tokens A 13276 vs B 22243; B additionally spends 3973 intent tokens (total A 13276 vs B 26216).",
+    "misunderstandings": "A mechanical-proxy 0.75 vs B 1.00; LLM-judged intent accuracy A 0.81 vs B 1.00.",
+    "unnecessaryQuestions": "B asked questions in 100% of runs; 2 unnecessary, 0 missed (per oracle necessity labels). A asks none by construction.",
+    "tokens": "mean agent tokens A 18477 vs B 27749; B additionally spends 4171 intent tokens (total A 18477 vs B 31919).",
     "unintendedChanges": "mean unintended changed files A 0.00 vs B 0.00."
   },
   "caveats": [

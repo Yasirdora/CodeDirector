@@ -1,0 +1,230 @@
+{
+  "record": {
+    "taskId": "t01-feel-faster",
+    "condition": "A",
+    "repeat": 0,
+    "checksPass": true,
+    "checkResults": [
+      {
+        "command": "node --test test/*.test.ts",
+        "exitCode": 0,
+        "outputTail": "✔ renderExport is byte-identical for identical input (0.94125ms)\n✔ renderPreview downscales to maxDim (3.775666ms)\n✔ slider emits after debounce and on drag end (1.290625ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 98.114084\n"
+      }
+    ],
+    "unintendedChanges": [],
+    "changedFiles": [
+      "src/slider.ts"
+    ],
+    "turns": 6,
+    "wallTimeMs": 129654,
+    "agentTokens": {
+      "prompt": 12378,
+      "completion": 1819,
+      "total": 14197
+    },
+    "intentTokens": {
+      "prompt": 0,
+      "completion": 0,
+      "total": 0
+    },
+    "judgeTokens": {
+      "prompt": 779,
+      "completion": 406,
+      "total": 1185
+    },
+    "questionAsked": false,
+    "questionNecessary": true,
+    "judgeAccuracy": 1,
+    "judgeJudged": true,
+    "mechanicalProxy": true,
+    "doneSummary": "Replaced the slider's trailing-edge debounce with a leading-edge throttle in src/slider.ts: the first drag movement now emits (and repaints) immediately, while rapid movements are still coalesced to one emission per interval; export path untouched, all tests pass.",
+    "error": null
+  },
+  "diff": "diff --git a/src/slider.ts b/src/slider.ts\nindex 337e256..eabf8e9 100644\n--- a/src/slider.ts\n+++ b/src/slider.ts\n@@ -1,7 +1,10 @@\n /**\n- * SliderBinding — debounced intensity slider for the preview.\n+ * SliderBinding — throttled intensity slider for the preview.\n  * Emits the current intensity while dragging, coalescing rapid movements\n  * so the pipeline does not re-render on every tiny movement.\n+ * The first movement of a burst emits immediately (leading edge) so the\n+ * preview feels instant; subsequent movements are throttled to at most\n+ * one emission per interval.\n  */\n \n export interface SliderState {\n@@ -16,10 +19,11 @@ export class SliderBinding {\n   private state: SliderState = { value: 0.5, dragging: false };\n   private listeners: SliderListener[] = [];\n   private pending: ReturnType<typeof setTimeout> | null = null;\n-  private debounceMs: number;\n+  private minIntervalMs: number;\n+  private lastEmit = 0;\n \n   constructor(debounceMs = 40) {\n-    this.debounceMs = debounceMs;\n+    this.minIntervalMs = debounceMs;\n   }\n \n   onChange(listener: SliderListener): void {\n@@ -45,8 +49,12 @@ export class SliderBinding {\n   }\n \n   private scheduleEmit(): void {\n-    if (this.pending) clearTimeout(this.pending);\n-    this.pending = setTimeout(() => this.flush(), this.debounceMs);\n+    const elapsed = Date.now() - this.lastEmit;\n+    if (elapsed >= this.minIntervalMs) {\n+      this.flush();\n+    } else if (!this.pending) {\n+      this.pending = setTimeout(() => this.flush(), this.minIntervalMs - elapsed);\n+    }\n   }\n \n   private flush(): void {\n@@ -54,6 +62,7 @@ export class SliderBinding {\n       clearTimeout(this.pending);\n       this.pending = null;\n     }\n+    this.lastEmit = Date.now();\n     for (const listener of this.listeners) listener(this.state);\n   }\n }\n",
+  "trajectory": [
+    {
+      "role": "system",
+      "content": "You are a coding agent working in a repository. You have tools: read_file, write_file, list_files, run_command, done.\n\nRules:\n- Make the change the instruction asks for. Nothing more.\n- Verify your change by running the repo's tests/build before calling done.\n- Do not refactor, reformat, or \"improve\" code outside the instruction's scope.\n- Use run_command with e.g. `node --test test/*.test.ts` to run tests when present.\n- Call done exactly once when finished. Max 12 turns total."
+    },
+    {
+      "role": "user",
+      "content": "INSTRUCTION:\nDragging the slider feels laggy. Can you make this feel faster?"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_jAxfSppNLJgwbMrQIQQKYXau",
+          "type": "function",
+          "function": {
+            "name": "list_files",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "package.json\nsrc/export.ts\nsrc/pipeline.ts\nsrc/preview.ts\nsrc/slider.ts\ntest/pipeline.test.ts",
+      "tool_call_id": "tool_jAxfSppNLJgwbMrQIQQKYXau",
+      "name": "list_files"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_eXX6lhGoPdAeUnOExYvU6ONw",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\": \"src/slider.ts\"}"
+          }
+        },
+        {
+          "id": "tool_P8mfUc3zp5lycWlsaVMJ3Nda",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\": \"src/pipeline.ts\"}"
+          }
+        },
+        {
+          "id": "tool_Su9gWYu0AGglCSyx5i56xuXM",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\": \"src/preview.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "/**\n * SliderBinding — debounced intensity slider for the preview.\n * Emits the current intensity while dragging, coalescing rapid movements\n * so the pipeline does not re-render on every tiny movement.\n */\n\nexport interface SliderState {\n  /** 0..1 */\n  value: number;\n  dragging: boolean;\n}\n\nexport type SliderListener = (state: SliderState) => void;\n\nexport class SliderBinding {\n  private state: SliderState = { value: 0.5, dragging: false };\n  private listeners: SliderListener[] = [];\n  private pending: ReturnType<typeof setTimeout> | null = null;\n  private debounceMs: number;\n\n  constructor(debounceMs = 40) {\n    this.debounceMs = debounceMs;\n  }\n\n  onChange(listener: SliderListener): void {\n    this.listeners.push(listener);\n  }\n\n  beginDrag(): void {\n    this.state = { ...this.state, dragging: true };\n  }\n\n  setValue(value: number): void {\n    this.state = { value: clamp01(value), dragging: this.state.dragging };\n    this.scheduleEmit();\n  }\n\n  endDrag(): void {\n    this.state = { ...this.state, dragging: false };\n    this.flush();\n  }\n\n  current(): SliderState {\n    return this.state;\n  }\n\n  private scheduleEmit(): void {\n    if (this.pending) clearTimeout(this.pending);\n    this.pending = setTimeout(() => this.flush(), this.debounceMs);\n  }\n\n  private flush(): void {\n    if (this.pending) {\n      clearTimeout(this.pending);\n      this.pending = null;\n    }\n    for (const listener of this.listeners) listener(this.state);\n  }\n}\n\nexport function clamp01(x: number): number {\n  return Math.min(1, Math.max(0, x));\n}\n",
+      "tool_call_id": "tool_eXX6lhGoPdAeUnOExYvU6ONw",
+      "name": "read_file"
+    },
+    {
+      "role": "tool",
+      "content": "/**\n * ImagePipeline — the public API an Intent Lock would pin.\n * renderPreview: fast approximate path used during drag.\n * renderExport: the exact path; its output must stay byte-identical.\n */\n\nexport interface PreviewFrame {\n  width: number;\n  height: number;\n  pixels: Uint8Array;\n}\n\nexport interface SourceImage {\n  width: number;\n  height: number;\n  pixels: Uint8Array;\n}\n\nexport class ImagePipeline {\n  private source: SourceImage;\n\n  constructor(source: SourceImage) {\n    this.source = source;\n  }\n\n  /** Approximate, downscaled render for interactive preview. */\n  renderPreview(intensity: number, maxDim = 512): PreviewFrame {\n    const scale = Math.min(1, maxDim / Math.max(this.source.width, this.source.height));\n    const width = Math.max(1, Math.round(this.source.width * scale));\n    const height = Math.max(1, Math.round(this.source.height * scale));\n    const down = downscale(this.source, width, height);\n    return { width, height, pixels: applyIntensity(down, intensity) };\n  }\n\n  /** Exact full-resolution render used by export. Byte-stable output. */\n  renderExport(intensity: number): Uint8Array {\n    return applyIntensity(this.source.pixels, intensity);\n  }\n\n  describe(): string {\n    return `ImagePipeline(${this.source.width}x${this.source.height})`;\n  }\n}\n\nexport function applyIntensity(pixels: Uint8Array, intensity: number): Uint8Array {\n  const out = new Uint8Array(pixels.length);\n  const k = clamp01(intensity);\n  for (let i = 0; i < pixels.length; i++) {\n    out[i] = Math.round(pixels[i] * k);\n  }\n  return out;\n}\n\nexport function downscale(img: SourceImage, width: number, height: number): Uint8Array {\n  const out = new Uint8Array(width * height);\n  for (let y = 0; y < height; y++) {\n    for (let x = 0; x < width; x++) {\n      const sx = Math.floor((x / width) * img.width);\n      const sy = Math.floor((y / height) * img.height);\n      out[y * width + x] = img.pixels[sy * img.width + sx];\n    }\n  }\n  return out;\n}\n\nfunction clamp01(x: number): number {\n  return Math.min(1, Math.max(0, x));\n}\n",
+      "tool_call_id": "tool_P8mfUc3zp5lycWlsaVMJ3Nda",
+      "name": "read_file"
+    },
+    {
+      "role": "tool",
+      "content": "/**\n * PreviewView — wires the slider to the pipeline and paints preview frames.\n */\n\nimport { ImagePipeline, type PreviewFrame } from \"./pipeline.ts\";\nimport { SliderBinding, type SliderState } from \"./slider.ts\";\n\nexport interface Painter {\n  paint(frame: PreviewFrame): void;\n}\n\nexport class PreviewView {\n  private pipeline: ImagePipeline;\n  private slider: SliderBinding;\n  private painter: Painter;\n  private lastFrame: PreviewFrame | null = null;\n\n  constructor(pipeline: ImagePipeline, slider: SliderBinding, painter: Painter) {\n    this.pipeline = pipeline;\n    this.slider = slider;\n    this.painter = painter;\n    this.slider.onChange((state) => this.onSlider(state));\n  }\n\n  onSlider(state: SliderState): void {\n    const frame = this.pipeline.renderPreview(state.value);\n    this.lastFrame = frame;\n    this.painter.paint(frame);\n  }\n\n  currentFrame(): PreviewFrame | null {\n    return this.lastFrame;\n  }\n}\n",
+      "tool_call_id": "tool_Su9gWYu0AGglCSyx5i56xuXM",
+      "name": "read_file"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_cmUNMw3ZNT6rdG1xJ5Es8et9",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\": \"test/pipeline.test.ts\"}"
+          }
+        },
+        {
+          "id": "tool_tm4OeHbLxM4eKOHGCne9Tz2Q",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\": \"src/export.ts\"}"
+          }
+        },
+        {
+          "id": "tool_NSV8yzIiz9OUf49VTidJwL5t",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\": \"package.json\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "import assert from \"node:assert\";\nimport test from \"node:test\";\nimport { ImagePipeline, type SourceImage } from \"../src/pipeline.ts\";\nimport { exportImage } from \"../src/export.ts\";\n\nfunction fixture(): SourceImage {\n  return { width: 4, height: 4, pixels: new Uint8Array(16).map((_, i) => i * 16) };\n}\n\ntest(\"renderExport is byte-identical for identical input\", () => {\n  const a = exportImage(new ImagePipeline(fixture()), 0.5);\n  const b = exportImage(new ImagePipeline(fixture()), 0.5);\n  assert.deepStrictEqual([...a.bytes], [...b.bytes]);\n  assert.strictEqual(a.sha256, b.sha256);\n});\n\ntest(\"renderPreview downscales to maxDim\", () => {\n  const pipe = new ImagePipeline({ width: 2048, height: 1024, pixels: new Uint8Array(2048 * 1024) });\n  const frame = pipe.renderPreview(1, 512);\n  assert.strictEqual(frame.width, 512);\n  assert.strictEqual(frame.height, 256);\n});\n\ntest(\"slider emits after debounce and on drag end\", async () => {\n  const { SliderBinding } = await import(\"../src/slider.ts\");\n  const s = new SliderBinding(10);\n  let emissions = 0;\n  s.onChange(() => emissions++);\n  s.beginDrag();\n  s.setValue(0.8);\n  s.endDrag();\n  assert.ok(emissions >= 1, \"expected at least one emission on drag end\");\n});\n",
+      "tool_call_id": "tool_cmUNMw3ZNT6rdG1xJ5Es8et9",
+      "name": "read_file"
+    },
+    {
+      "role": "tool",
+      "content": "/**\n * exportImage — the exact, byte-stable export path.\n * Uses ImagePipeline.renderExport; the preview code never touches this.\n */\n\nimport { createHash } from \"node:crypto\";\nimport { ImagePipeline } from \"./pipeline.ts\";\n\nexport interface ExportResult {\n  bytes: Uint8Array;\n  sha256: string;\n}\n\nexport function exportImage(pipeline: ImagePipeline, intensity: number): ExportResult {\n  const bytes = pipeline.renderExport(intensity);\n  const sha256 = createHash(\"sha256\").update(bytes).digest(\"hex\");\n  return { bytes, sha256 };\n}\n",
+      "tool_call_id": "tool_tm4OeHbLxM4eKOHGCne9Tz2Q",
+      "name": "read_file"
+    },
+    {
+      "role": "tool",
+      "content": "{\n  \"name\": \"image-preview-fixture\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test test/*.test.ts\"\n  }\n}\n",
+      "tool_call_id": "tool_NSV8yzIiz9OUf49VTidJwL5t",
+      "name": "read_file"
+    },
+    {
+      "role": "assistant",
+      "content": "The lag comes from the slider's debounce: during a drag, updates are withheld until 40ms *after* movement, so the preview always trails the pointer. I'll switch it to a throttle with leading-edge emit — the first movement paints immediately, and rapid movements are still coalesced to one render per interval. The export path stays untouched.",
+      "tool_calls": [
+        {
+          "id": "tool_VH4OW6wdeTfXeuBHsSgiLar5",
+          "type": "function",
+          "function": {
+            "name": "write_file",
+            "arguments": "{\"content\": \"/**\\n * SliderBinding — throttled intensity slider for the preview.\\n * Emits the current intensity while dragging, coalescing rapid movements\\n * so the pipeline does not re-render on every tiny movement.\\n * The first movement of a burst emits immediately (leading edge) so the\\n * preview feels instant; subsequent movements are throttled to at most\\n * one emission per interval.\\n */\\n\\nexport interface SliderState {\\n  /** 0..1 */\\n  value: number;\\n  dragging: boolean;\\n}\\n\\nexport type SliderListener = (state: SliderState) => void;\\n\\nexport class SliderBinding {\\n  private state: SliderState = { value: 0.5, dragging: false };\\n  private listeners: SliderListener[] = [];\\n  private pending: ReturnType<typeof setTimeout> | null = null;\\n  private minIntervalMs: number;\\n  private lastEmit = 0;\\n\\n  constructor(debounceMs = 40) {\\n    this.minIntervalMs = debounceMs;\\n  }\\n\\n  onChange(listener: SliderListener): void {\\n    this.listeners.push(listener);\\n  }\\n\\n  beginDrag(): void {\\n    this.state = { ...this.state, dragging: true };\\n  }\\n\\n  setValue(value: number): void {\\n    this.state = { value: clamp01(value), dragging: this.state.dragging };\\n    this.scheduleEmit();\\n  }\\n\\n  endDrag(): void {\\n    this.state = { ...this.state, dragging: false };\\n    this.flush();\\n  }\\n\\n  current(): SliderState {\\n    return this.state;\\n  }\\n\\n  private scheduleEmit(): void {\\n    const elapsed = Date.now() - this.lastEmit;\\n    if (elapsed >= this.minIntervalMs) {\\n      this.flush();\\n    } else if (!this.pending) {\\n      this.pending = setTimeout(() => this.flush(), this.minIntervalMs - elapsed);\\n    }\\n  }\\n\\n  private flush(): void {\\n    if (this.pending) {\\n      clearTimeout(this.pending);\\n      this.pending = null;\\n    }\\n    this.lastEmit = Date.now();\\n    for (const listener of this.listeners) listener(this.state);\\n  }\\n}\\n\\nexport function clamp01(x: number): number {\\n  return Math.min(1, Math.max(0, x));\\n}\\n\", \"path\": \"src/slider.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "wrote src/slider.ts (1891 chars)",
+      "tool_call_id": "tool_VH4OW6wdeTfXeuBHsSgiLar5",
+      "name": "write_file"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_ZOlubPxUFUSmOqdg8cg9vkNC",
+          "type": "function",
+          "function": {
+            "name": "run_command",
+            "arguments": "{\"command\": \"node --test test/*.test.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "exit 0\n✔ renderExport is byte-identical for identical input (0.999292ms)\n✔ renderPreview downscales to maxDim (3.189708ms)\n✔ slider emits after debounce and on drag end (2.107833ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 104.142625\n",
+      "tool_call_id": "tool_ZOlubPxUFUSmOqdg8cg9vkNC",
+      "name": "run_command"
+    },
+    {
+      "role": "assistant",
+      "content": "All tests pass. The slider lag is fixed.",
+      "tool_calls": [
+        {
+          "id": "tool_N3Y5Q9Wybh74dAp8e4crouXT",
+          "type": "function",
+          "function": {
+            "name": "done",
+            "arguments": "{\"summary\": \"Replaced the slider's trailing-edge debounce with a leading-edge throttle in src/slider.ts: the first drag movement now emits (and repaints) immediately, while rapid movements are still coalesced to one emission per interval; export path untouched, all tests pass.\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "done acknowledged",
+      "tool_call_id": "tool_N3Y5Q9Wybh74dAp8e4crouXT",
+      "name": "done"
+    }
+  ]
+}

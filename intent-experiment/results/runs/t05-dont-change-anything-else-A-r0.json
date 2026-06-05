@@ -1,0 +1,287 @@
+{
+  "record": {
+    "taskId": "t05-dont-change-anything-else",
+    "condition": "A",
+    "repeat": 0,
+    "checksPass": true,
+    "checkResults": [
+      {
+        "command": "node --test test/*.test.ts",
+        "exitCode": 0,
+        "outputTail": "✔ add + list shows newest first (4.571542ms)\n✔ nextId increments past max id (0.079375ms)\n✔ done tasks are hidden from default list (1.349583ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 150.707417\n"
+      },
+      {
+        "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t05-done-index.mjs",
+        "exitCode": 0,
+        "outputTail": "t05 check OK\n"
+      }
+    ],
+    "unintendedChanges": [],
+    "changedFiles": [
+      "src/tasks.ts"
+    ],
+    "turns": 10,
+    "wallTimeMs": 73021,
+    "agentTokens": {
+      "prompt": 25421,
+      "completion": 1428,
+      "total": 26849
+    },
+    "intentTokens": {
+      "prompt": 0,
+      "completion": 0,
+      "total": 0
+    },
+    "judgeTokens": {
+      "prompt": 634,
+      "completion": 239,
+      "total": 873
+    },
+    "questionAsked": false,
+    "questionNecessary": false,
+    "judgeAccuracy": 1,
+    "judgeJudged": true,
+    "mechanicalProxy": true,
+    "doneSummary": "Fixed completeTask in src/tasks.ts to index the visible (newest-first, incomplete-filtered) list matching what `list` displays, so `done 1` completes the correct task.",
+    "error": null
+  },
+  "diff": "diff --git a/src/tasks.ts b/src/tasks.ts\nindex ddf07c2..84af25b 100644\n--- a/src/tasks.ts\n+++ b/src/tasks.ts\n@@ -3,11 +3,6 @@\n  *\n  * Display order is NEWEST FIRST (id desc). `done <n>` takes the 1-based\n  * index as shown by `list`.\n- *\n- * NOTE: completeTask below contains a subtle planted bug for the benchmark:\n- * it indexes the raw insertion-ordered array instead of the displayed\n- * (sorted, filtered) list, so `done 1` completes the wrong task whenever\n- * two or more tasks exist.\n  */\n \n import { type Task, loadTasks, saveTasks, nextId } from \"./storage.ts\";\n@@ -33,9 +28,10 @@ export function listTasks(all = false, file?: string): Task[] {\n /** Complete the task at 1-based display index n (as shown by `list`). */\n export function completeTask(n: number, file?: string): Task {\n   const tasks = loadTasks(file);\n-  // PLANTED BUG: indexes the unsorted, unfiltered array instead of visibleTasks().\n-  const task = tasks[n - 1];\n-  if (!task) throw new Error(`no task at index ${n}`);\n+  const visible = visibleTasks(tasks);\n+  const target = visible[n - 1];\n+  if (!target) throw new Error(`no task at index ${n}`);\n+  const task = tasks.find((t) => t.id === target.id)!;\n   task.done = true;\n   saveTasks(tasks, file);\n   return task;\n",
+  "trajectory": [
+    {
+      "role": "system",
+      "content": "You are a coding agent working in a repository. You have tools: read_file, write_file, list_files, run_command, done.\n\nRules:\n- Make the change the instruction asks for. Nothing more.\n- Verify your change by running the repo's tests/build before calling done.\n- Do not refactor, reformat, or \"improve\" code outside the instruction's scope.\n- Use run_command with e.g. `node --test test/*.test.ts` to run tests when present.\n- Call done exactly once when finished. Max 12 turns total."
+    },
+    {
+      "role": "user",
+      "content": "INSTRUCTION:\nHeads up: `done 1` keeps completing the wrong task when I have a few items. Fix just that — please don't change anything else."
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_ZwF1E5eLE0RIyOe4Ivo4y0DK",
+          "type": "function",
+          "function": {
+            "name": "list_files",
+            "arguments": "{\"path\":\"\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "package.json\nsrc/cache.ts\nsrc/cli.ts\nsrc/storage.ts\nsrc/tasks.ts\ntest/tasks.test.ts",
+      "tool_call_id": "tool_ZwF1E5eLE0RIyOe4Ivo4y0DK",
+      "name": "list_files"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_1wDh6ktwmwE9GAddWmpASfiH",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\":\"src/tasks.ts\"}"
+          }
+        },
+        {
+          "id": "tool_MC7mKEJEY46OP93byp1QJbsO",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\":\"src/cli.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "/**\n * tasks.ts — task list core logic.\n *\n * Display order is NEWEST FIRST (id desc). `done <n>` takes the 1-based\n * index as shown by `list`.\n *\n * NOTE: completeTask below contains a subtle planted bug for the benchmark:\n * it indexes the raw insertion-ordered array instead of the displayed\n * (sorted, filtered) list, so `done 1` completes the wrong task whenever\n * two or more tasks exist.\n */\n\nimport { type Task, loadTasks, saveTasks, nextId } from \"./storage.ts\";\n\n/** Tasks as the user sees them: incomplete first? No — newest first, done hidden unless all=true. */\nexport function visibleTasks(tasks: Task[], all = false): Task[] {\n  const filtered = all ? tasks : tasks.filter((t) => !t.done);\n  return [...filtered].sort((a, b) => b.id - a.id);\n}\n\nexport function addTask(title: string, file?: string): Task {\n  const tasks = loadTasks(file);\n  const task: Task = { id: nextId(tasks), title, done: false, createdAt: new Date().toISOString() };\n  tasks.push(task);\n  saveTasks(tasks, file);\n  return task;\n}\n\nexport function listTasks(all = false, file?: string): Task[] {\n  return visibleTasks(loadTasks(file), all);\n}\n\n/** Complete the task at 1-based display index n (as shown by `list`). */\nexport function completeTask(n: number, file?: string): Task {\n  const tasks = loadTasks(file);\n  // PLANTED BUG: indexes the unsorted, unfiltered array instead of visibleTasks().\n  const task = tasks[n - 1];\n  if (!task) throw new Error(`no task at index ${n}`);\n  task.done = true;\n  saveTasks(tasks, file);\n  return task;\n}\n",
+      "tool_call_id": "tool_1wDh6ktwmwE9GAddWmpASfiH",
+      "name": "read_file"
+    },
+    {
+      "role": "tool",
+      "content": "/**\n * cli.ts — tiny JSON task-list CLI.\n *   node src/cli.ts add \"title\"     → prints \"added <id>. <title>\"\n *   node src/cli.ts list [--all] [--json]\n *   node src/cli.ts done <n>        → prints \"done <id>. <title>\"\n */\n\nimport { addTask, listTasks, completeTask } from \"./tasks.ts\";\nimport { loadTasksFast } from \"./cache.ts\";\nimport { storageFile } from \"./storage.ts\";\nimport { visibleTasks } from \"./tasks.ts\";\n\nfunction formatTask(t: { id: number; title: string; done: boolean }): string {\n  return `${t.done ? \"[x]\" : \"[ ]\"} ${t.id}. ${t.title}`;\n}\n\nfunction main(argv: string[]): void {\n  const [cmd, ...rest] = argv;\n  const file = storageFile();\n  switch (cmd) {\n    case \"add\": {\n      const title = rest.join(\" \");\n      const task = addTask(title, file);\n      console.log(`added ${task.id}. ${task.title}`);\n      break;\n    }\n    case \"list\": {\n      const all = rest.includes(\"--all\");\n      const asJson = rest.includes(\"--json\");\n      const tasks = visibleTasks(loadTasksFast(file), all);\n      if (asJson) console.log(JSON.stringify(tasks));\n      else for (const t of tasks) console.log(formatTask(t));\n      break;\n    }\n    case \"done\": {\n      const n = parseInt(rest[0] ?? \"\", 10);\n      const task = completeTask(n, file);\n      console.log(`done ${task.id}. ${task.title}`);\n      break;\n    }\n    default:\n      console.log(\"usage: cli.ts add <title> | list [--all] [--json] | done <n>\");\n  }\n}\n\nmain(process.argv.slice(2));\n",
+      "tool_call_id": "tool_MC7mKEJEY46OP93byp1QJbsO",
+      "name": "read_file"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_Imh4gu98pMQPcpViIRELf3Hz",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\":\"src/storage.ts\"}"
+          }
+        },
+        {
+          "id": "tool_sM2uweBbh9zXbcrMYB7TdKN6",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\":\"test/tasks.test.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "/**\n * storage.ts — JSON file persistence for the task list.\n * Storage file path comes from TASKS_FILE env or ./tasks.json.\n */\n\nimport { readFileSync, writeFileSync, renameSync, existsSync } from \"node:fs\";\n\nexport interface Task {\n  id: number;\n  title: string;\n  done: boolean;\n  createdAt: string;\n}\n\nexport function storageFile(): string {\n  return process.env.TASKS_FILE || \"tasks.json\";\n}\n\nexport function loadTasks(file: string = storageFile()): Task[] {\n  if (!existsSync(file)) return [];\n  const raw = readFileSync(file, \"utf8\").trim();\n  if (raw === \"\") return [];\n  return JSON.parse(raw) as Task[];\n}\n\nexport function saveTasks(tasks: Task[], file: string = storageFile()): void {\n  const tmp = file + \".tmp\";\n  writeFileSync(tmp, JSON.stringify(tasks, null, 2) + \"\\n\", \"utf8\");\n  renameSync(tmp, file);\n}\n\nexport function nextId(tasks: Task[]): number {\n  return tasks.reduce((m, t) => Math.max(m, t.id), 0) + 1;\n}\n",
+      "tool_call_id": "tool_Imh4gu98pMQPcpViIRELf3Hz",
+      "name": "read_file"
+    },
+    {
+      "role": "tool",
+      "content": "import assert from \"node:assert\";\nimport test from \"node:test\";\nimport { mkdtempSync } from \"node:fs\";\nimport { tmpdir } from \"node:os\";\nimport path from \"node:path\";\nimport { addTask, listTasks } from \"../src/tasks.ts\";\nimport { loadTasks, nextId } from \"../src/storage.ts\";\n\nfunction tmpFile(): string {\n  return path.join(mkdtempSync(path.join(tmpdir(), \"tasks-test-\")), \"tasks.json\");\n}\n\ntest(\"add + list shows newest first\", () => {\n  const f = tmpFile();\n  addTask(\"first\", f);\n  addTask(\"second\", f);\n  const list = listTasks(false, f);\n  assert.strictEqual(list.length, 2);\n  assert.strictEqual(list[0].title, \"second\");\n  assert.strictEqual(list[1].title, \"first\");\n});\n\ntest(\"nextId increments past max id\", () => {\n  assert.strictEqual(nextId([]), 1);\n  assert.strictEqual(nextId([{ id: 3, title: \"x\", done: false, createdAt: \"\" }]), 4);\n});\n\ntest(\"done tasks are hidden from default list\", async () => {\n  const f = tmpFile();\n  addTask(\"keep\", f);\n  const t2 = addTask(\"hide me\", f);\n  const tasks = loadTasks(f);\n  tasks.find((t) => t.id === t2.id)!.done = true;\n  const { saveTasks } = await import(\"../src/storage.ts\");\n  saveTasks(tasks, f);\n  const list = listTasks(false, f);\n  assert.deepStrictEqual(list.map((t) => t.title), [\"keep\"]);\n});\n",
+      "tool_call_id": "tool_sM2uweBbh9zXbcrMYB7TdKN6",
+      "name": "read_file"
+    },
+    {
+      "role": "assistant",
+      "content": "The bug is in `completeTask` — it indexes the raw insertion-ordered array instead of the visible (sorted, filtered) list that `list` displays. Let me fix just that:",
+      "tool_calls": [
+        {
+          "id": "tool_4PRfVybfjHlY9TmPTcYFisLF",
+          "type": "function",
+          "function": {
+            "name": "write_file",
+            "arguments": "{\"content\":\"/**\\n * tasks.ts — task list core logic.\\n *\\n * Display order is NEWEST FIRST (id desc). `done <n>` takes the 1-based\\n * index as shown by `list`.\\n */\\n\\nimport { type Task, loadTasks, saveTasks, nextId } from \\\"./storage.ts\\\";\\n\\n/** Tasks as the user sees them: incomplete first? No — newest first, done hidden unless all=true. */\\nexport function visibleTasks(tasks: Task[], all = false): Task[] {\\n  const filtered = all ? tasks : tasks.filter((t) => !t.done);\\n  return [...filtered].sort((a, b) => b.id - a.id);\\n}\\n\\nexport function addTask(title: string, file?: string): Task {\\n  const tasks = loadTasks(file);\\n  const task: Task = { id: nextId(tasks), title, done: false, createdAt: new Date().toISOString() };\\n  tasks.push(task);\\n  saveTasks(tasks, file);\\n  return task;\\n}\\n\\nexport function listTasks(all = false, file?: string): Task[] {\\n  return visibleTasks(loadTasks(file), all);\\n}\\n\\n/** Complete the task at 1-based display index n (as shown by `list`). */\\nexport function completeTask(n: number, file?: string): Task {\\n  const tasks = loadTasks(file);\\n  const visible = visibleTasks(tasks);\\n  const target = visible[n - 1];\\n  if (!target) throw new Error(`no task at index ${n}`);\\n  const task = tasks.find((t) => t.id === target.id)!;\\n  task.done = true;\\n  saveTasks(tasks, file);\\n  return task;\\n}\\n\",\"path\":\"src/tasks.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "wrote src/tasks.ts (1299 chars)",
+      "tool_call_id": "tool_4PRfVybfjHlY9TmPTcYFisLF",
+      "name": "write_file"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_8bjah332cui3sgB8nxi2Avmz",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\":\"package.json\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\n  \"name\": \"task-list-fixture\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test test/*.test.ts\"\n  }\n}\n",
+      "tool_call_id": "tool_8bjah332cui3sgB8nxi2Avmz",
+      "name": "read_file"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_IXW5N2d87jjFwtVfEpxIQisX",
+          "type": "function",
+          "function": {
+            "name": "run_command",
+            "arguments": "{\"command\":\"npm test\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "exit 0\n\n> test\n> node --test test/*.test.ts\n\n✔ add + list shows newest first (3.993916ms)\n✔ nextId increments past max id (0.123583ms)\n✔ done tasks are hidden from default list (2.186959ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 84.159541\n",
+      "tool_call_id": "tool_IXW5N2d87jjFwtVfEpxIQisX",
+      "name": "run_command"
+    },
+    {
+      "role": "assistant",
+      "content": "All existing tests pass. Let me also verify the fix manually with a quick scenario matching the reported bug:",
+      "tool_calls": [
+        {
+          "id": "tool_Q2I4ft5iEgOguuB0GhThKBMU",
+          "type": "function",
+          "function": {
+            "name": "run_command",
+            "arguments": "{\"command\":\"cd /tmp && rm -rf tasktest && mkdir tasktest && cd tasktest && export TASKS_FILE=/tmp/tasktest/tasks.json && node --experimental-strip-types /repo/src/cli.ts add \\\"first task\\\" && node --experimental-strip-types /repo/src/cli.ts add \\\"second task\\\" && node --experimental-strip-types /repo/src/cli.ts add \\\"third task\\\" && echo \\\"--- list ---\\\" && node --experimental-strip-types /repo/src/cli.ts list && echo \\\"--- done 1 ---\\\" && node --experimental-strip-types /repo/src/cli.ts done 1 && echo \\\"--- list after ---\\\" && node --experimental-strip-types /repo/src/cli.ts list\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "exit 1\nnode:internal/modules/cjs/loader:1479\n  throw err;\n  ^\n\nError: Cannot find module '/repo/src/cli.ts'\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1476:15)\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27)\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1073:10)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1094:12)\n    at Module._load (node:internal/modules/cjs/loader:1262:25)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\n    at node:internal/main/run_main_module:33:47 {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: []\n}\n\nNode.js v24.15.0\n",
+      "tool_call_id": "tool_Q2I4ft5iEgOguuB0GhThKBMU",
+      "name": "run_command"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_7Gz8Fnli7jWsXlruHLQoXXZw",
+          "type": "function",
+          "function": {
+            "name": "run_command",
+            "arguments": "{\"command\":\"pwd && export TASKS_FILE=/tmp/tasktest/tasks.json && rm -f /tmp/tasktest/tasks.json && node src/cli.ts add \\\"first task\\\" && node src/cli.ts add \\\"second task\\\" && node src/cli.ts add \\\"third task\\\" && echo \\\"--- list ---\\\" && node src/cli.ts list && echo \\\"--- done 1 ---\\\" && node src/cli.ts done 1 && echo \\\"--- list after ---\\\" && node src/cli.ts list\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "exit 0\n/private/var/folders/_3/kvqht5fx3xs_hswpzlltl8440000gn/T/intent-exp-0Q5OnA\nadded 1. first task\nadded 2. second task\nadded 3. third task\n--- list ---\n[ ] 3. third task\n[ ] 2. second task\n[ ] 1. first task\n--- done 1 ---\ndone 3. third task\n--- list after ---\n[ ] 2. second task\n[ ] 1. first task\n",
+      "tool_call_id": "tool_7Gz8Fnli7jWsXlruHLQoXXZw",
+      "name": "run_command"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_9TejRG21xyKW5ZSi3qDYOP8l",
+          "type": "function",
+          "function": {
+            "name": "run_command",
+            "arguments": "{\"command\":\"rm -f /tmp/tasktest/tasks.json\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "exit 0\n",
+      "tool_call_id": "tool_9TejRG21xyKW5ZSi3qDYOP8l",
+      "name": "run_command"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_LO4u0RmSs5d8OV4Fz5DRKca8",
+          "type": "function",
+          "function": {
+            "name": "done",
+            "arguments": "{\"summary\":\"Fixed completeTask in src/tasks.ts to index the visible (newest-first, incomplete-filtered) list matching what `list` displays, so `done 1` completes the correct task.\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "done acknowledged",
+      "tool_call_id": "tool_LO4u0RmSs5d8OV4Fz5DRKca8",
+      "name": "done"
+    }
+  ]
+}
