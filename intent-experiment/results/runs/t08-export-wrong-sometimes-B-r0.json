@@ -1,0 +1,208 @@
+{
+  "record": {
+    "taskId": "t08-export-wrong-sometimes",
+    "condition": "B",
+    "repeat": 0,
+    "checksPass": true,
+    "checkResults": [
+      {
+        "command": "node --test test/*.test.ts",
+        "exitCode": 0,
+        "outputTail": "17ms)\n✔ renderExport clamps intensity above 1 (0.074458ms)\n✔ renderExport clamps intensity below 0 (0.05775ms)\n✔ renderPreview clamps intensity above 1 (0.052542ms)\n✔ renderPreview clamps intensity below 0 (0.04875ms)\n✔ exportImage with out-of-range intensity produces no pixel wraparound (0.091542ms)\nℹ tests 8\nℹ suites 0\nℹ pass 8\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 92.336458\n"
+      },
+      {
+        "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t08-export-clamp.mjs",
+        "exitCode": 0,
+        "outputTail": "t08 check OK\n"
+      }
+    ],
+    "unintendedChanges": [],
+    "changedFiles": [
+      "src/pipeline.ts",
+      "test/pipeline.test.ts"
+    ],
+    "turns": 6,
+    "wallTimeMs": 53056,
+    "agentTokens": {
+      "prompt": 15130,
+      "completion": 1875,
+      "total": 17005
+    },
+    "intentTokens": {
+      "prompt": 2959,
+      "completion": 1577,
+      "total": 4536
+    },
+    "judgeTokens": {
+      "prompt": 1252,
+      "completion": 1034,
+      "total": 2286
+    },
+    "questionAsked": true,
+    "questionNecessary": true,
+    "judgeAccuracy": 1,
+    "judgeJudged": true,
+    "mechanicalProxy": true,
+    "doneSummary": "Clamped intensity to [0,1] via clamp01 in renderExport/renderPreview (and defense-in-depth in applyIntensity), plus added tests verifying out-of-range intensities match clamped results with no wraparound; all 8 tests pass.",
+    "error": null
+  },
+  "diff": "diff --git a/src/pipeline.ts b/src/pipeline.ts\nindex 0fefcb0..cd94a95 100644\n--- a/src/pipeline.ts\n+++ b/src/pipeline.ts\n@@ -25,6 +25,7 @@ export class ImagePipeline {\n \n   /** Approximate, downscaled render for interactive preview. */\n   renderPreview(intensity: number, maxDim = 512): PreviewFrame {\n+    intensity = clamp01(intensity);\n     const scale = Math.min(1, maxDim / Math.max(this.source.width, this.source.height));\n     const width = Math.max(1, Math.round(this.source.width * scale));\n     const height = Math.max(1, Math.round(this.source.height * scale));\n@@ -34,6 +35,7 @@ export class ImagePipeline {\n \n   /** Exact full-resolution render used by export. Byte-stable output. */\n   renderExport(intensity: number): Uint8Array {\n+    intensity = clamp01(intensity);\n     return applyIntensity(this.source.pixels, intensity);\n   }\n \n@@ -44,7 +46,7 @@ export class ImagePipeline {\n \n export function applyIntensity(pixels: Uint8Array, intensity: number): Uint8Array {\n   const out = new Uint8Array(pixels.length);\n-  const k = intensity;\n+  const k = clamp01(intensity);\n   for (let i = 0; i < pixels.length; i++) {\n     out[i] = Math.round(pixels[i] * k);\n   }\ndiff --git a/test/pipeline.test.ts b/test/pipeline.test.ts\nindex 7ff53ff..0ae5a34 100644\n--- a/test/pipeline.test.ts\n+++ b/test/pipeline.test.ts\n@@ -31,3 +31,51 @@ test(\"slider emits after debounce and on drag end\", async () => {\n   s.endDrag();\n   assert.ok(emissions >= 1, \"expected at least one emission on drag end\");\n });\n+\n+test(\"renderExport clamps intensity above 1\", () => {\n+  const pipe = new ImagePipeline(fixture());\n+  assert.deepStrictEqual([...pipe.renderExport(1.5)], [...pipe.renderExport(1.0)]);\n+});\n+\n+test(\"renderExport clamps intensity below 0\", () => {\n+  const pipe = new ImagePipeline(fixture());\n+  assert.deepStrictEqual([...pipe.renderExport(-0.5)], [...pipe.renderExport(0.0)]);\n+});\n+\n+test(\"renderPreview clamps intensity above 1\", () => {\n+  const pipe = new ImagePipeline(fixture());\n+  const a = pipe.renderPreview(2.0);\n+  const b = pipe.renderPreview(1.0);\n+  assert.strictEqual(a.width, b.width);\n+  assert.strictEqual(a.height, b.height);\n+  assert.deepStrictEqual([...a.pixels], [...b.pixels]);\n+});\n+\n+test(\"renderPreview clamps intensity below 0\", () => {\n+  const pipe = new ImagePipeline(fixture());\n+  const a = pipe.renderPreview(-2.0);\n+  const b = pipe.renderPreview(0.0);\n+  assert.strictEqual(a.width, b.width);\n+  assert.strictEqual(a.height, b.height);\n+  assert.deepStrictEqual([...a.pixels], [...b.pixels]);\n+});\n+\n+test(\"exportImage with out-of-range intensity produces no pixel wraparound\", () => {\n+  const pipe = new ImagePipeline(fixture());\n+  const clamped = exportImage(pipe, 1.0);\n+  const over = exportImage(pipe, 1.5);\n+  // Over-range intensity must behave exactly like intensity 1 — no wraparound.\n+  assert.deepStrictEqual([...over.bytes], [...clamped.bytes]);\n+  assert.strictEqual(over.sha256, clamped.sha256);\n+\n+  const zero = exportImage(pipe, 0.0);\n+  const under = exportImage(pipe, -0.5);\n+  // Under-range intensity must behave exactly like intensity 0 — all zeros.\n+  assert.deepStrictEqual([...under.bytes], [...zero.bytes]);\n+  assert.strictEqual(under.sha256, zero.sha256);\n+  assert.ok(under.bytes.every((b) => b === 0), \"expected all bytes to be 0 for negative intensity\");\n+\n+  // With intensity clamped to 1, output equals source pixels (no wraparound past 255).\n+  const src = fixture();\n+  assert.deepStrictEqual([...clamped.bytes], [...src.pixels]);\n+});\n",
+  "trajectory": [
+    {
+      "role": "system",
+      "content": "You are a coding agent working in a repository. You have tools: read_file, write_file, list_files, run_command, done.\n\nRules:\n- Make the change the instruction asks for. Nothing more.\n- Verify your change by running the repo's tests/build before calling done.\n- Do not refactor, reformat, or \"improve\" code outside the instruction's scope.\n- Use run_command with e.g. `node --test test/*.test.ts` to run tests when present.\n- Call done exactly once when finished. Max 12 turns total."
+    },
+    {
+      "role": "user",
+      "content": "INSTRUCTION:\nClamp intensity to [0,1] inside the pipeline so every render path stays in range. Concretely: apply the existing clamp01 helper to the intensity argument at the entry points of ImagePipeline (renderExport and renderPreview in src/pipeline.ts) — or once in a shared internal render path if both methods funnel through one — so that any intensity < 0 is treated as 0 and any intensity > 1 as 1, before applyIntensity runs. Optionally also clamp inside applyIntensity itself as defense-in-depth, but do not remove or change clamp01's semantics.\n\nBoundaries:\n- Do not change any public signatures: exportImage(pipeline, intensity), ImagePipeline.renderExport(intensity), ImagePipeline.renderPreview(intensity, maxDim), applyIntensity(pixels, intensity), or the ExportResult/PreviewFrame interfaces.\n- Do not touch src/slider.ts or package.json; do not add UI-level clamping — the fix belongs in the pipeline so all callers (slider, API, tests) benefit.\n- Do not alter pixel processing math beyond clamping the intensity input; clamping happens to intensity, not per-pixel output values.\n- Existing tests in test/pipeline.test.ts must continue to pass unchanged.\n\nVerification:\n- Add tests to test/pipeline.test.ts asserting: renderExport(1.5) deep-equals renderExport(1.0); renderExport(-0.5) deep-equals renderExport(0.0); renderPreview(2.0) matches renderPreview(1.0) (and likewise for negatives); exportImage with out-of-range intensity produces no pixel wraparound (all output bytes consistent with clamped intensity).\n- Run the full test suite; all tests, old and new, must pass."
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_gMPUQZogYKkX14JBN2OpktwN",
+          "type": "function",
+          "function": {
+            "name": "list_files",
+            "arguments": "{}"
+          }
+        },
+        {
+          "id": "tool_Z8IprdOuC5LZQK2KYLT6vnmW",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\": \"src/pipeline.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "package.json\nsrc/export.ts\nsrc/pipeline.ts\nsrc/preview.ts\nsrc/slider.ts\ntest/pipeline.test.ts",
+      "tool_call_id": "tool_gMPUQZogYKkX14JBN2OpktwN",
+      "name": "list_files"
+    },
+    {
+      "role": "tool",
+      "content": "/**\n * ImagePipeline — the public API an Intent Lock would pin.\n * renderPreview: fast approximate path used during drag.\n * renderExport: the exact path; its output must stay byte-identical.\n */\n\nexport interface PreviewFrame {\n  width: number;\n  height: number;\n  pixels: Uint8Array;\n}\n\nexport interface SourceImage {\n  width: number;\n  height: number;\n  pixels: Uint8Array;\n}\n\nexport class ImagePipeline {\n  private source: SourceImage;\n\n  constructor(source: SourceImage) {\n    this.source = source;\n  }\n\n  /** Approximate, downscaled render for interactive preview. */\n  renderPreview(intensity: number, maxDim = 512): PreviewFrame {\n    const scale = Math.min(1, maxDim / Math.max(this.source.width, this.source.height));\n    const width = Math.max(1, Math.round(this.source.width * scale));\n    const height = Math.max(1, Math.round(this.source.height * scale));\n    const down = downscale(this.source, width, height);\n    return { width, height, pixels: applyIntensity(down, intensity) };\n  }\n\n  /** Exact full-resolution render used by export. Byte-stable output. */\n  renderExport(intensity: number): Uint8Array {\n    return applyIntensity(this.source.pixels, intensity);\n  }\n\n  describe(): string {\n    return `ImagePipeline(${this.source.width}x${this.source.height})`;\n  }\n}\n\nexport function applyIntensity(pixels: Uint8Array, intensity: number): Uint8Array {\n  const out = new Uint8Array(pixels.length);\n  const k = intensity;\n  for (let i = 0; i < pixels.length; i++) {\n    out[i] = Math.round(pixels[i] * k);\n  }\n  return out;\n}\n\nexport function downscale(img: SourceImage, width: number, height: number): Uint8Array {\n  const out = new Uint8Array(width * height);\n  for (let y = 0; y < height; y++) {\n    for (let x = 0; x < width; x++) {\n      const sx = Math.floor((x / width) * img.width);\n      const sy = Math.floor((y / height) * img.height);\n      out[y * width + x] = img.pixels[sy * img.width + sx];\n    }\n  }\n  return out;\n}\n\nfunction clamp01(x: number): number {\n  return Math.min(1, Math.max(0, x));\n}\n",
+      "tool_call_id": "tool_Z8IprdOuC5LZQK2KYLT6vnmW",
+      "name": "read_file"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_4aRNB5HUJv5AoesljRSvY9Hf",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\": \"test/pipeline.test.ts\"}"
+          }
+        },
+        {
+          "id": "tool_2yMFWAIB6n70Dg548OSZmfLm",
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "arguments": "{\"path\": \"src/export.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "import assert from \"node:assert\";\nimport test from \"node:test\";\nimport { ImagePipeline, type SourceImage } from \"../src/pipeline.ts\";\nimport { exportImage } from \"../src/export.ts\";\n\nfunction fixture(): SourceImage {\n  return { width: 4, height: 4, pixels: new Uint8Array(16).map((_, i) => i * 16) };\n}\n\ntest(\"renderExport is byte-identical for identical input\", () => {\n  const a = exportImage(new ImagePipeline(fixture()), 0.5);\n  const b = exportImage(new ImagePipeline(fixture()), 0.5);\n  assert.deepStrictEqual([...a.bytes], [...b.bytes]);\n  assert.strictEqual(a.sha256, b.sha256);\n});\n\ntest(\"renderPreview downscales to maxDim\", () => {\n  const pipe = new ImagePipeline({ width: 2048, height: 1024, pixels: new Uint8Array(2048 * 1024) });\n  const frame = pipe.renderPreview(1, 512);\n  assert.strictEqual(frame.width, 512);\n  assert.strictEqual(frame.height, 256);\n});\n\ntest(\"slider emits after debounce and on drag end\", async () => {\n  const { SliderBinding } = await import(\"../src/slider.ts\");\n  const s = new SliderBinding(10);\n  let emissions = 0;\n  s.onChange(() => emissions++);\n  s.beginDrag();\n  s.setValue(0.8);\n  s.endDrag();\n  assert.ok(emissions >= 1, \"expected at least one emission on drag end\");\n});\n",
+      "tool_call_id": "tool_4aRNB5HUJv5AoesljRSvY9Hf",
+      "name": "read_file"
+    },
+    {
+      "role": "tool",
+      "content": "/**\n * exportImage — the exact, byte-stable export path.\n * Uses ImagePipeline.renderExport; the preview code never touches this.\n */\n\nimport { createHash } from \"node:crypto\";\nimport { ImagePipeline } from \"./pipeline.ts\";\n\nexport interface ExportResult {\n  bytes: Uint8Array;\n  sha256: string;\n}\n\nexport function exportImage(pipeline: ImagePipeline, intensity: number): ExportResult {\n  const bytes = pipeline.renderExport(intensity);\n  const sha256 = createHash(\"sha256\").update(bytes).digest(\"hex\");\n  return { bytes, sha256 };\n}\n",
+      "tool_call_id": "tool_2yMFWAIB6n70Dg548OSZmfLm",
+      "name": "read_file"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_aDQPNf3XW2RK7LLaYrh2Eug7",
+          "type": "function",
+          "function": {
+            "name": "write_file",
+            "arguments": "{\"content\": \"/**\\n * ImagePipeline — the public API an Intent Lock would pin.\\n * renderPreview: fast approximate path used during drag.\\n * renderExport: the exact path; its output must stay byte-identical.\\n */\\n\\nexport interface PreviewFrame {\\n  width: number;\\n  height: number;\\n  pixels: Uint8Array;\\n}\\n\\nexport interface SourceImage {\\n  width: number;\\n  height: number;\\n  pixels: Uint8Array;\\n}\\n\\nexport class ImagePipeline {\\n  private source: SourceImage;\\n\\n  constructor(source: SourceImage) {\\n    this.source = source;\\n  }\\n\\n  /** Approximate, downscaled render for interactive preview. */\\n  renderPreview(intensity: number, maxDim = 512): PreviewFrame {\\n    intensity = clamp01(intensity);\\n    const scale = Math.min(1, maxDim / Math.max(this.source.width, this.source.height));\\n    const width = Math.max(1, Math.round(this.source.width * scale));\\n    const height = Math.max(1, Math.round(this.source.height * scale));\\n    const down = downscale(this.source, width, height);\\n    return { width, height, pixels: applyIntensity(down, intensity) };\\n  }\\n\\n  /** Exact full-resolution render used by export. Byte-stable output. */\\n  renderExport(intensity: number): Uint8Array {\\n    intensity = clamp01(intensity);\\n    return applyIntensity(this.source.pixels, intensity);\\n  }\\n\\n  describe(): string {\\n    return `ImagePipeline(${this.source.width}x${this.source.height})`;\\n  }\\n}\\n\\nexport function applyIntensity(pixels: Uint8Array, intensity: number): Uint8Array {\\n  const out = new Uint8Array(pixels.length);\\n  const k = clamp01(intensity);\\n  for (let i = 0; i < pixels.length; i++) {\\n    out[i] = Math.round(pixels[i] * k);\\n  }\\n  return out;\\n}\\n\\nexport function downscale(img: SourceImage, width: number, height: number): Uint8Array {\\n  const out = new Uint8Array(width * height);\\n  for (let y = 0; y < height; y++) {\\n    for (let x = 0; x < width; x++) {\\n      const sx = Math.floor((x / width) * img.width);\\n      const sy = Math.floor((y / height) * img.height);\\n      out[y * width + x] = img.pixels[sy * img.width + sx];\\n    }\\n  }\\n  return out;\\n}\\n\\nfunction clamp01(x: number): number {\\n  return Math.min(1, Math.max(0, x));\\n}\\n\", \"path\": \"src/pipeline.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "wrote src/pipeline.ts (2112 chars)",
+      "tool_call_id": "tool_aDQPNf3XW2RK7LLaYrh2Eug7",
+      "name": "write_file"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_Bw8FJJ4dIMVKk8t37o6xYyjj",
+          "type": "function",
+          "function": {
+            "name": "write_file",
+            "arguments": "{\"content\": \"import assert from \\\"node:assert\\\";\\nimport test from \\\"node:test\\\";\\nimport { ImagePipeline, type SourceImage } from \\\"../src/pipeline.ts\\\";\\nimport { exportImage } from \\\"../src/export.ts\\\";\\n\\nfunction fixture(): SourceImage {\\n  return { width: 4, height: 4, pixels: new Uint8Array(16).map((_, i) => i * 16) };\\n}\\n\\ntest(\\\"renderExport is byte-identical for identical input\\\", () => {\\n  const a = exportImage(new ImagePipeline(fixture()), 0.5);\\n  const b = exportImage(new ImagePipeline(fixture()), 0.5);\\n  assert.deepStrictEqual([...a.bytes], [...b.bytes]);\\n  assert.strictEqual(a.sha256, b.sha256);\\n});\\n\\ntest(\\\"renderPreview downscales to maxDim\\\", () => {\\n  const pipe = new ImagePipeline({ width: 2048, height: 1024, pixels: new Uint8Array(2048 * 1024) });\\n  const frame = pipe.renderPreview(1, 512);\\n  assert.strictEqual(frame.width, 512);\\n  assert.strictEqual(frame.height, 256);\\n});\\n\\ntest(\\\"slider emits after debounce and on drag end\\\", async () => {\\n  const { SliderBinding } = await import(\\\"../src/slider.ts\\\");\\n  const s = new SliderBinding(10);\\n  let emissions = 0;\\n  s.onChange(() => emissions++);\\n  s.beginDrag();\\n  s.setValue(0.8);\\n  s.endDrag();\\n  assert.ok(emissions >= 1, \\\"expected at least one emission on drag end\\\");\\n});\\n\\ntest(\\\"renderExport clamps intensity above 1\\\", () => {\\n  const pipe = new ImagePipeline(fixture());\\n  assert.deepStrictEqual([...pipe.renderExport(1.5)], [...pipe.renderExport(1.0)]);\\n});\\n\\ntest(\\\"renderExport clamps intensity below 0\\\", () => {\\n  const pipe = new ImagePipeline(fixture());\\n  assert.deepStrictEqual([...pipe.renderExport(-0.5)], [...pipe.renderExport(0.0)]);\\n});\\n\\ntest(\\\"renderPreview clamps intensity above 1\\\", () => {\\n  const pipe = new ImagePipeline(fixture());\\n  const a = pipe.renderPreview(2.0);\\n  const b = pipe.renderPreview(1.0);\\n  assert.strictEqual(a.width, b.width);\\n  assert.strictEqual(a.height, b.height);\\n  assert.deepStrictEqual([...a.pixels], [...b.pixels]);\\n});\\n\\ntest(\\\"renderPreview clamps intensity below 0\\\", () => {\\n  const pipe = new ImagePipeline(fixture());\\n  const a = pipe.renderPreview(-2.0);\\n  const b = pipe.renderPreview(0.0);\\n  assert.strictEqual(a.width, b.width);\\n  assert.strictEqual(a.height, b.height);\\n  assert.deepStrictEqual([...a.pixels], [...b.pixels]);\\n});\\n\\ntest(\\\"exportImage with out-of-range intensity produces no pixel wraparound\\\", () => {\\n  const pipe = new ImagePipeline(fixture());\\n  const clamped = exportImage(pipe, 1.0);\\n  const over = exportImage(pipe, 1.5);\\n  // Over-range intensity must behave exactly like intensity 1 — no wraparound.\\n  assert.deepStrictEqual([...over.bytes], [...clamped.bytes]);\\n  assert.strictEqual(over.sha256, clamped.sha256);\\n\\n  const zero = exportImage(pipe, 0.0);\\n  const under = exportImage(pipe, -0.5);\\n  // Under-range intensity must behave exactly like intensity 0 — all zeros.\\n  assert.deepStrictEqual([...under.bytes], [...zero.bytes]);\\n  assert.strictEqual(under.sha256, zero.sha256);\\n  assert.ok(under.bytes.every((b) => b === 0), \\\"expected all bytes to be 0 for negative intensity\\\");\\n\\n  // With intensity clamped to 1, output equals source pixels (no wraparound past 255).\\n  const src = fixture();\\n  assert.deepStrictEqual([...clamped.bytes], [...src.pixels]);\\n});\\n\", \"path\": \"test/pipeline.test.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "wrote test/pipeline.test.ts (3190 chars)",
+      "tool_call_id": "tool_Bw8FJJ4dIMVKk8t37o6xYyjj",
+      "name": "write_file"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_dnbeyBRsUqXvte5k65eRBFHL",
+          "type": "function",
+          "function": {
+            "name": "run_command",
+            "arguments": "{\"command\": \"cat package.json && node --test test/*.test.ts\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "exit 0\n{\n  \"name\": \"image-preview-fixture\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test test/*.test.ts\"\n  }\n}\n✔ renderExport is byte-identical for identical input (0.879833ms)\n✔ renderPreview downscales to maxDim (2.324125ms)\n✔ slider emits after debounce and on drag end (1.35175ms)\n✔ renderExport clamps intensity above 1 (0.089625ms)\n✔ renderExport clamps intensity below 0 (0.065542ms)\n✔ renderPreview clamps intensity above 1 (0.443917ms)\n✔ renderPreview clamps intensity below 0 (0.081583ms)\n✔ exportImage with out-of-range intensity produces no pixel wraparound (0.264916ms)\nℹ tests 8\nℹ suites 0\nℹ pass 8\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 105.141625\n",
+      "tool_call_id": "tool_dnbeyBRsUqXvte5k65eRBFHL",
+      "name": "run_command"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "tool_c8vgMJKJkCwqVDvXj161iUIF",
+          "type": "function",
+          "function": {
+            "name": "done",
+            "arguments": "{\"summary\": \"Clamped intensity to [0,1] via clamp01 in renderExport/renderPreview (and defense-in-depth in applyIntensity), plus added tests verifying out-of-range intensities match clamped results with no wraparound; all 8 tests pass.\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "done acknowledged",
+      "tool_call_id": "tool_c8vgMJKJkCwqVDvXj161iUIF",
+      "name": "done"
+    }
+  ]
+}

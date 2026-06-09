@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-11T17:45:53.270Z",
+  "generatedAt": "2026-09-11T18:14:18.925Z",
   "mock": false,
   "repeats": 1,
   "records": [
@@ -168,6 +168,190 @@
       "error": null
     },
     {
+      "taskId": "t03-like-the-other-screen",
+      "condition": "A",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ add + list shows newest first (2.806083ms)\n✔ nextId increments past max id (0.088375ms)\n✔ done tasks are hidden from default list (2.677125ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 105.597625\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t03-done-format.mjs",
+          "exitCode": 0,
+          "outputTail": "t03 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/cli.ts"
+      ],
+      "turns": 7,
+      "wallTimeMs": 29353,
+      "agentTokens": {
+        "prompt": 10550,
+        "completion": 964,
+        "total": 11514
+      },
+      "intentTokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "judgeTokens": {
+        "prompt": 562,
+        "completion": 355,
+        "total": 917
+      },
+      "questionAsked": false,
+      "questionNecessary": true,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Changed the `done` command in src/cli.ts to print the completed task via formatTask (same \"[x] id. title\" style as `list` output) instead of \"done id. title\"; tests pass and manual CLI verification confirms identical formatting.",
+      "error": null
+    },
+    {
+      "taskId": "t03-like-the-other-screen",
+      "condition": "B",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ add + list shows newest first (2.866167ms)\n✔ nextId increments past max id (0.081292ms)\n✔ done tasks are hidden from default list (5.606542ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 128.931208\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t03-done-format.mjs",
+          "exitCode": 0,
+          "outputTail": "t03 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/cli.ts"
+      ],
+      "turns": 8,
+      "wallTimeMs": 107364,
+      "agentTokens": {
+        "prompt": 20061,
+        "completion": 1361,
+        "total": 21422
+      },
+      "intentTokens": {
+        "prompt": 2695,
+        "completion": 1129,
+        "total": 3824
+      },
+      "judgeTokens": {
+        "prompt": 562,
+        "completion": 222,
+        "total": 784
+      },
+      "questionAsked": true,
+      "questionNecessary": true,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Changed the done command handler in src/cli.ts to print the completed task via formatTask() ('[x] <id>. <title>') instead of the custom 'done <id>. <title>' message; verified output matches list formatting and all tests pass.",
+      "error": null
+    },
+    {
+      "taskId": "t04-clean-this-up",
+      "condition": "A",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ add + list shows newest first (3.802708ms)\n✔ nextId increments past max id (0.136584ms)\n✔ done tasks are hidden from default list (2.779708ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 89.09125\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t04-behavior-snapshot.mjs",
+          "exitCode": 0,
+          "outputTail": "t04 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/cli.ts"
+      ],
+      "turns": 6,
+      "wallTimeMs": 60229,
+      "agentTokens": {
+        "prompt": 12066,
+        "completion": 1298,
+        "total": 13364
+      },
+      "intentTokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "judgeTokens": {
+        "prompt": 1001,
+        "completion": 255,
+        "total": 1256
+      },
+      "questionAsked": false,
+      "questionNecessary": true,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Cleaned up src/cli.ts: consolidated duplicate imports from tasks.ts into one line, extracted the three inline switch branches into named handlers (cmdAdd, cmdList, cmdDone), pulled the usage string into a USAGE constant, and typed formatTask with the exported Task type. Behavior unchanged; tests pass and CLI smoke-tested.",
+      "error": null
+    },
+    {
+      "taskId": "t04-clean-this-up",
+      "condition": "B",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ add + list shows newest first (5.815458ms)\n✔ nextId increments past max id (0.357917ms)\n✔ done tasks are hidden from default list (5.650042ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 489.895958\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t04-behavior-snapshot.mjs",
+          "exitCode": 0,
+          "outputTail": "t04 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/cli.ts"
+      ],
+      "turns": 9,
+      "wallTimeMs": 88633,
+      "agentTokens": {
+        "prompt": 29828,
+        "completion": 2473,
+        "total": 32301
+      },
+      "intentTokens": {
+        "prompt": 2657,
+        "completion": 1079,
+        "total": 3736
+      },
+      "judgeTokens": {
+        "prompt": 982,
+        "completion": 223,
+        "total": 1205
+      },
+      "questionAsked": true,
+      "questionNecessary": true,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Refactored src/cli.ts only: replaced switch dispatch with a command table, extracted handleAdd/handleList/handleDone/printUsage helpers and a USAGE constant; tests pass and all CLI outputs verified byte-identical.",
+      "error": null
+    },
+    {
       "taskId": "t05-dont-change-anything-else",
       "condition": "A",
       "repeat": 0,
@@ -258,6 +442,98 @@
       "judgeJudged": true,
       "mechanicalProxy": true,
       "doneSummary": "Fixed completeTask in src/tasks.ts to resolve the 1-based `done <n>` argument against the visible, newest-first list (visibleTasks) instead of indexing the raw insertion-ordered array, matching the target by id; added tests in test/tasks.test.ts covering `done 1` (newest visible, with a hidden completed task) and `done 2` positional correctness. All 5 tests pass.",
+      "error": null
+    },
+    {
+      "taskId": "t06-something-broke",
+      "condition": "A",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ renderExport is byte-identical for identical input (0.783875ms)\n✔ renderPreview downscales to maxDim (1.937917ms)\n✔ slider emits after debounce and on drag end (0.912916ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 69.680917\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t06-enddrag-flush.mjs",
+          "exitCode": 0,
+          "outputTail": "t06 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/slider.ts"
+      ],
+      "turns": 7,
+      "wallTimeMs": 56375,
+      "agentTokens": {
+        "prompt": 13094,
+        "completion": 1185,
+        "total": 14279
+      },
+      "intentTokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "judgeTokens": {
+        "prompt": 370,
+        "completion": 140,
+        "total": 510
+      },
+      "questionAsked": false,
+      "questionNecessary": false,
+      "judgeAccuracy": 0.75,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Restored the this.flush() call in SliderBinding.endDrag() so the final slider value is emitted immediately when the user releases the slider, fixing the preview not updating on drag end. All tests pass.",
+      "error": null
+    },
+    {
+      "taskId": "t06-something-broke",
+      "condition": "B",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ renderExport is byte-identical for identical input (1.777042ms)\n✔ renderPreview downscales to maxDim (2.977375ms)\n✔ slider emits after debounce and on drag end (1.10525ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 75.358042\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t06-enddrag-flush.mjs",
+          "exitCode": 0,
+          "outputTail": "t06 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/slider.ts"
+      ],
+      "turns": 10,
+      "wallTimeMs": 66360,
+      "agentTokens": {
+        "prompt": 33283,
+        "completion": 2942,
+        "total": 36225
+      },
+      "intentTokens": {
+        "prompt": 2889,
+        "completion": 1526,
+        "total": 4415
+      },
+      "judgeTokens": {
+        "prompt": 603,
+        "completion": 940,
+        "total": 1543
+      },
+      "questionAsked": true,
+      "questionNecessary": false,
+      "judgeAccuracy": 0.5,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Fixed src/slider.ts so SliderBinding emits exactly once with the final value on drag-end: setValue no longer schedules debounced emits while dragging (no mid-drag preview re-renders), and endDrag now flushes any pending scheduled emit so the final value is always delivered; verified end-to-end drag→SliderBinding→PreviewView.onSlider→ImagePipeline.renderPreview→Painter.paint with a temporary test, and all existing tests pass.",
       "error": null
     },
     {
@@ -352,6 +628,194 @@
       "judgeJudged": true,
       "mechanicalProxy": true,
       "doneSummary": "Added input validation: addTask rejects empty/whitespace titles (stores trimmed value), completeTask validates integer and in-range indices before any write, CLI strictly parses the done index and catches errors to print them to stderr with exit code 1; added test/validation.test.ts (all 10 tests pass, storage byte-identical after each rejection, verified via CLI exercise).",
+      "error": null
+    },
+    {
+      "taskId": "t08-export-wrong-sometimes",
+      "condition": "A",
+      "repeat": 0,
+      "checksPass": false,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ renderExport is byte-identical for identical input (1.546875ms)\n✔ renderPreview downscales to maxDim (2.919667ms)\n✔ slider emits after debounce and on drag end (0.97ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 187.925416\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t08-export-clamp.mjs",
+          "exitCode": 1,
+          "outputTail": "FAIL: export(1.5) != export(1.0) — intensity not clamped\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/pipeline.ts"
+      ],
+      "turns": 7,
+      "wallTimeMs": 68415,
+      "agentTokens": {
+        "prompt": 14526,
+        "completion": 1611,
+        "total": 16137
+      },
+      "intentTokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "judgeTokens": {
+        "prompt": 520,
+        "completion": 758,
+        "total": 1278
+      },
+      "questionAsked": false,
+      "questionNecessary": true,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": false,
+      "doneSummary": "Fixed export corruption for out-of-range intensity by clamping pixel values to 0–255 in applyIntensity (src/pipeline.ts), preventing Uint8Array modulo wraparound; all tests pass and high-intensity output now saturates correctly.",
+      "error": null
+    },
+    {
+      "taskId": "t08-export-wrong-sometimes",
+      "condition": "B",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "17ms)\n✔ renderExport clamps intensity above 1 (0.074458ms)\n✔ renderExport clamps intensity below 0 (0.05775ms)\n✔ renderPreview clamps intensity above 1 (0.052542ms)\n✔ renderPreview clamps intensity below 0 (0.04875ms)\n✔ exportImage with out-of-range intensity produces no pixel wraparound (0.091542ms)\nℹ tests 8\nℹ suites 0\nℹ pass 8\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 92.336458\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t08-export-clamp.mjs",
+          "exitCode": 0,
+          "outputTail": "t08 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/pipeline.ts",
+        "test/pipeline.test.ts"
+      ],
+      "turns": 6,
+      "wallTimeMs": 53056,
+      "agentTokens": {
+        "prompt": 15130,
+        "completion": 1875,
+        "total": 17005
+      },
+      "intentTokens": {
+        "prompt": 2959,
+        "completion": 1577,
+        "total": 4536
+      },
+      "judgeTokens": {
+        "prompt": 1252,
+        "completion": 1034,
+        "total": 2286
+      },
+      "questionAsked": true,
+      "questionNecessary": true,
+      "judgeAccuracy": 1,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Clamped intensity to [0,1] via clamp01 in renderExport/renderPreview (and defense-in-depth in applyIntensity), plus added tests verifying out-of-range intensities match clamped results with no wraparound; all 8 tests pass.",
+      "error": null
+    },
+    {
+      "taskId": "t09-many-tasks-slow",
+      "condition": "A",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ add + list shows newest first (28.159875ms)\n✔ nextId increments past max id (1.199625ms)\n✔ done tasks are hidden from default list (4.265ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 233.817458\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t09-scale.mjs",
+          "exitCode": 0,
+          "outputTail": "t09 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/cache.ts",
+        "src/storage.ts",
+        "src/tasks.ts"
+      ],
+      "turns": 11,
+      "wallTimeMs": 173433,
+      "agentTokens": {
+        "prompt": 35567,
+        "completion": 4443,
+        "total": 40010
+      },
+      "intentTokens": {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0
+      },
+      "judgeTokens": {
+        "prompt": 1347,
+        "completion": 1452,
+        "total": 2799
+      },
+      "questionAsked": false,
+      "questionNecessary": true,
+      "judgeAccuracy": 0.75,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Sped up the task list: tasks.ts now uses the mtime-based loadTasksFast cache instead of re-parsing the JSON file on every call, writes prime the cache (primeCache in cache.ts) so subsequent reads stay fast, and saveTasks writes compact JSON; completeTask now also correctly resolves the 1-based index against the visible (sorted/filtered) list. All 3 tests pass; 1000 reads of a 5000-task file dropped from ~1476ms to ~3.4ms.",
+      "error": null
+    },
+    {
+      "taskId": "t09-many-tasks-slow",
+      "condition": "B",
+      "repeat": 0,
+      "checksPass": true,
+      "checkResults": [
+        {
+          "command": "node --test test/*.test.ts",
+          "exitCode": 0,
+          "outputTail": "✔ add + list shows newest first (4.3695ms)\n✔ nextId increments past max id (0.074875ms)\n✔ done tasks are hidden from default list (2.234458ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 116.188875\n"
+        },
+        {
+          "command": "node /Users/x/Documents/tasks/2026-09-11/09-22-51-8d0c63ce/intent-experiment/benchmark/checks/t09-scale.mjs",
+          "exitCode": 0,
+          "outputTail": "t09 check OK\n"
+        }
+      ],
+      "unintendedChanges": [],
+      "changedFiles": [
+        "src/storage.ts",
+        "src/tasks.ts"
+      ],
+      "turns": 10,
+      "wallTimeMs": 73638,
+      "agentTokens": {
+        "prompt": 32117,
+        "completion": 2942,
+        "total": 35059
+      },
+      "intentTokens": {
+        "prompt": 2765,
+        "completion": 1362,
+        "total": 4127
+      },
+      "judgeTokens": {
+        "prompt": 714,
+        "completion": 463,
+        "total": 1177
+      },
+      "questionAsked": true,
+      "questionNecessary": true,
+      "judgeAccuracy": 0.75,
+      "judgeJudged": true,
+      "mechanicalProxy": true,
+      "doneSummary": "Routed listTasks through loadTasksFast (src/cache.ts) for cached parsing, and added invalidateCache() to saveTasks in src/storage.ts so writes bust the cache; on-disk format, signatures, CLI output, and tests unchanged — all tests pass, cached listings ~12x faster, and add/complete immediately reflected in listings.",
       "error": null
     }
   ]
