@@ -1,0 +1,25 @@
+name: api-arrow-const-held
+# Control: an untouched exported const-arrow verifies held (proven).
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/compose.js: |
+    export const compose = (a, b) => (x) => a(b(x));
+  src/util.js: |
+    export const identity = (x) => x;
+lock:
+  utterance: tidy util internals
+  goal: same behavior
+  change: src/util.js internals
+  keep:
+    - kind: api-unchanged
+      symbols: ["src/compose.js#compose", "src/util.js#identity"]
+  budget:
+    files: ["src/util.js"]
+command: node -e 'require("fs").appendFileSync("src/util.js","// tidy\n")'
+expect:
+  exitCode: 0
+  status: verified
+  items:
+    - { match: "compose", class: proven, verdict: held }
+    - { match: "identity", class: proven, verdict: held }

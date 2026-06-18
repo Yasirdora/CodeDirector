@@ -102,3 +102,72 @@ test("extracts call sites attributed to enclosing symbol", async () => {
   assert.ok(callers.has("src/sample.ts#Greeter.greet"), "call inside method attributed");
   assert.ok(callers.has("src/sample.ts#makeHandler"), "call inside arrow const attributed");
 });
+
+test("arrow-function consts: signature includes type params, params, return type", async () => {
+  const p = await makeParser();
+  const src = `export const compose = <E>(a: E, b: E): E => {
+  return b;
+};
+
+export const fetchAll = async (id: string, opts?: { raw: boolean }, retries = 3): Promise<void> => {
+  return;
+};
+
+export const plain = (x) => x + 1;
+
+export const LIMIT = 42;
+`;
+  const fi = p.parseFile("src/fn.ts", src, hashContent(src));
+  const byId = new Map(fi.symbols.map((s) => [s.id, s]));
+
+  const compose = byId.get("src/fn.ts#compose");
+  assert.ok(compose, "generic arrow const extracted");
+  assert.equal(
+    compose!.signature,
+    "compose = <E>(a: E, b: E): E",
+    `type params + params + return type in signature, got: ${compose!.signature}`,
+  );
+
+  const fetchAll = byId.get("src/fn.ts#fetchAll");
+  assert.equal(
+    fetchAll!.signature,
+    "fetchAll = async (id: string, opts?: { raw: boolean }, retries = 3): Promise<void>",
+    `async + optional + default params in signature, got: ${fetchAll!.signature}`,
+  );
+
+  const plain = byId.get("src/fn.ts#plain");
+  assert.equal(plain!.signature, "plain = (x)", `expression-body arrow cut at body, got: ${plain!.signature}`);
+
+  // plain value const: value excluded from the signature
+  const limit = byId.get("src/fn.ts#LIMIT");
+  assert.equal(limit!.signature, "LIMIT", `plain const signature excludes the value, got: ${limit!.signature}`);
+});
+
+test("arrow-function consts: adding a parameter CHANGES the signature hash (field-reported defect)", async () => {
+  const p = await makeParser();
+  const before = `export const compose = <E>(a: E, b: E): E => b;\n`;
+  const after = `export const compose = <E>(a: E, b: E, c: E): E => c;\n`;
+  const sigOf = (src: string) =>
+    p.parseFile("src/fn.ts", src, hashContent(src)).symbols.find((s) => s.name === "compose")!.signature;
+  const sigBefore = sigOf(before);
+  const sigAfter = sigOf(after);
+  assert.notEqual(sigBefore, sigAfter, "parameter added → signature differs");
+  assert.notEqual(
+    hashContent(sigBefore),
+    hashContent(sigAfter),
+    "parameter added → sha256 differs (no false 'signature unchanged')",
+  );
+});
+
+test("plain const: changing only the VALUE keeps the signature stable", async () => {
+  const p = await makeParser();
+  const sigOf = (src: string) =>
+    p.parseFile("src/fn.ts", src, hashContent(src)).symbols.find((s) => s.name === "LIMIT")!.signature;
+  const a = sigOf(`export const LIMIT = 42;\n`);
+  const b = sigOf(`export const LIMIT = 100;\n`);
+  assert.equal(a, b, "value-only change → same signature");
+  // but an arrow body change behaves like function bodies: excluded too
+  const bodyOf = (src: string) =>
+    p.parseFile("src/fn.ts", src, hashContent(src)).symbols.find((s) => s.name === "f")!.signature;
+  assert.equal(bodyOf(`export const f = (x) => x + 1;\n`), bodyOf(`export const f = (x) => x + 2;\n`));
+});

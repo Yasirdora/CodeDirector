@@ -19,7 +19,7 @@ import { CallSite, FileIndex, ImportInfo, SymbolInfo, SymbolKind } from "./types
 type SyntaxNode = any;
 
 /** Bump whenever extraction logic changes; stale entries are reparsed. */
-export const PARSER_VERSION = 2;
+export const PARSER_VERSION = 3;
 
 export type LangKey = "typescript" | "tsx" | "javascript";
 
@@ -191,19 +191,42 @@ function collapseWs(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
-/** One-line signature: node text up to (not including) its body block. */
+/** Node types that make a variable declarator a function-valued export. */
+const FUNCTION_INITIALIZER_TYPES = new Set([
+  "arrow_function",
+  "function_expression",
+  "generator_function_expression",
+]);
+
+/**
+ * One-line signature: node text up to (not including) its body block.
+ *
+ * Function-valued declarators (`export const compose = <E>(a, b) => {…}`)
+ * are the important case: cutting at the value initializer would discard the
+ * entire parameter list, making the signature blind to API-breaking edits
+ * (a field-reported defect: adding a parameter left the sha256 unchanged).
+ * For those, the signature runs from the declarator name through type
+ * parameters, the parameter list, and any return-type annotation, and cuts
+ * at the function BODY (`=>` body / `{`).
+ */
 function signatureOf(node: SyntaxNode, source: string): string {
   let end = node.endIndex;
-  const body =
-    node.childForFieldName("body") ??
-    node.namedChildren.find(
-      (c: SyntaxNode) => c.type === "statement_block" || c.type === "class_body",
-    );
-  if (body) end = body.startIndex;
-  // For variable declarators, cut at the value initializer.
   const value = node.childForFieldName("value");
-  if (value && value.startIndex < end) end = value.startIndex;
+  if (value && FUNCTION_INITIALIZER_TYPES.has(value.type)) {
+    const fnBody = value.childForFieldName("body");
+    if (fnBody) end = fnBody.startIndex;
+  } else {
+    const body =
+      node.childForFieldName("body") ??
+      node.namedChildren.find(
+        (c: SyntaxNode) => c.type === "statement_block" || c.type === "class_body",
+      );
+    if (body) end = body.startIndex;
+    // For plain value declarators, cut at the value initializer.
+    if (value && value.startIndex < end) end = value.startIndex;
+  }
   let sig = collapseWs(source.slice(node.startIndex, end));
+  if (sig.endsWith("=>")) sig = sig.slice(0, -2).trim();
   if (sig.endsWith("=")) sig = sig.slice(0, -1).trim();
   if (sig.length > 200) sig = sig.slice(0, 197) + "...";
   return sig;

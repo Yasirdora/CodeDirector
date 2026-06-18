@@ -1,0 +1,25 @@
+name: api-signature-violation-arrow-const
+# Field-reported defect: api-unchanged was blind on initializer-declared
+# functions. Adding a parameter to an exported const-arrow MUST fail the run.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/compose.js: |
+    export const compose = (a, b) => (x) => a(b(x));
+lock:
+  utterance: extend compose without changing its API
+  goal: same signature, wider body
+  change: src/compose.js body only
+  keep:
+    - kind: api-unchanged
+      symbols: ["src/compose.js#compose"]
+  budget:
+    files: ["src/compose.js"]
+command: node -e 'const fs=require("fs");fs.writeFileSync("src/compose.js",fs.readFileSync("src/compose.js","utf8").replace("(a, b)","(a, b, c)"))'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "KEEP api-unchanged"
+  items:
+    - { match: api-unchanged, class: proven, verdict: violated }
