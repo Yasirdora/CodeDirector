@@ -19,7 +19,48 @@ export interface CoChangeResult {
   top: Array<{ file: string; sharedCommits: number }>;
 }
 
-export function coChange(rootDir: string, relFile: string, limit = 5, maxCommits = 500): CoChangeResult {
+export function coChange(
+  rootDir: string,
+  relFile: string,
+  limit = 5,
+  maxCommits = 500,
+  minCommits = 30,
+): CoChangeResult {
+  // Shallow clones and tiny histories make co-change meaningless: on a
+  // --depth 1 clone the single commit touches every file, so .editorconfig
+  // "couples" with everything (field-reported on Hono). Skip with a named
+  // reason rather than reporting noise.
+  try {
+    const shallow = execFileSync("git", ["rev-parse", "--is-shallow-repository"], {
+      cwd: rootDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 5000,
+    }).trim();
+    if (shallow === "true") {
+      return { available: false, reason: "shallow clone", commitsExamined: 0, top: [] };
+    }
+    const total = parseInt(
+      execFileSync("git", ["rev-list", "--count", "HEAD"], {
+        cwd: rootDir,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 5000,
+      }).trim(),
+      10,
+    );
+    if (Number.isFinite(total) && total < minCommits) {
+      return {
+        available: false,
+        reason: `only ${total} commit(s) of history (< ${minCommits}) — coupling would be noise`,
+        commitsExamined: 0,
+        top: [],
+      };
+    }
+  } catch {
+    /* git missing or not a repo — the log call below produces the precise error */
+  }
+
   // Note: `git log --name-only -- <file>` would filter the name list to
   // <file> as well, so we take (capped) full history and filter in-process.
   let out: string;

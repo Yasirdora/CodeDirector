@@ -11,7 +11,7 @@ import { coChange } from "../src/core/git";
 import { buildGraph, directCallers, testFilesFor, transitiveCallers } from "../src/core/graph";
 import { rankSymbols } from "../src/core/rank";
 import { blastRadius, findSymbols, formatBlastRadius } from "../src/core/why";
-import { copyFixture } from "./helpers";
+import { copyFixture, makeGitRepo } from "./helpers";
 
 test("ranking is deterministic and biased toward anchors", async () => {
   const root = copyFixture();
@@ -121,8 +121,25 @@ test("co-change coupling from a real git repo", async (t) => {
     t.skip("git not available");
     return;
   }
-  const cc = coChange(root, "src/math.ts");
+  const cc = coChange(root, "src/math.ts", 5, 500, 2);
   assert.equal(cc.available, true);
   assert.equal(cc.commitsExamined, 2);
   assert.deepEqual(cc.top[0], { file: "src/service.ts", sharedCommits: 2 });
+});
+
+test("co-change: 1-commit history is skipped with a named reason (no noise)", () => {
+  const root = makeGitRepo({ "src/a.ts": "export const a = 1;\n", ".editorconfig": "root = true\n" });
+  const cc = coChange(root, "src/a.ts");
+  assert.equal(cc.available, false, "tiny history must not report coupling");
+  assert.ok(cc.reason?.includes("commit"), `reason names the cause: ${cc.reason}`);
+  assert.equal(cc.top.length, 0);
+});
+
+test("co-change: shallow clone is skipped with a named reason", () => {
+  const root = makeGitRepo({ "src/a.ts": "export const a = 1;\n" });
+  // Simulate a shallow clone: git rev-parse reads .git/shallow when present.
+  fs.writeFileSync(path.join(root, ".git", "shallow"), "");
+  const cc = coChange(root, "src/a.ts");
+  assert.equal(cc.available, false);
+  assert.ok(cc.reason?.includes("shallow"), `reason names shallow clone: ${cc.reason}`);
 });
