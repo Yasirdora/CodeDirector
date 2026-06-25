@@ -235,6 +235,9 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
       }
       if (result.suggestedDeny.length > 0) {
         lines.push(`suggested deny: ${result.suggestedDeny.join(", ")}`);
+        if (result.denyOmitted > 0) {
+          lines.push(`  (+${result.denyOmitted} more omitted for readability — see the lock's assumptions)`);
+        }
       }
       lines.push(``, `next: edit the file, then \`cdir lock check ${result.lock.id}\` and \`cdir lock activate ${result.lock.id}\``);
       process.stdout.write(lines.join("\n") + "\n");

@@ -43,6 +43,47 @@ export interface DraftResult {
   /** Files proposed by blast-radius analysis (before any --budget-files override). */
   proposedFiles: string[];
   suggestedDeny: string[];
+  /** How many deny suggestions were omitted for readability (0 = none). */
+  denyOmitted: number;
+}
+
+/** Cap on written deny suggestions; the remainder is noted, not listed. */
+export const DENY_SUGGESTION_CAP = 8;
+
+/**
+ * Compress a long test-file list into directory globs: files under
+ * `__tests__/` collapse to `<dir>/__tests__/**`; directories with ≥2 test
+ * files collapse to `<dir>/**\/*.test.*` / `*.spec.*`. Falls back to
+ * individual paths. Deterministic (sorted output).
+ */
+export function compressTestPaths(testFiles: string[]): string[] {
+  const globs = new Set<string>();
+  const singles: string[] = [];
+  const byDir = new Map<string, string[]>();
+  for (const f of [...testFiles].sort()) {
+    const segs = f.split("/");
+    const tt = segs.indexOf("__tests__");
+    if (tt !== -1) {
+      globs.add(segs.slice(0, tt + 1).join("/") + "/**");
+      continue;
+    }
+    const dir = segs.slice(0, -1).join("/");
+    byDir.set(dir, [...(byDir.get(dir) ?? []), f]);
+  }
+  for (const [dir, files] of [...byDir.entries()].sort()) {
+    if (files.length < 2) {
+      singles.push(...files);
+      continue;
+    }
+    const hasTest = files.some((f) => f.includes(".test."));
+    const hasSpec = files.some((f) => f.includes(".spec."));
+    if (hasTest) globs.add(`${dir}/**/*.test.*`);
+    if (hasSpec) globs.add(`${dir}/**/*.spec.*`);
+    for (const f of files) {
+      if (!f.includes(".test.") && !f.includes(".spec.")) singles.push(f);
+    }
+  }
+  return [...[...globs].sort(), ...singles.sort()];
 }
 
 /** Parse a "--keep" flag value into a KeepClause. Throws on bad form. */
@@ -114,17 +155,24 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
 
   // Suggested deny: dependency manifests present at the root, plus test
   // files that are NOT in the blast radius of any anchor (unrelated areas).
+  // Compressed to directory globs and capped — on real repos the raw list is
+  // hundreds of entries and unreadable (field-reported on Hono: ~140 test
+  // files on one line). Omissions are noted in the assumptions, never silent.
   const relatedTests = new Set<string>();
   for (const a of anchors) {
     for (const t of testFilesFor(index, a)) relatedTests.add(t);
   }
-  const suggestedDeny: string[] = [];
+  const manifestDeny: string[] = [];
   for (const m of DEPENDENCY_MANIFESTS) {
-    if (fs.existsSync(path.join(rootDir, m))) suggestedDeny.push(m);
+    if (fs.existsSync(path.join(rootDir, m))) manifestDeny.push(m);
   }
+  const unrelatedTests: string[] = [];
   for (const f of Object.keys(index.files).sort()) {
-    if (isTestFile(f) && !relatedTests.has(f)) suggestedDeny.push(f);
+    if (isTestFile(f) && !relatedTests.has(f)) unrelatedTests.push(f);
   }
+  const allDeny = [...manifestDeny, ...compressTestPaths(unrelatedTests)];
+  const suggestedDeny = allDeny.slice(0, DENY_SUGGESTION_CAP);
+  const denyOmitted = allDeny.length - suggestedDeny.length;
 
   const budgetFiles = opts.budgetFiles && opts.budgetFiles.length > 0 ? opts.budgetFiles : proposedFiles;
 
@@ -146,7 +194,11 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
   }
   if (suggestedDeny.length > 0) {
     assumptions.push({
-      text: "Deny list suggested automatically (manifests, unrelated test files); review before activating",
+      text:
+        `Deny list suggested automatically (manifests, unrelated test files)` +
+        (denyOmitted > 0
+          ? ` — truncated for readability: ${denyOmitted} further entr${denyOmitted === 1 ? "y" : "ies"} omitted (mostly test files; add a glob like "src/**/*.test.*" to deny them all)`
+          : "; review before activating"),
       source: "system",
       confirmed: false,
     });
@@ -176,5 +228,5 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
   };
 
   const writtenPath = saveLock(rootDir, lock);
-  return { lock, path: writtenPath, anchors, proposedFiles, suggestedDeny };
+  return { lock, path: writtenPath, anchors, proposedFiles, suggestedDeny, denyOmitted };
 }

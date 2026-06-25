@@ -184,3 +184,38 @@ test("checkLock passes a well-formed lock and flags custom clauses as human-judg
   assert.equal(api?.checkability, "now");
   assert.equal(api?.errors.length, 0, "demo-repo symbol resolves");
 });
+
+test("draft caps deny suggestions at scale and notes the omission (field-reported on Hono)", async () => {
+  // 24 test files across 12 dirs (→ 12 globs) + 2 manifests + demo's own test
+  const root = copyDemoRepo();
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  for (const d of ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]) {
+    const dir = `src/${d}`;
+    for (let i = 0; i < 2; i++) {
+      fs.mkdirSync(path.join(root, dir), { recursive: true });
+      fs.writeFileSync(path.join(root, dir, `m${i}.test.ts`), `// t${i}\n`);
+    }
+  }
+  fs.writeFileSync(path.join(root, "package.json"), '{"name":"x"}\n');
+  fs.writeFileSync(path.join(root, "package-lock.json"), '{}\n');
+  const { index } = await buildIndex(root);
+  const result = draftLock(root, index, "make the preview feel instant", {
+    now: "2026-09-11T00:00:00.000Z",
+    createdBy: "test",
+  });
+  assert.ok(result.suggestedDeny.length <= 8, `deny list capped, got ${result.suggestedDeny.length}`);
+  assert.ok(result.suggestedDeny.includes("package.json"), "manifests kept first");
+  assert.ok(
+    result.suggestedDeny.some((d) => d.includes("*")),
+    `compression emits directory globs: ${result.suggestedDeny.join(", ")}`,
+  );
+  assert.ok(result.denyOmitted > 0, "omission counted");
+  assert.ok(
+    result.lock.assumptions.some((a) => a.text.includes("truncated for readability")),
+    "omission noted in the lock's assumptions (valid YAML, no giant line)",
+  );
+  // the written lock stays valid
+  const check = checkLock(root, result.lock, index);
+  assert.ok(check.ok, `written lock remains valid: ${check.errors.join("; ")}`);
+});
