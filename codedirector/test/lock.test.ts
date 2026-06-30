@@ -12,7 +12,7 @@ import { draftLock, parseKeepClause } from "../src/lock/draft";
 import { checkLock } from "../src/lock/check";
 import { listLocks, loadLock } from "../src/lock/store";
 import { matchPath, validateGlob } from "../src/lock/glob";
-import { copyDemoRepo } from "./helpers";
+import { copyDemoRepo, copyFixture } from "./helpers";
 
 function sampleLock(): IntentLock {
   return {
@@ -218,4 +218,35 @@ test("draft caps deny suggestions at scale and notes the omission (field-reporte
   // the written lock stays valid
   const check = checkLock(root, result.lock, index);
   assert.ok(check.ok, `written lock remains valid: ${check.errors.join("; ")}`);
+});
+
+test("budget proposal prefers exact anchors; weak anchors abstain (field-reported on Hono)", async () => {
+  const root = copyFixture();
+  const { index } = await buildIndex(root);
+
+  // (a) utterance naming a specific symbol proposes its defining file
+  const named = draftLock(root, index, "make computeTotal handle discounts", {
+    now: "2026-09-11T00:00:00.000Z",
+    createdBy: "test",
+  });
+  assert.equal(named.anchorStrength, "name", `token "computeTotal" is a name match, got ${named.anchorStrength}`);
+  assert.ok(
+    named.lock.budget.files.includes("src/service.ts"),
+    `budget proposes the defining file, got: ${named.lock.budget.files.join(", ")}`,
+  );
+
+  // (c) generic utterance with no name-bearing token → empty budget + guidance
+  const vague = draftLock(root, index, "please tidy up the codebase a bit", {
+    now: "2026-09-11T00:00:00.000Z",
+    createdBy: "test",
+  });
+  assert.ok(
+    vague.anchorStrength === "lexical" || vague.anchorStrength === "none",
+    `generic utterance is weak, got ${vague.anchorStrength}`,
+  );
+  assert.deepEqual(vague.proposedFiles, [], "weak anchors propose NOTHING rather than a wrong budget");
+  assert.ok(
+    vague.lock.assumptions.some((a) => a.text.includes("budget left empty")),
+    "guidance recorded in assumptions",
+  );
 });

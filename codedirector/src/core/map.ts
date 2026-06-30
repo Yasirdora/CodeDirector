@@ -25,25 +25,59 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-/** Resolve a free-text query to anchor symbols. */
-export function resolveAnchors(graph: SymbolGraph, query: string): SymbolInfo[] {
+/** How strongly the query matched: exact > name-token > lexical-only > none. */
+export type AnchorStrength = "exact" | "name" | "lexical" | "none";
+
+export interface AnchorResolution {
+  anchors: SymbolInfo[];
+  strength: AnchorStrength;
+}
+
+/**
+ * Resolve a free-text query to anchor symbols, with an explicit strength
+ * tier. Field-reported on Hono: the purely lexical fallback let generic
+ * words ("make", "the") anchor on unrelated adapter files, so budget
+ * proposals had nothing to do with the query. Name-bearing matches now win
+ * over lexical fuzz, and the strength is exposed so callers can abstain when
+ * the match is weak.
+ */
+export function resolveAnchorsDetailed(graph: SymbolGraph, query: string): AnchorResolution {
   // 1. exact name match
   const exact = graph.byName.get(query);
-  if (exact && exact.length > 0) return exact.map((id) => graph.symbols.get(id)!);
+  if (exact && exact.length > 0) return { anchors: exact.map((id) => graph.symbols.get(id)!), strength: "exact" };
 
   const q = query.toLowerCase();
   const tokens = q.split(/[^a-zA-Z0-9_$]+/).filter((t) => t.length >= 3);
 
   // 2. case-insensitive exact name / qualified name
   const ci: SymbolInfo[] = [];
-  for (const [id, sym] of graph.symbols) {
+  for (const sym of graph.symbols.values()) {
     if (sym.name.toLowerCase() === q || sym.qualifiedName.toLowerCase() === q) ci.push(sym);
-    void id;
   }
-  if (ci.length > 0) return ci;
+  if (ci.length > 0) return { anchors: ci, strength: "exact" };
 
-  // 3. lexical: symbols whose name or file path contains any query token.
+  // 3. name-token match: a query token that IS a symbol name (len ≥ 3) or
+  //    appears inside one (len ≥ 4, so "the" can't match "other"). These are
+  //    real anchors; lexical fuzz below is not.
+  const nameHits = new Map<string, SymbolInfo>();
+  for (const sym of graph.symbols.values()) {
+    const nm = sym.name.toLowerCase();
+    const qn = sym.qualifiedName.toLowerCase();
+    for (const t of tokens) {
+      if (t === nm || t === qn || (t.length >= 4 && (nm.includes(t) || qn.includes(t)))) {
+        nameHits.set(sym.id, sym);
+        break;
+      }
+    }
+  }
+  if (nameHits.size > 0) {
+    const anchors = [...nameHits.values()].sort((a, b) => a.id.localeCompare(b.id)).slice(0, 5);
+    return { anchors, strength: "name" };
+  }
+
+  // 4. lexical: symbols whose name or file path contains any query token.
   //    Scored by number of matching tokens, deterministic tie-break by id.
+  //    WEAK — callers should treat these as hints, not anchors.
   const scored: Array<{ sym: SymbolInfo; hits: number }> = [];
   for (const sym of graph.symbols.values()) {
     const hay = `${sym.name} ${sym.qualifiedName} ${sym.file}`.toLowerCase();
@@ -51,7 +85,13 @@ export function resolveAnchors(graph: SymbolGraph, query: string): SymbolInfo[] 
     if (hits > 0) scored.push({ sym, hits });
   }
   scored.sort((a, b) => b.hits - a.hits || a.sym.id.localeCompare(b.sym.id));
-  return scored.slice(0, 5).map((s) => s.sym);
+  const anchors = scored.slice(0, 5).map((s) => s.sym);
+  return { anchors, strength: anchors.length > 0 ? "lexical" : "none" };
+}
+
+/** Resolve a free-text query to anchor symbols. */
+export function resolveAnchors(graph: SymbolGraph, query: string): SymbolInfo[] {
+  return resolveAnchorsDetailed(graph, query).anchors;
 }
 
 export function buildRepoMap(index: RepoIndex, query: string, opts: MapOptions = {}): RepoMapResult {

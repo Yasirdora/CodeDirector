@@ -15,7 +15,7 @@ import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { RepoIndex, SymbolInfo } from "../core/types";
 import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
-import { buildRepoMap } from "../core/map";
+import { buildRepoMap, resolveAnchorsDetailed, type AnchorStrength } from "../core/map";
 import { IntentLock, KeepClause, LOCK_SCHEMA_VERSION, DEPENDENCY_MANIFESTS } from "./types";
 import { nextLockId, saveLock } from "./store";
 
@@ -43,6 +43,8 @@ export interface DraftResult {
   /** Files proposed by blast-radius analysis (before any --budget-files override). */
   proposedFiles: string[];
   suggestedDeny: string[];
+  /** How strongly the utterance matched (exact / name / lexical / none). */
+  anchorStrength: AnchorStrength;
   /** How many deny suggestions were omitted for readability (0 = none). */
   denyOmitted: number;
 }
@@ -139,18 +141,26 @@ function gitUserName(rootDir: string): string {
  */
 export function draftLock(rootDir: string, index: RepoIndex, utterance: string, opts: DraftOptions = {}): DraftResult {
   const graph = buildGraph(index);
+  const resolution = resolveAnchorsDetailed(graph, utterance);
+  const anchors = resolution.anchors;
   const map = buildRepoMap(index, utterance, { top: 30, maxTokens: 4096 });
-  const anchors = map.anchors;
+
+  // Weak anchors abstain: when nothing name-bearing matched, a proposed
+  // budget would be confidently wrong (field-reported on Hono: asking about
+  // `compose` proposed unrelated adapter files). Propose nothing and say so.
+  const anchorsWeak = resolution.strength === "lexical" || resolution.strength === "none";
 
   // Proposed budget: defining files of top-ranked symbols, non-test,
   // ordered by rank, capped.
   const cap = opts.maxProposedFiles ?? 6;
   const proposedFiles: string[] = [];
-  for (const entry of map.entries) {
-    const f = entry.symbol.file;
-    if (isTestFile(f)) continue;
-    if (!proposedFiles.includes(f)) proposedFiles.push(f);
-    if (proposedFiles.length >= cap) break;
+  if (!anchorsWeak) {
+    for (const entry of map.entries) {
+      const f = entry.symbol.file;
+      if (isTestFile(f)) continue;
+      if (!proposedFiles.includes(f)) proposedFiles.push(f);
+      if (proposedFiles.length >= cap) break;
+    }
   }
 
   // Suggested deny: dependency manifests present at the root, plus test
@@ -177,11 +187,19 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
   const budgetFiles = opts.budgetFiles && opts.budgetFiles.length > 0 ? opts.budgetFiles : proposedFiles;
 
   const assumptions: IntentLock["assumptions"] = [];
-  if (anchors.length > 0) {
+  if (anchors.length > 0 && !anchorsWeak) {
     assumptions.push({
       text:
         `Budget proposed automatically from anchors: ${anchors.map((a) => a.qualifiedName).join(", ")} ` +
-        `(blast-radius analysis; review before activating)`,
+        `(blast-radius analysis, anchor strength: ${resolution.strength}; review before activating)`,
+      source: "system",
+      confirmed: false,
+    });
+  } else if (anchorsWeak && anchors.length > 0) {
+    assumptions.push({
+      text:
+        `Only weak lexical anchors matched (${anchors.map((a) => a.qualifiedName).join(", ")}) — ` +
+        `budget left empty on purpose; name the symbols or files you intend to touch (--budget-files)`,
       source: "system",
       confirmed: false,
     });
@@ -228,5 +246,5 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
   };
 
   const writtenPath = saveLock(rootDir, lock);
-  return { lock, path: writtenPath, anchors, proposedFiles, suggestedDeny, denyOmitted };
+  return { lock, path: writtenPath, anchors, proposedFiles, suggestedDeny, anchorStrength: resolution.strength, denyOmitted };
 }

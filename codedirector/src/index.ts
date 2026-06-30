@@ -47,9 +47,12 @@ export {
   buildRepoMap,
   formatRepoMap,
   resolveAnchors,
+  resolveAnchorsDetailed,
   estimateTokens,
   type RepoMapResult,
   type MapOptions,
+  type AnchorStrength,
+  type AnchorResolution,
 } from "./core/map";
 
 export {

@@ -229,7 +229,11 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
       lines.push(`drafted ${result.lock.id} → ${path.relative(root, result.path)}`);
       if (result.anchors.length > 0) {
         lines.push(`anchors: ${result.anchors.map((a) => a.qualifiedName).join(", ")}`);
-        lines.push(`proposed budget: ${result.proposedFiles.join(", ") || "(none)"}`);
+        if (result.anchorStrength === "lexical") {
+          lines.push(`proposed budget: (none — weak lexical anchors only; name files with --budget-files)`);
+        } else {
+          lines.push(`proposed budget: ${result.proposedFiles.join(", ") || "(none)"}`);
+        }
       } else {
         lines.push(`anchors: none matched — budget left empty, fill it in by hand`);
       }

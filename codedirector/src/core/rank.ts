@@ -21,6 +21,12 @@ import { SymbolInfo } from "./types";
 export const PAGERANK_DAMPING = 0.85;
 export const PAGERANK_ITERATIONS = 50;
 export const SAME_FILE_WEIGHT = 0.15;
+/**
+ * Co-membership cap: files with more than this many symbols dilute each
+ * pair's weight, so large barrel/adapter files can't dominate relevance
+ * (field-reported on Hono: budget proposals drifted to unrelated adapters).
+ */
+export const SAME_FILE_CAP = 8;
 export const CALL_WEIGHT = 1.0;
 
 export interface RankedSymbol {
@@ -58,10 +64,11 @@ export function rankSymbols(graph: SymbolGraph, anchorIds: string[]): RankedSymb
   for (const [file, syms] of graph.filesOf) {
     void file;
     const ids = syms.map((s) => s.id).sort();
+    const w = SAME_FILE_WEIGHT * Math.min(1, SAME_FILE_CAP / ids.length);
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
-        addAdj(ids[i], ids[j], SAME_FILE_WEIGHT);
-        addAdj(ids[j], ids[i], SAME_FILE_WEIGHT);
+        addAdj(ids[i], ids[j], w);
+        addAdj(ids[j], ids[i], w);
       }
     }
   }
