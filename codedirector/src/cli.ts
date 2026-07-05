@@ -314,14 +314,14 @@ async function main(): Promise<number> {
   const runCommand = sep === -1 ? null : argv.slice(sep + 1);
   const { command, positional, flags } = parseArgs(sep === -1 ? argv : argv.slice(0, sep));
 
+  if (flags.has("version")) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    process.stdout.write(require("../../package.json").version + "\n");
+    return 0;
+  }
   if (flags.has("help") || command === "help" || command === undefined) {
     process.stdout.write(HELP);
     return command === undefined && !flags.has("help") ? 2 : 0;
-  }
-  if (flags.has("version")) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    process.stdout.write(require("../package.json").version + "\n");
-    return 0;
   }
 
   const root = rootFrom(flags);
