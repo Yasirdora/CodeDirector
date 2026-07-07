@@ -30,7 +30,7 @@ import { IntentLock, DEPENDENCY_MANIFESTS } from "../lock/types";
 import { loadLock } from "../lock/store";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
-import { Baseline, latestBaselinePath, loadBaseline } from "../run/baseline";
+import { Baseline, baselineFileHash, latestBaselinePath, loadBaseline } from "../run/baseline";
 import { runArgvProbe, runShellProbe, sha256 } from "../run/probe";
 import {
   countByClass,
@@ -53,9 +53,30 @@ export interface VerifyOptions {
   outputTimeoutMs?: number;
   /** Environment for spawned checks (default: process.env). */
   env?: NodeJS.ProcessEnv;
+  /**
+   * sha256 the baseline file had at capture time (from the run record).
+   * When provided, verify re-hashes the baseline and, on mismatch, marks
+   * every baseline-dependent check unchecked — "baseline modified during
+   * execution — run invalid" — and fails. (An agent command executed by
+   * `cdir run` could otherwise edit the baseline and fake "held".)
+   */
+  expectedBaselineSha256?: string;
 }
 
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", ".codedirector"]);
+
+const TAMPER_REASON = "baseline modified during execution — run invalid";
+const BASELINE_DEPENDENT_KINDS = new Set(["api-unchanged", "no-new-dependency", "output-unchanged"]);
+
+/** Re-hash the baseline file and compare against the capture-time hash. */
+function baselineTampered(rootDir: string, baselineRel: string | undefined, opts: VerifyOptions): boolean {
+  if (!opts.expectedBaselineSha256 || !baselineRel) return false;
+  try {
+    return baselineFileHash(path.join(rootDir, baselineRel)) !== opts.expectedBaselineSha256;
+  } catch {
+    return true; // baseline file unreadable — treat as tampered
+  }
+}
 
 /** Repo-relative files matching a glob, deterministic order. */
 function expandGlob(rootDir: string, glob: string): string[] {
@@ -376,7 +397,8 @@ export function verifyWithBaseline(
   indexAfter: RepoIndex,
   opts: VerifyOptions = {},
 ): VerificationReport {
-  const items: VerificationItem[] = [
+  const tampered = baselineTampered(rootDir, baselineRel, opts);
+  let items: VerificationItem[] = [
     ...verifyApiUnchanged(lock, baseline, baselineRel, indexAfter),
     ...verifyNoNewDependency(rootDir, lock, baseline, baselineRel),
     ...verifyTypecheck(rootDir, opts),
@@ -385,13 +407,24 @@ export function verifyWithBaseline(
     ...verifyOutputUnchanged(rootDir, lock, baseline, baselineRel, opts),
     ...verifyCustom(lock),
   ];
+  if (tampered) {
+    // A tampered baseline invalidates every differential check against it.
+    // Tests/typecheck/verifyCommand are self-contained and still count.
+    items = items.map((i) =>
+      i.source === "keep-clause" && BASELINE_DEPENDENT_KINDS.has(i.clauseKind ?? "")
+        ? uncheckedItem(i.source, i.subject, TAMPER_REASON, i.clauseKind)
+        : i,
+    );
+  }
   const violations = items
     .filter((i) => i.verdict === "violated")
     .map((i) => (i.source === "keep-clause" ? `KEEP ${i.clauseKind}: ${i.detail}` : `VERIFY ${i.source}: ${i.detail}`));
+  if (tampered) violations.unshift(`BASELINE TAMPERED: ${baselineRel} — ${TAMPER_REASON}`);
   return {
     lockId: lock.id,
     verifiedAt: new Date().toISOString(),
     ...(baselineRel !== undefined ? { baselinePath: baselineRel } : {}),
+    ...(tampered ? { baselineTampered: true } : {}),
     items,
     violations,
     counts: countByClass(items),
@@ -408,7 +441,16 @@ export async function verifyLock(rootDir: string, lockId: string, opts: VerifyOp
   const lock = loadLock(rootDir, lockId);
   if (!lock) throw new VerifyError(`no such lock: ${lockId} (see \`cdir lock ls\`)`);
   const baselinePath = opts.baselinePath ?? latestBaselinePath(rootDir, lockId) ?? undefined;
-  const baseline = baselinePath ? loadBaseline(baselinePath) : null;
+  let baseline: Baseline | null = null;
+  if (baselinePath) {
+    try {
+      baseline = loadBaseline(baselinePath);
+    } catch {
+      // Corrupted/unreadable baseline (e.g. tampered mid-run): checks report
+      // Unchecked; when a capture-time hash is known the tamper reason applies.
+      baseline = null;
+    }
+  }
   const baselineRel = baselinePath ? path.relative(rootDir, baselinePath).split(path.sep).join("/") : undefined;
   const { index } = await buildIndex(rootDir);
   return verifyWithBaseline(rootDir, lock, baseline, baselineRel, index, opts);

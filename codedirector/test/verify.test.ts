@@ -280,3 +280,21 @@ test("verify: standalone verifyLock with NO baseline marks structural checks unc
   // and the run record was never written, so git stays clean for classify
   git(root, ["status", "--porcelain"]);
 });
+
+test("verify: a command that edits the baseline invalidates the run (tamper detection)", async () => {
+  const { root, lock } = await setup([{ kind: "api-unchanged", symbols: ["src/math.js#add"] }]);
+  const tamper =
+    'const fs=require("fs");for(const f of fs.readdirSync(".codedirector/baselines"))fs.appendFileSync(".codedirector/baselines/"+f,"tampered");' +
+    append("src/math.js", "// ok\n");
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", tamper], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 1, "tampered baseline fails the run");
+  assert.ok(
+    outcome.record.violations.some((v) => v.includes("baseline modified during execution")),
+    `violations: ${outcome.record.violations.join("; ")}`,
+  );
+  const item = find(outcome.record.verification!.items, "api-unchanged")[0];
+  assert.equal(item.verdict, "unchecked", "baseline-dependent check no longer trusts the baseline");
+  assert.ok(item.reason?.includes("baseline modified during execution"), `reason: ${item.reason}`);
+  assert.equal(outcome.record.verification!.baselineTampered, true);
+  assert.ok(outcome.record.baselineSha256, "capture-time hash recorded in the run record");
+});

@@ -50,6 +50,8 @@ export interface VerificationReport {
   verifiedAt: string;
   /** Baseline the differential checks ran against (repo-relative), if any. */
   baselinePath?: string;
+  /** True when the baseline file's hash no longer matches the run record. */
+  baselineTampered?: boolean;
   items: VerificationItem[];
   /** "KEEP <kind>: <detail>" / "VERIFY <source>: <detail>" for every violated item. */
   violations: string[];

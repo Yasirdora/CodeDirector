@@ -136,6 +136,11 @@ export function saveBaseline(rootDir: string, baseline: Baseline): string {
   return p;
 }
 
+/** sha256 of a saved baseline file — the tamper-detection primitive. */
+export function baselineFileHash(baselinePath: string): string {
+  return hashContent(fs.readFileSync(baselinePath, "utf8"));
+}
+
 /** Load a baseline from an explicit path. Throws on unreadable JSON. */
 export function loadBaseline(baselinePath: string): Baseline {
   return JSON.parse(fs.readFileSync(baselinePath, "utf8")) as Baseline;

@@ -26,7 +26,7 @@ import { createCheckpoint, Checkpoint } from "../checkpoint";
 import { IntentLock } from "../lock/types";
 import { loadLock, saveLock } from "../lock/store";
 import { signatureHash } from "../lock/check";
-import { Baseline, captureBaseline, saveBaseline } from "./baseline";
+import { Baseline, baselineFileHash, captureBaseline, saveBaseline } from "./baseline";
 import { changedFiles, changedLineCount, ClassifiedChange, classifyChanges } from "./classify";
 import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
 import { VerificationReport } from "../verify/types";
@@ -53,6 +53,8 @@ export interface RunRecord {
   exitCode: number;
   checkpoint: Checkpoint;
   baselinePath: string;
+  /** sha256 of the baseline file at capture time — tamper detection. */
+  baselineSha256?: string;
   changed: ClassifiedChange[];
   budget: BudgetStats;
   keepResults: KeepResult[];
@@ -202,6 +204,11 @@ export async function runWithLock(
   const { index: indexBefore } = await buildIndex(rootDir);
   const baseline: Baseline = captureBaseline(rootDir, lock, indexBefore, checkpoint.tag);
   const baselinePath = saveBaseline(rootDir, baseline);
+  // Hash the baseline at capture: the executed command could edit files under
+  // .codedirector/baselines/ and fake a "held" verdict. The hash goes into
+  // the run record; verify re-hashes and invalidates on mismatch. (True
+  // oracle separation — baseline outside the writable tree — is a later phase.)
+  const baselineSha256 = baselineFileHash(baselinePath);
 
   // 3. execute
   const startedAt = new Date().toISOString();
@@ -235,7 +242,10 @@ export async function runWithLock(
   const verification =
     opts.verify === false
       ? undefined
-      : verifyWithBaseline(rootDir, lock, baseline, baselineRel, indexAfter, opts.verifyOptions);
+      : verifyWithBaseline(rootDir, lock, baseline, baselineRel, indexAfter, {
+          expectedBaselineSha256: baselineSha256,
+          ...opts.verifyOptions,
+        });
   const keepResults = verification
     ? keepResultsFromVerification(verification)
     : checkKeepClauses(rootDir, lock, baseline, indexAfter);
@@ -273,6 +283,7 @@ export async function runWithLock(
     exitCode: commandExit,
     checkpoint,
     baselinePath: path.relative(rootDir, baselinePath),
+    baselineSha256,
     changed,
     budget,
     keepResults,

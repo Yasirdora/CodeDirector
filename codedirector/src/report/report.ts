@@ -126,8 +126,17 @@ export async function buildReport(
   const lock = loadLock(rootDir, lockId);
   if (!lock) throw new ReportError(`no such lock: ${lockId} (see \`cdir lock ls\`)`);
 
-  const verification = opts.verification ?? (await verifyLock(rootDir, lockId, opts));
   const latest = opts.run ? { record: opts.run, recordPath: opts.runRecordPath } : latestRunRecord(rootDir, lockId);
+  // When re-verifying standalone, verify against the run's own baseline and
+  // enforce its capture-time hash (baseline tamper detection).
+  const integrity =
+    !opts.verification && latest?.record.baselineSha256 && latest.record.baselinePath
+      ? {
+          baselinePath: path.join(rootDir, latest.record.baselinePath),
+          expectedBaselineSha256: latest.record.baselineSha256,
+        }
+      : {};
+  const verification = opts.verification ?? (await verifyLock(rootDir, lockId, { ...integrity, ...opts }));
   const run = latest?.record;
   const runRecordPath = latest?.recordPath
     ? path.isAbsolute(latest.recordPath)

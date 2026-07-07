@@ -1,0 +1,27 @@
+name: baseline-tamper-fails-run
+# An executed command that edits the baseline must invalidate the run:
+# baseline-dependent checks become unchecked with the tamper reason, and the
+# run exits non-zero. (True oracle separation is a later phase; this is the
+# v1 tripwire.)
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: make math faster
+  goal: same behavior, faster
+  change: math internals only
+  keep:
+    - kind: api-unchanged
+      symbols: ["src/math.js#add"]
+  budget:
+    files: ["src/math.js"]
+command: node -e 'const fs=require("fs");for(const f of fs.readdirSync(".codedirector/baselines"))fs.appendFileSync(".codedirector/baselines/"+f,"tampered");require("fs").appendFileSync("src/math.js","// ok\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "baseline modified during execution"
+  items:
+    - { match: api-unchanged, class: unchecked, verdict: unchecked }
