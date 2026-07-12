@@ -35,6 +35,7 @@ export interface RunRecord {
   taskId: string;
   condition: "A" | "B";
   repeat: number;
+  mock: boolean;
   checksPass: boolean;
   checkResults: CheckResult[];
   unintendedChanges: string[];
@@ -54,6 +55,17 @@ export interface RunRecord {
 }
 
 const PILOT_TASKS = ["t01-feel-faster", "t02-fix-it", "t05-dont-change-anything-else", "t07-production-ready"];
+
+/**
+ * Top-level provenance flag: true when ANY record used the mock backend.
+ * Computed from the records themselves — never from invocation flags. (An
+ * earlier version wrote `cfg.mock`, so a --mock invocation could stamp a
+ * fully-live result set as mock; `every()` had the opposite failure, hiding
+ * mock records in a mixed set.)
+ */
+export function mockFlagFor(records: Array<Pick<RunRecord, "mock">>): boolean {
+  return records.some((r) => r.mock);
+}
 
 export function repoRoot(): string {
   return path.resolve(__dirname, "..", "..");
@@ -84,6 +96,7 @@ export async function runOne(
     taskId: task.id,
     condition,
     repeat,
+    mock: cfg.mock,
     checksPass: false,
     checkResults: [],
     unintendedChanges: [],
@@ -180,7 +193,7 @@ async function main(): Promise<void> {
     );
     await fs.writeFile(
       rawPath,
-      JSON.stringify({ generatedAt: new Date().toISOString(), mock: cfg.mock, repeats, records }, null, 2),
+      JSON.stringify({ generatedAt: new Date().toISOString(), mock: mockFlagFor(records), repeats, records }, null, 2),
     );
   };
 
