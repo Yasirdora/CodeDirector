@@ -30,6 +30,24 @@ best. **A claim without an artifact reference is automatically Asserted —
 enforced in code** (`enforceArtifactRule`), not by discipline. The Unchecked
 bucket is always rendered, even when empty; a report that hides it is lying.
 
+Two honesty limits worth knowing:
+
+- **Signature evidence covers the full callable surface** — including
+  initializer-declared functions (`export const compose = <E>(a, b) => …`),
+  whose signatures include type parameters, the parameter list, and the
+  return-type annotation. (A field-reported defect where adding a parameter
+  to a const-arrow left the hash unchanged is fixed and covered by parser
+  tests + two eval cases; `PARSER_VERSION` was bumped, so old indexes
+  re-parse.) Plain value consts still exclude the value, by design.
+- **Baselines are tamper-evident, not tamper-proof.** The baseline file's
+  sha256 is recorded in the run record at capture; verification re-hashes
+  and, on mismatch, marks every baseline-dependent check Unchecked —
+  "baseline modified during execution — run invalid" — and fails the run.
+  But `.codedirector/baselines/` is still inside the tree the executed
+  command can write: a command that rewrites the baseline *and* the record
+  could evade this. True oracle separation (baseline outside the writable
+  tree / read-only verifier process) remains a later phase.
+
 ## Install
 
 ```sh
@@ -67,7 +85,10 @@ Blast radius for a symbol — genuinely useful with no AI involved:
 - which test files reference it (`*.test.*` / `*.spec.*` / `__tests__`)
 - historical co-change coupling (top files committed together with the
   defining file, from `git log --name-only`; degrades gracefully outside
-  a git repo)
+  a git repo). Skipped with a printed reason on shallow clones
+  (`git rev-parse --is-shallow-repository`) and on histories under 30
+  commits — on a `--depth 1` clone the single commit touches every file, so
+  the coupling report would be pure noise.
 
 `--json` emits the same report as deterministic JSON (sorted keys).
 
@@ -80,7 +101,12 @@ YAML versioned at `.codedirector/locks/IL-<NNNN>-<slug>.yaml`. The command is
 interactive-free: it resolves anchor symbols from your words, computes blast
 radius, and PROPOSES `budget.files` (defining files of the top-ranked
 symbols) plus a suggested `deny` list (dependency manifests, unrelated test
-files). The draft is written with `status: draft` — edit it, then
+files). Anchor matching is tiered — exact name, then name-token, then lexical
+fuzz — and when only lexical fuzz matches, the draft **abstains**: empty
+budget plus a guidance assumption, rather than a confidently wrong one. Deny
+suggestions are compressed to directory globs and capped at 8 entries; any
+omission is counted in the lock's assumptions, never silent. The draft is
+written with `status: draft` — edit it, then
 `cdir lock check IL-XXXX` and `cdir lock activate IL-XXXX`.
 
 The Lock schema (v1): `utterance` (your exact words, immutable), `goal`,
@@ -261,8 +287,10 @@ Per the blueprint's phasing, honestly:
 - **No LLM agent loop.** `cdir run` wraps a command you (or your agent)
   provide; it does not plan, edit, or repair by itself.
 - **No sandboxed verifier.** Probed commands run with repo permissions; our
-  code writes nothing, but a compromised test script could. Sandboxing is a
-  later phase.
+  code writes nothing, but a compromised test script could. Baselines are
+  tamper-EVIDENT (capture-time sha256 re-checked at verify; a mismatch
+  invalidates the run), not tamper-proof — full sandboxing and moving the
+  baseline outside the writable tree are later phases.
 - **No characterization generation.** `output-unchanged` pins the output of
   commands you name; it does not auto-generate behavior-pinning tests over
   the KEEP surface (blueprint phase 1.5+, with a mutation-testing gate).

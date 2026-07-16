@@ -101,6 +101,12 @@ Outputs land in `results/`: `results.raw.json` (per-run records),
 per-run trajectories in `results/runs/`, and `results.json`/`results.md`
 (paired per-task table, aggregates, the four "fewers").
 
+Provenance: every run record carries its own `mock` boolean, stamped at run
+creation. The top-level `mock` flag in `results.raw.json` / `results.json`
+is computed from the records — true when ANY record used the mock backend —
+never from invocation flags; a mixed set is labeled "MIXED — k of n records"
+with an explicit caveat.
+
 ## Honest limits
 
 - **LLM judge.** intentAccuracy is judged by a model and labeled as such;
