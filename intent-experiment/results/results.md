@@ -1,6 +1,6 @@
 # Code Director intent-layer experiment — results
 
-Generated: 2026-09-11T18:14:18.925Z · mock backend: false
+Generated: 2026-09-12T00:01:22.266Z · mock backend: no
 
 > **Pilot signal, not proof.** n=1 per cell; variance is unmeasured. Run with `--repeats N` (N≥5) before concluding anything.
 

@@ -67,10 +67,18 @@ function analyze(raw) {
         "Clarification answers come from a simulated user (the task oracle), not a real human.",
         "Identical agent, prompts, and tools in both conditions; only the instruction differs.",
     ];
+    // Provenance is computed from the records, never trusted from the
+    // top-level flag: a stale or miscomputed raw.mock cannot mislabel the data.
+    const mockRecords = raw.records.filter((r) => r.mock).length;
+    const mock = mockRecords > 0;
+    if (mockRecords > 0 && mockRecords < raw.records.length) {
+        caveats.unshift(`MIXED PROVENANCE: ${mockRecords} of ${raw.records.length} records used the deterministic mock backend ` +
+            `(per-record mock flags). Aggregates blend scripted and live measurements — do not quote them as live-backend results.`);
+    }
     if (raw.repeats === 1) {
         caveats.unshift("n=1 per cell: this is a PILOT SIGNAL, NOT PROOF. Variance is unmeasured; run --repeats N (N≥5) before drawing conclusions.");
     }
-    return { generatedAt: raw.generatedAt, mock: raw.mock, repeats: raw.repeats, perTask, overall: { A, B }, fewers, caveats };
+    return { generatedAt: raw.generatedAt, mock, mockRecords, repeats: raw.repeats, perTask, overall: { A, B }, fewers, caveats };
 }
 function mdTable(a) {
     const lines = [];
@@ -91,9 +99,15 @@ function renderMarkdown(a) {
     const pilotNote = a.repeats === 1
         ? "> **Pilot signal, not proof.** n=1 per cell; variance is unmeasured. Run with `--repeats N` (N≥5) before concluding anything."
         : `> repeats per cell: ${a.repeats}. Treat differences below sampling noise with care.`;
+    const totalRecords = a.overall.A.n + a.overall.B.n;
+    const mockLabel = a.mockRecords === 0
+        ? "no"
+        : a.mockRecords === totalRecords
+            ? "yes (all records)"
+            : `MIXED — ${a.mockRecords} of ${totalRecords} records`;
     return `# Code Director intent-layer experiment — results
 
-Generated: ${a.generatedAt} · mock backend: ${a.mock}
+Generated: ${a.generatedAt} · mock backend: ${mockLabel}
 
 ${pilotNote}
 

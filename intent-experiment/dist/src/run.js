@@ -32,6 +32,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.mockFlagFor = mockFlagFor;
 exports.repoRoot = repoRoot;
 exports.loadTasks = loadTasks;
 exports.runOne = runOne;
@@ -44,6 +45,16 @@ const intent_1 = require("./intent");
 const measure_1 = require("./measure");
 const judge_1 = require("./judge");
 const PILOT_TASKS = ["t01-feel-faster", "t02-fix-it", "t05-dont-change-anything-else", "t07-production-ready"];
+/**
+ * Top-level provenance flag: true when ANY record used the mock backend.
+ * Computed from the records themselves — never from invocation flags. (An
+ * earlier version wrote `cfg.mock`, so a --mock invocation could stamp a
+ * fully-live result set as mock; `every()` had the opposite failure, hiding
+ * mock records in a mixed set.)
+ */
+function mockFlagFor(records) {
+    return records.some((r) => r.mock);
+}
 function repoRoot() {
     return node_path_1.default.resolve(__dirname, "..", "..");
 }
@@ -66,6 +77,7 @@ async function runOne(task, condition, repeat, cfg) {
         taskId: task.id,
         condition,
         repeat,
+        mock: cfg.mock,
         checksPass: false,
         checkResults: [],
         unintendedChanges: [],
@@ -151,7 +163,7 @@ async function main() {
         byKey.set(`${r.taskId}|${r.condition}|${r.repeat}`, r);
     const persist = async () => {
         const records = [...byKey.values()].sort((a, b) => a.taskId.localeCompare(b.taskId) || a.condition.localeCompare(b.condition) || a.repeat - b.repeat);
-        await node_fs_1.promises.writeFile(rawPath, JSON.stringify({ generatedAt: new Date().toISOString(), mock: cfg.mock, repeats, records }, null, 2));
+        await node_fs_1.promises.writeFile(rawPath, JSON.stringify({ generatedAt: new Date().toISOString(), mock: mockFlagFor(records), repeats, records }, null, 2));
     };
     for (const task of tasks) {
         for (let r = 0; r < repeats; r++) {
