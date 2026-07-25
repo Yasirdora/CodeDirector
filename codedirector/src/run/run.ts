@@ -21,7 +21,7 @@ import { spawnSync } from "node:child_process";
 import { RepoIndex } from "../core/types";
 import { buildIndex, hashContent } from "../core/builder";
 import { buildGraph } from "../core/graph";
-import { indexDir, stableStringify } from "../core/store";
+import { ensureCodedirectorIgnore, indexDir, stableStringify } from "../core/store";
 import { createCheckpoint, Checkpoint } from "../checkpoint";
 import { IntentLock } from "../lock/types";
 import { loadLock, saveLock } from "../lock/store";
@@ -197,6 +197,8 @@ export async function runWithLock(
     throw new RunError(`lock ${lockId} has status "abandoned" — it cannot run again`);
   }
 
+  ensureCodedirectorIgnore(rootDir);
+
   // 1. checkpoint before anything
   const checkpoint = createCheckpoint(rootDir);
 
@@ -220,12 +222,12 @@ export async function runWithLock(
   const finishedAt = new Date().toISOString();
   const commandExit = child.error ? 127 : (child.status ?? 1);
 
-  // 4. classify changes against the Lock
-  const changed = classifyChanges(rootDir, lock);
-  const untracked = changedFiles(rootDir)
+  // 4. classify changes against the Lock (delta vs pre-run baseline, not vs HEAD)
+  const changed = classifyChanges(rootDir, lock, baseline);
+  const untracked = changedFiles(rootDir, baseline)
     .filter((c) => c.status === "??")
     .map((c) => c.path);
-  const linesChanged = changedLineCount(rootDir, untracked);
+  const linesChanged = changedLineCount(rootDir, untracked, baseline);
   const budget: BudgetStats = {
     filesChanged: changed.length,
     maxFiles: lock.budget.maxFiles,

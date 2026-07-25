@@ -12,7 +12,8 @@
  *   cdir lock check <id>               Validate a Lock (non-zero exit on invalid)
  *   cdir lock activate <id>            draft → active (only if check passes)
  *   cdir checkpoint                    Git checkpoint (tag + dirty-state record)
- *   cdir undo [--force]                Restore the latest checkpoint
+ *   cdir undo [--force] [--keep-untracked]
+ *                                       Restore the latest checkpoint
  *   cdir run <lock-id> -- <cmd...>     Verified execution inside the Lock
  *   cdir verify <lock-id>              Re-run the verification ladder
  *   cdir report <lock-id> [--format]   Change Report (terminal · md · json)
@@ -64,8 +65,11 @@ Usage:
   cdir checkpoint [--root DIR]            Git checkpoint: tag cdir/ckpt-<ts> at
                                           HEAD + record dirty state
   cdir undo [--root DIR] [--force]        Restore the latest checkpoint. Refuses
-                                          when the checkpoint covered a dirty
-                                          tree, unless --force (says what is lost)
+          [--keep-untracked]              when the checkpoint covered a dirty
+                                          tree, unless --force (says what is lost).
+                                          Untracked files created after the
+                                          checkpoint are DELETED (listed first);
+                                          --keep-untracked preserves them.
 
   cdir run <lock-id> [--root DIR]         Verified execution: checkpoint, capture
           [--allow-expand] -- <cmd...>    baseline, run the command, enforce
@@ -382,13 +386,17 @@ async function main(): Promise<number> {
     case "undo": {
       try {
         const prev = latestCheckpoint(root);
-        const result = undo(root, { force: flags.has("force") });
+        const result = undo(root, { force: flags.has("force"), keepUntracked: flags.has("keep-untracked") });
         const lines = [
           `restored ${result.checkpoint.tag} (${result.checkpoint.ref.slice(0, 12)})`,
         ];
         if (result.lostFiles.length > 0) {
           lines.push(`discarded uncommitted changes in:`);
           for (const f of result.lostFiles) lines.push(`  ${f}`);
+        }
+        if (result.deletedUntracked.length > 0) {
+          lines.push(`deleted untracked files created after the checkpoint (--keep-untracked preserves them):`);
+          for (const f of result.deletedUntracked) lines.push(`  ${f}`);
         }
         if (result.untrackedRemaining.length > 0) {
           lines.push(`note: untracked files left in place:`);

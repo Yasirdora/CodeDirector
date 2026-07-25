@@ -56,18 +56,39 @@ export function lockPathFor(rootDir: string, id: string): string | null {
   return entry ? path.join(locksDir(rootDir), entry.file) : null;
 }
 
+function sealPath(rootDir: string, id: string): string {
+  return path.join(rootDir, ".codedirector", "seals", `${id}.utterance`);
+}
+
+function readSealedUtterance(rootDir: string, id: string): string | null {
+  const p = sealPath(rootDir, id);
+  try {
+    return fs.readFileSync(p, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function writeSealedUtterance(rootDir: string, id: string, utterance: string): void {
+  fs.mkdirSync(path.dirname(sealPath(rootDir, id)), { recursive: true });
+  fs.writeFileSync(sealPath(rootDir, id), utterance, "utf8");
+}
+
 /** Load a Lock by id ("IL-0001"). Returns null when not found; throws LockParseError on bad YAML. */
 export function loadLock(rootDir: string, id: string): IntentLock | null {
   const p = lockPathFor(rootDir, id);
   if (!p) return null;
-  return lockFromYaml(fs.readFileSync(p, "utf8"));
+  const lock = lockFromYaml(fs.readFileSync(p, "utf8"));
+  const sealed = readSealedUtterance(rootDir, id);
+  if (sealed !== null && lock.status !== "draft") lock.utterance = sealed;
+  return lock;
 }
 
 /** List all Locks, ordered by id. */
 export function listLocks(rootDir: string): IntentLock[] {
-  return scanLockFiles(rootDir).map((e) =>
-    lockFromYaml(fs.readFileSync(path.join(locksDir(rootDir), e.file), "utf8")),
-  );
+  return scanLockFiles(rootDir)
+    .map((e) => loadLock(rootDir, e.id))
+    .filter((l): l is IntentLock => l !== null);
 }
 
 /**
@@ -77,6 +98,11 @@ export function listLocks(rootDir: string): IntentLock[] {
  */
 export function saveLock(rootDir: string, lock: IntentLock): string {
   fs.mkdirSync(locksDir(rootDir), { recursive: true });
+  const sealed = readSealedUtterance(rootDir, lock.id);
+  if (lock.status !== "draft") {
+    if (sealed !== null) lock.utterance = sealed;
+    else writeSealedUtterance(rootDir, lock.id, lock.utterance);
+  }
   const fileName = `${lock.id}-${slugify(lock.utterance)}.yaml`;
   const target = path.join(locksDir(rootDir), fileName);
   const prev = lockPathFor(rootDir, lock.id);

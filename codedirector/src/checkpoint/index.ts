@@ -3,11 +3,11 @@
  * defensible (blueprint §19): checkpoint before every execution, one
  * command to restore, no understanding required.
  *
- * Strategy (stash-free): a lightweight git tag `cdir/ckpt-<timestamp>` at
- * HEAD, plus a hash of `git status --porcelain` recording whether the tree
- * was dirty. Undo resets --hard to the tagged ref; when the checkpoint was
- * taken over a dirty tree, undo refuses without --force and says precisely
- * what will be lost. Every undo is logged.
+ * Strategy: git tag `cdir/ckpt-<timestamp>` at HEAD, plus a byte snapshot of
+ * dirty / untracked / skip-worktree files under .codedirector/ckpt-blobs/.
+ * Undo resets --hard to the tagged ref, then restores that snapshot so a
+ * checkpoint taken over a dirty tree actually comes back (including
+ * skip-worktree files that `git reset --hard` would otherwise leave).
  */
 
 import * as fs from "node:fs";
@@ -29,6 +29,8 @@ export interface Checkpoint {
   dirty: boolean;
   /** sha256 of `git status --porcelain` output at checkpoint time. */
   statusHash: string;
+  /** Relative dir under .codedirector holding dirty-file bytes, when dirty. */
+  blobDir?: string;
 }
 
 export interface UndoRecord {
@@ -74,19 +76,30 @@ function git(rootDir: string, args: string[]): string {
   });
 }
 
-/** Paths reported by `git status --porcelain` (rename targets resolved). */
+function unquotePath(p: string): string {
+  if (p.startsWith('"') && p.endsWith('"')) return p.slice(1, -1).replace(/\\"/g, '"');
+  return p;
+}
+
+/** Paths on one porcelain line: rename SOURCE and target both included. */
+export function porcelainLinePaths(line: string): string[] {
+  if (!line.trim()) return [];
+  let rest = line.slice(3);
+  const arrow = rest.indexOf(" -> ");
+  if (arrow !== -1) {
+    return [unquotePath(rest.slice(0, arrow)), unquotePath(rest.slice(arrow + 4))];
+  }
+  return [unquotePath(rest)];
+}
+
+/** Paths reported by `git status --porcelain` (rename source AND target). */
 export function dirtyPaths(porcelain: string): string[] {
   const out: string[] = [];
   for (const line of porcelain.split("\n")) {
     if (!line.trim()) continue;
-    let p = line.slice(3);
-    const arrow = p.indexOf(" -> ");
-    if (arrow !== -1) p = p.slice(arrow + 4);
-    // quoted paths (special chars) come wrapped in double quotes
-    if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1);
-    out.push(p);
+    out.push(...porcelainLinePaths(line));
   }
-  return out.sort();
+  return [...new Set(out)].sort();
 }
 
 export function gitStatusPorcelain(rootDir: string): string {
@@ -103,7 +116,9 @@ export function workTreeStatusPorcelain(rootDir: string): string {
     .split("\n")
     .filter((line) => {
       if (!line.trim()) return false;
-      return !dirtyPaths(line).some((p) => p.split("/").includes(".codedirector"));
+      return !dirtyPaths(line).some(
+        (p) => p.split("/").includes(".codedirector") || p === ".gitignore" || p.endsWith("/.gitignore"),
+      );
     })
     .join("\n");
 }
@@ -141,6 +156,177 @@ function timestampId(d = new Date()): string {
 
 export class CheckpointError extends Error {}
 
+interface BlobMeta {
+  hidden: Array<{ path: string; flag: "S" | "h" }>;
+  untracked: string[];
+  files: string[];
+}
+
+function blobRoot(rootDir: string, id: string): string {
+  return path.join(indexDir(rootDir), "ckpt-blobs", id);
+}
+
+/**
+ * Absolute path for a git-root-relative path. rootDir may be a subdirectory
+ * of the git work tree — translate via the prefix (walking up with ../ for
+ * paths outside rootDir's subtree).
+ */
+function gitPathAbs(rootDir: string, gitPath: string): string {
+  const prefix = gitPrefix(rootDir);
+  if (!prefix) return path.join(rootDir, gitPath);
+  const rel = toRootRelative(prefix, gitPath);
+  if (rel !== null) return path.join(rootDir, rel);
+  const up = prefix.split("/").filter(Boolean).map(() => "..").join("/");
+  return path.resolve(rootDir, up, gitPath);
+}
+
+function writeCheckpointBlobs(rootDir: string, id: string): string {
+  const dir = blobRoot(rootDir, id);
+  fs.mkdirSync(dir, { recursive: true });
+  const files: string[] = [];
+  const untracked: string[] = [];
+  const hidden: BlobMeta["hidden"] = [];
+
+  const status = gitStatusPorcelain(rootDir);
+  for (const line of status.split("\n")) {
+    if (!line.trim()) continue;
+    const st = line.slice(0, 2);
+    for (const p of porcelainLinePaths(line)) {
+      if (p.split("/").includes(".codedirector")) continue;
+      const abs = gitPathAbs(rootDir, p);
+      try {
+        const data = fs.readFileSync(abs);
+        const dest = path.join(dir, "files", p);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.writeFileSync(dest, data);
+        files.push(p);
+      } catch {
+        /* vanished */
+      }
+      if (st === "??") untracked.push(p);
+    }
+  }
+
+  try {
+    const ls = git(rootDir, ["ls-files", "-v"]);
+    for (const line of ls.split("\n")) {
+      if (line.length < 3) continue;
+      const flag = line[0];
+      if (flag !== "S" && flag !== "h") continue;
+      const p = line.slice(2);
+      hidden.push({ path: p, flag });
+      const abs = gitPathAbs(rootDir, p);
+      try {
+        const data = fs.readFileSync(abs);
+        const dest = path.join(dir, "files", p);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.writeFileSync(dest, data);
+        if (!files.includes(p)) files.push(p);
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    /* not a git repo — shouldn't happen */
+  }
+
+  const meta: BlobMeta = { hidden, untracked: [...new Set(untracked)].sort(), files: [...new Set(files)].sort() };
+  fs.writeFileSync(path.join(dir, "meta.json"), stableStringify(meta));
+  return path.relative(indexDir(rootDir), dir).split(path.sep).join("/");
+}
+
+function restoreCheckpointBlobs(rootDir: string, id: string): void {
+  const dir = blobRoot(rootDir, id);
+  const metaPath = path.join(dir, "meta.json");
+  if (!fs.existsSync(metaPath)) return;
+  const meta = JSON.parse(fs.readFileSync(metaPath, "utf8")) as BlobMeta;
+
+  for (const h of meta.hidden) {
+    try {
+      git(rootDir, [
+        "update-index",
+        h.flag === "S" ? "--no-skip-worktree" : "--no-assume-unchanged",
+        "--",
+        h.path,
+      ]);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  for (const p of meta.files) {
+    const src = path.join(dir, "files", p);
+    if (!fs.existsSync(src)) continue;
+    const dest = gitPathAbs(rootDir, p);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(src, dest);
+  }
+
+  for (const h of meta.hidden) {
+    try {
+      git(rootDir, [
+        "update-index",
+        h.flag === "S" ? "--skip-worktree" : "--assume-unchanged",
+        "--",
+        h.path,
+      ]);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function clearSkipFlags(rootDir: string): void {
+  try {
+    const ls = git(rootDir, ["ls-files", "-v"]);
+    for (const line of ls.split("\n")) {
+      if (line.length < 3) continue;
+      const flag = line[0];
+      if (flag !== "S" && flag !== "h") continue;
+      try {
+        git(rootDir, [
+          "update-index",
+          flag === "S" ? "--no-skip-worktree" : "--no-assume-unchanged",
+          "--",
+          line.slice(2),
+        ]);
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Untracked files (git-root-relative) created after the checkpoint. */
+function postCheckpointUntracked(rootDir: string, keep: Set<string>): string[] {
+  const out: string[] = [];
+  const status = gitStatusPorcelain(rootDir);
+  for (const line of status.split("\n")) {
+    if (!line.startsWith("??")) continue;
+    for (const p of porcelainLinePaths(line)) {
+      if (p.split("/").includes(".codedirector") || keep.has(p)) continue;
+      out.push(p);
+    }
+  }
+  return out.sort();
+}
+
+/** Delete the given git-root-relative paths; returns those actually removed. */
+function deleteGitPaths(rootDir: string, paths: string[]): string[] {
+  const removed: string[] = [];
+  for (const p of paths) {
+    try {
+      fs.rmSync(gitPathAbs(rootDir, p), { recursive: true, force: true });
+      removed.push(p);
+    } catch {
+      /* ignore */
+    }
+  }
+  return removed;
+}
+
 /** Create a checkpoint at HEAD. Requires a git repo with at least one commit. */
 export function createCheckpoint(rootDir: string): Checkpoint {
   if (!isGitRepo(rootDir)) {
@@ -157,13 +343,19 @@ export function createCheckpoint(rootDir: string): Checkpoint {
   const tag = `cdir/${id}`;
   git(rootDir, ["tag", tag, ref]);
 
+  const dirty = status.trim() !== "";
+  let blobDir: string | undefined;
+  // Always snapshot hidden flags / dirty bytes so skip-worktree files restore.
+  blobDir = writeCheckpointBlobs(rootDir, id);
+
   const ckpt: Checkpoint = {
     id,
     tag,
     ref,
     createdAt: new Date().toISOString(),
-    dirty: status.trim() !== "",
+    dirty,
     statusHash: createHash("sha256").update(status, "utf8").digest("hex"),
+    blobDir,
   };
   const store = loadStore(rootDir);
   store.checkpoints.push(ckpt);
@@ -180,21 +372,33 @@ export interface UndoResult {
   checkpoint: Checkpoint;
   forced: boolean;
   lostFiles: string[];
-  /** Untracked files still present after the reset (reset --hard does not remove them). */
+  /** Untracked files created after the checkpoint that undo DELETED. */
+  deletedUntracked: string[];
+  /** Untracked files still present after the undo (kept via --keep-untracked). */
   untrackedRemaining: string[];
 }
 
 export interface UndoOptions {
   force?: boolean;
+  /**
+   * Preserve untracked files created after the checkpoint. By default undo
+   * deletes them (this changed from v0.1.0, which left them in place) so the
+   * tree matches the checkpoint exactly; the deleted list is reported.
+   */
+  keepUntracked?: boolean;
 }
 
 /**
  * Restore the working tree to the latest checkpoint.
  *
  * Guard: if the checkpoint was taken over a DIRTY tree, refuse unless
- * `force` — a reset would silently discard uncommitted work that existed
- * before the checkpoint (and any made since). The refusal says precisely
- * what will be lost.
+ * `force` — restoring discards uncommitted work made since the checkpoint.
+ * With --force, the dirty tree as of checkpoint time is restored from the
+ * blob snapshot (not merely HEAD).
+ *
+ * NOTE (changed from v0.1.0): untracked files created AFTER the checkpoint
+ * are deleted by default — pass `keepUntracked` (`--keep-untracked`) to
+ * preserve them.
  */
 export function undo(rootDir: string, opts: UndoOptions = {}): UndoResult {
   if (!isGitRepo(rootDir)) {
@@ -214,12 +418,12 @@ export function undo(rootDir: string, opts: UndoOptions = {}): UndoResult {
       ``,
       `What ` + "`cdir undo --force`" + ` will do:`,
       `  git reset --hard ${ckpt.ref.slice(0, 12)}  (${ckpt.tag})`,
+      `  then restore the dirty files captured at checkpoint time`,
       ``,
-      `What will be LOST (uncommitted changes, gone permanently):`,
+      `What will be LOST (changes made since the checkpoint):`,
     ];
     if (currentDirty.length === 0) {
-      lines.push(`  (the tree is clean right now, but the pre-checkpoint uncommitted`);
-      lines.push(`   state was never captured — reset cannot bring it back either)`);
+      lines.push(`  (working tree looks clean; skip-worktree / committed-since-ckpt edits may still revert)`);
     } else {
       for (const p of currentDirty) lines.push(`  ${p}`);
     }
@@ -227,7 +431,28 @@ export function undo(rootDir: string, opts: UndoOptions = {}): UndoResult {
     throw new CheckpointError(lines.join("\n"));
   }
 
+  clearSkipFlags(rootDir);
   git(rootDir, ["reset", "--hard", ckpt.ref]);
+  let deletedUntracked: string[] = [];
+  if (!opts.keepUntracked) {
+    const keepUntracked = new Set<string>();
+    const metaPath = path.join(blobRoot(rootDir, ckpt.id), "meta.json");
+    if (fs.existsSync(metaPath)) {
+      const meta = JSON.parse(fs.readFileSync(metaPath, "utf8")) as BlobMeta;
+      for (const p of meta.untracked) keepUntracked.add(p);
+    }
+    // Enumerate and announce BEFORE deleting, so the notice names what is lost.
+    const toDelete = postCheckpointUntracked(rootDir, keepUntracked);
+    if (toDelete.length > 0) {
+      process.stderr.write(
+        `cdir undo: deleting ${toDelete.length} untracked file(s) created after the checkpoint:\n` +
+          toDelete.map((p) => `  ${p}`).join("\n") +
+          `\n(pass --keep-untracked to preserve them)\n`,
+      );
+      deletedUntracked = deleteGitPaths(rootDir, toDelete);
+    }
+  }
+  restoreCheckpointBlobs(rootDir, ckpt.id);
 
   const after = dirtyPaths(gitStatusPorcelain(rootDir)).filter((p) => !p.split("/").includes(".codedirector"));
   const record: UndoRecord = {
@@ -241,5 +466,11 @@ export function undo(rootDir: string, opts: UndoOptions = {}): UndoResult {
   store.undos.push(record);
   saveStore(rootDir, store);
 
-  return { checkpoint: ckpt, forced: opts.force === true, lostFiles: currentDirty, untrackedRemaining: after };
+  return {
+    checkpoint: ckpt,
+    forced: opts.force === true,
+    lostFiles: currentDirty,
+    deletedUntracked,
+    untrackedRemaining: after,
+  };
 }

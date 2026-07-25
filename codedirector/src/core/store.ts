@@ -51,8 +51,32 @@ function sortKeysDeep(value: unknown): unknown {
   return value;
 }
 
+const GITIGNORE_BLOCK =
+  "# BEGIN cdir\n" +
+  ".codedirector/index.json\n" +
+  ".codedirector/baselines/\n" +
+  ".codedirector/runs/\n" +
+  ".codedirector/ckpt-blobs/\n" +
+  ".codedirector/checkpoints.json\n" +
+  "# END cdir\n";
+
+/** Ensure .gitignore ignores tool state (locks stay commitable). Idempotent. */
+export function ensureCodedirectorIgnore(rootDir: string): void {
+  const p = path.join(rootDir, ".gitignore");
+  let existing = "";
+  try {
+    existing = fs.readFileSync(p, "utf8");
+  } catch {
+    fs.writeFileSync(p, GITIGNORE_BLOCK);
+    return;
+  }
+  if (existing.includes("# BEGIN cdir")) return;
+  fs.writeFileSync(p, existing + (existing.endsWith("\n") ? "" : "\n") + GITIGNORE_BLOCK);
+}
+
 export function saveIndex(rootDir: string, index: RepoIndex): void {
   fs.mkdirSync(indexDir(rootDir), { recursive: true });
+  ensureCodedirectorIgnore(rootDir);
   const sortedFiles: RepoIndex["files"] = {};
   for (const key of Object.keys(index.files).sort()) sortedFiles[key] = index.files[key];
   const toWrite: RepoIndex = { ...index, files: sortedFiles };

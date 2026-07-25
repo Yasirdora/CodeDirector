@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import test from "node:test";
-import { ImagePipeline, SourceImage } from "../src/pipeline";
-import { exportImage } from "../src/export";
+import { ImagePipeline, SourceImage } from "../src/pipeline.ts";
+import { exportImage } from "../src/export.ts";
 
 function fixture(): SourceImage {
   return { width: 4, height: 4, pixels: new Uint8Array(16).map((_, i) => i * 16) };

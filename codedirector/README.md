@@ -118,9 +118,9 @@ maxLines}`, `accept[]`, `assumptions[]`. KEEP clause kinds:
 | Kind | Payload | Checked how |
 |---|---|---|
 | `api-unchanged` | symbol ids | ✓ signature hash, diffed against the pre-change baseline (proven) |
-| `no-new-dependency` | — | ✓ sha256 of manifests/lockfiles vs baseline (proven) |
-| `output-unchanged` | entry command + fixtures | ✓ stdout sha256, captured at baseline, re-run at verify (measured) |
-| `tests-pass` | test glob | ✓ `node --test <glob>` (measured) |
+| `no-new-dependency` | — | ✓ dependency maps in package.json + lockfile hashes vs baseline (proven) |
+| `output-unchanged` | entry command + fixtures | ✓ stdout **and stderr** sha256, captured at baseline, re-run at verify (measured) |
+| `tests-pass` | test glob | ✓ `node --test <glob>` (measured); empty glob is a violation |
 | `custom` | free text | ? not machine-checkable — always Unchecked, human judges |
 
 A Lock **rejects** clauses it cannot even in principle check, unless
@@ -137,16 +137,19 @@ A Lock **rejects** clauses it cannot even in principle check, unless
 resolve, deny globs valid, `maxFiles >= files.length` — and exits non-zero
 on invalid. `activate` moves draft → active only when check passes.
 
-### `cdir checkpoint` · `cdir undo [--force]`
+### `cdir checkpoint` · `cdir undo [--force] [--keep-untracked]`
 
 Git-native safety net (blueprint §19): `checkpoint` records a lightweight
-tag `cdir/ckpt-<timestamp>` at HEAD plus the working-tree dirty state in
-`.codedirector/checkpoints.json`. `undo` restores the latest checkpoint with
-`git reset --hard <ref>` — one command, no understanding required. If the
-checkpoint was taken over a dirty tree, undo **refuses** without `--force`
-and says precisely what will be lost; every undo is logged. Untracked files
-are left in place and reported. Honest limit: git cannot undo external side
-effects.
+tag `cdir/ckpt-<timestamp>` at HEAD plus a byte snapshot of dirty /
+skip-worktree files under `.codedirector/ckpt-blobs/`. `undo` resets to the
+tagged ref and restores that snapshot — including a dirty tree as of
+checkpoint time (`--force`) and skip-worktree files that `git reset --hard`
+would otherwise leave. Honest limit: git cannot undo external side effects.
+
+**⚠ Behavior change from v0.1.0:** untracked files created *after* the
+checkpoint are **deleted** by undo (v0.1.0 left them in place). The files
+are enumerated and printed to stderr *before* deletion, and the deleted list
+is shown again in the undo output. Pass `--keep-untracked` to preserve them.
 
 ### `cdir run <lock-id> [--allow-expand] [--no-report] -- <command...>`
 
@@ -154,14 +157,17 @@ Verified execution inside an active Lock:
 
 1. auto-checkpoint (git tag) before anything;
 2. refresh the index and capture the KEEP baseline — signature hashes of
-   every `api-unchanged` symbol, sha256 of dependency manifests, **stdout
-   hashes of every `output-unchanged` command**, git-status baseline — to
-   `.codedirector/baselines/` (gitignored: outside the source tree the
-   command can modify);
+   every `api-unchanged` symbol, dependency fingerprints, **stdout+stderr
+   hashes of every `output-unchanged` command** (probes are isolated so they
+   cannot mutate the tree), plus HEAD / dirty hashes / skip-worktree state —
+   to `.codedirector/baselines/` (gitignored);
 3. run the command (spawned, stdio inherited);
-4. classify every changed file against the Lock — in-budget / out-of-budget /
-   denied. Denied or out-of-budget changes are violations with exact
-   offending paths; nothing is auto-reverted (`cdir undo` is offered).
+4. classify every file the command actually touched against the Lock — delta
+   vs the pre-run baseline, not vs current HEAD, so `git commit`, `git mv`,
+   and skip-worktree cannot hide a deny. Writes outside `--root` are
+   out-of-budget. Pre-existing dirt is not billed to the command. Denied or
+   out-of-budget changes are violations; nothing is auto-reverted (`cdir undo`
+   is offered).
    `--allow-expand` is the logged override for scope growth only — a broken
    KEEP clause still fails;
 5. **run the verification ladder** (see below) against the baseline;
@@ -180,24 +186,24 @@ After execution, every KEEP clause and every lock-level claim is verified as
 far as possible, in ladder order (cheapest/strongest first):
 
 1. **Structural (proven)** — re-index; each `api-unchanged` symbol's
-   signature hash compared pre/post; `no-new-dependency` as a sha256 diff of
-   `package.json` / lockfiles. Both produce `proven` held or violated.
+   signature hash compared pre/post (types/interfaces/enums include their
+   members; function signatures are not truncated); `no-new-dependency`
+   diffs dependency maps in `package.json` plus lockfile hashes. Both
+   produce `proven` held or violated.
 2. **Typecheck (proven when clean)** — if `tsconfig.json` exists and a
    compiler is available (`node_modules/typescript`, else
    `npx --no-install tsc`), run `tsc --noEmit` with a 120s timeout. Clean →
-   proven; errors → measured violation; no compiler → Unchecked with the
-   reason named.
+   proven; errors → measured violation; no compiler or no tsconfig →
+   Unchecked with the reason named.
 3. **Tests (measured)** — each `tests-pass` glob is expanded and run via
    `node --test` with a timeout; pass → measured, fail → measured violation
-   with the failing test names, empty glob or dead runner → Unchecked with
-   the reason. A Lock-level `verifyCommand` (e.g. `npm test`) runs the same
-   way. (Probes strip the `NODE_TEST_CONTEXT` marker so a `cdir run` invoked
-   from inside another `node --test` process really executes — otherwise the
-   nested runner silently skips and exits 0, a false "held".)
-4. **Output (measured)** — each `output-unchanged` command is re-run and its
-   stdout sha256 compared to the baseline capture. If the lock was edited
-   after the baseline was captured, the clause is Unchecked — "no pre-change
-   baseline" — never silently held.
+   with the failing test names, empty glob → **violated** (fail closed). A
+   Lock-level `verifyCommand` (e.g. `npm test`) runs the same way. Probes
+   are isolated (tree restored afterwards) and strip `NODE_TEST_CONTEXT`.
+4. **Output (measured)** — each `output-unchanged` command is re-run in
+   isolation and its stdout **and stderr** sha256 compared to the baseline
+   capture. If the lock was edited after the baseline was captured, the
+   clause is Unchecked — "no pre-change baseline" — never silently held.
 5. **Custom (unchecked)** — always `unchecked — human judges`, listed by
    text. This honesty is the feature.
 

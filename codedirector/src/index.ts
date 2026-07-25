@@ -105,6 +105,7 @@ export {
   latestCheckpoint,
   undo,
   dirtyPaths,
+  porcelainLinePaths,
   gitStatusPorcelain,
   gitPrefix,
   toRootRelative,

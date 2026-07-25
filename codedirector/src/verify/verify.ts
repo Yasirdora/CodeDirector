@@ -31,7 +31,9 @@ import { loadLock } from "../lock/store";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
 import { Baseline, baselineFileHash, latestBaselinePath, loadBaseline } from "../run/baseline";
+import { dependencyFingerprint } from "../run/deps";
 import { runArgvProbe, runShellProbe, sha256 } from "../run/probe";
+import { runIsolated } from "../run/tree";
 import {
   countByClass,
   VerificationItem,
@@ -173,7 +175,8 @@ function verifyNoNewDependency(
       items.push({ source: "keep-clause", clauseKind: kind, subject, verdict: "violated", evidenceClass: "proven", detail: `${m} deleted`, artifactRef: artifactFor(m) });
       continue;
     }
-    const after = hashContent(fs.readFileSync(p, "utf8"));
+    const raw = fs.readFileSync(p, "utf8");
+    const after = m === "package.json" ? dependencyFingerprint(raw) : hashContent(raw);
     items.push(
       after === before
         ? { source: "keep-clause", clauseKind: kind, subject, verdict: "held", evidenceClass: "proven", detail: `${m} unchanged`, artifactRef: artifactFor(m) }
@@ -218,12 +221,16 @@ function compilerDiagnostics(stdout: string, stderr: string): string {
 
 function verifyTypecheck(rootDir: string, opts: VerifyOptions): VerificationItem[] {
   if (opts.typecheck === false) return [];
-  if (!fs.existsSync(path.join(rootDir, "tsconfig.json"))) return [];
   const subject = "typecheck · tsc --noEmit";
+  if (!fs.existsSync(path.join(rootDir, "tsconfig.json"))) {
+    return [uncheckedItem("typecheck", subject, "no tsconfig.json — typecheck rung skipped")];
+  }
   const timeout = opts.typecheckTimeoutMs ?? 120_000;
   const tsc = localTsc(rootDir);
   if (tsc) {
-    const probe = runArgvProbe(rootDir, [process.execPath, tsc, "--noEmit", "-p", "."], timeout, opts.env);
+    const probe = runIsolated(rootDir, () =>
+      runArgvProbe(rootDir, [process.execPath, tsc, "--noEmit", "-p", "."], timeout, opts.env),
+    );
     if (probe.timedOut) {
       return [uncheckedItem("typecheck", subject, `tsc --noEmit timed out after ${timeout}ms`)];
     }
@@ -244,7 +251,7 @@ function verifyTypecheck(rootDir: string, opts: VerifyOptions): VerificationItem
     }];
   }
   // No local install: probe npx without allowing downloads.
-  const probe = runShellProbe(rootDir, "npx --no-install tsc --noEmit", timeout, opts.env);
+  const probe = runIsolated(rootDir, () => runShellProbe(rootDir, "npx --no-install tsc --noEmit", timeout, opts.env));
   const out = `${probe.stdout}\n${probe.stderr}`;
   if (probe.error || probe.timedOut || /could not determine executable|npm error|not installed|not the tsc command/i.test(out)) {
     return [uncheckedItem("typecheck", subject, "typescript compiler unavailable (no node_modules/typescript; `npx --no-install tsc` found no real compiler)")];
@@ -285,10 +292,25 @@ function verifyTestsPass(rootDir: string, lock: IntentLock, opts: VerifyOptions)
     const subject = `tests-pass · ${glob}`;
     const files = expandGlob(rootDir, glob);
     if (files.length === 0) {
-      items.push(uncheckedItem("keep-clause", subject, `glob matched no test files: ${glob}`, clause.kind));
+      items.push({
+        source: "keep-clause",
+        clauseKind: clause.kind,
+        subject,
+        verdict: "violated",
+        // Nothing executed — the empty expansion is a structural fact, not a measurement.
+        evidenceClass: "proven",
+        detail: `glob matched no test files: ${glob}`,
+        artifactRef: `glob expansion → 0 file(s) matched ${JSON.stringify(glob)}`,
+      });
       continue;
     }
-    const probe = runArgvProbe(rootDir, [process.execPath, "--test", "--test-reporter=tap", ...files], timeout, opts.env);
+    const argv = [process.execPath];
+    const major = parseInt(process.versions.node, 10);
+    if (major >= 22 && files.some((f) => /\.[cm]?tsx?$/.test(f))) {
+      argv.push("--experimental-strip-types");
+    }
+    argv.push("--test", "--test-reporter=tap", ...files);
+    const probe = runIsolated(rootDir, () => runArgvProbe(rootDir, argv, timeout, opts.env));
     const artifactRef = `node --test ${glob} (${files.length} file(s)) → exit ${probe.exitCode ?? "?"}`;
     if (probe.timedOut) {
       items.push(uncheckedItem("keep-clause", subject, `test run timed out after ${timeout}ms`, clause.kind));
@@ -316,7 +338,7 @@ function verifyCommand(rootDir: string, lock: IntentLock, opts: VerifyOptions): 
   if (!lock.verifyCommand) return [];
   const subject = `verifyCommand · ${lock.verifyCommand}`;
   const timeout = opts.testTimeoutMs ?? 60_000;
-  const probe = runShellProbe(rootDir, lock.verifyCommand, timeout, opts.env);
+  const probe = runIsolated(rootDir, () => runShellProbe(rootDir, lock.verifyCommand!, timeout, opts.env));
   const artifactRef = `sh -c ${JSON.stringify(lock.verifyCommand)} → exit ${probe.exitCode ?? "?"}`;
   if (probe.timedOut) {
     return [uncheckedItem("verify-command", subject, `verifyCommand timed out after ${timeout}ms`)];
@@ -349,7 +371,7 @@ function verifyOutputUnchanged(rootDir: string, lock: IntentLock, baseline: Base
       items.push(uncheckedItem("keep-clause", subject, `baseline capture failed (${captured.error ?? "unknown"}) — nothing to diff against`, clause.kind));
       continue;
     }
-    const probe = runShellProbe(rootDir, cmd, timeout, opts.env);
+    const probe = runIsolated(rootDir, () => runShellProbe(rootDir, cmd, timeout, opts.env));
     const baseRef = `${baselineRel}#outputs[${JSON.stringify(cmd)}]`;
     if (probe.timedOut || probe.error || probe.exitCode === null) {
       items.push(uncheckedItem("keep-clause", subject, `command could not run at verify time: ${probe.timedOut ? `timed out after ${timeout}ms` : probe.error}`, clause.kind));
@@ -360,11 +382,24 @@ function verifyOutputUnchanged(rootDir: string, lock: IntentLock, baseline: Base
       items.push({ source: "keep-clause", clauseKind: clause.kind, subject, verdict: "violated", evidenceClass: "measured", detail: `output command exited ${probe.exitCode} after the change (was 0 at baseline)`, artifactRef });
       continue;
     }
-    const after = sha256(probe.stdout);
+    const afterOut = sha256(probe.stdout);
+    const afterErr = sha256(probe.stderr);
+    const stdoutOk = afterOut === captured.stdoutSha256;
+    const stderrOk = captured.stderrSha256 === undefined || afterErr === captured.stderrSha256;
     items.push(
-      after === captured.stdoutSha256
-        ? { source: "keep-clause", clauseKind: clause.kind, subject, verdict: "held", evidenceClass: "measured", detail: `output byte-identical (sha256 ${after.slice(0, 12)}…)`, artifactRef }
-        : { source: "keep-clause", clauseKind: clause.kind, subject, verdict: "violated", evidenceClass: "measured", detail: `output changed: sha256 ${captured.stdoutSha256.slice(0, 12)}… → ${after.slice(0, 12)}…`, artifactRef },
+      stdoutOk && stderrOk
+        ? { source: "keep-clause", clauseKind: clause.kind, subject, verdict: "held", evidenceClass: "measured", detail: `output byte-identical (sha256 ${afterOut.slice(0, 12)}…)`, artifactRef }
+        : {
+            source: "keep-clause",
+            clauseKind: clause.kind,
+            subject,
+            verdict: "violated",
+            evidenceClass: "measured",
+            detail: stdoutOk
+              ? `stderr changed: sha256 ${captured.stderrSha256?.slice(0, 12)}… → ${afterErr.slice(0, 12)}…`
+              : `output changed: sha256 ${captured.stdoutSha256.slice(0, 12)}… → ${afterOut.slice(0, 12)}…`,
+            artifactRef,
+          },
     );
   }
   return items;

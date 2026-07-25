@@ -31,6 +31,14 @@ export interface SymbolGraph {
 }
 
 /** Normalize a module specifier + importing file to an indexed relpath, or null. */
+/** `default:Foo` | `real as alias` | `name` → local binding and exported name. */
+function parseImportName(n: string): { local: string; exported: string } {
+  if (n.startsWith("default:")) return { local: n.slice("default:".length), exported: "default" };
+  const idx = n.indexOf(" as ");
+  if (idx !== -1) return { exported: n.slice(0, idx), local: n.slice(idx + 4) };
+  return { local: n, exported: n };
+}
+
 export function resolveModule(fromFile: string, specifier: string, index: RepoIndex): string | null {
   if (!specifier.startsWith(".")) return null; // external/bare imports are not indexed
   const fromDir = path.posix.dirname(fromFile);
@@ -119,7 +127,6 @@ export function buildGraph(index: RepoIndex): SymbolGraph {
 
     for (const call of fi.calls) {
       const candidates = byName.get(call.calleeName) ?? [];
-      if (candidates.length === 0) continue;
 
       // 1. same-file
       const sameFile = candidates.filter((id) => symbols.get(id)!.file === file);
@@ -127,17 +134,28 @@ export function buildGraph(index: RepoIndex): SymbolGraph {
         for (const id of sameFile) addEdge(call.callerId, id, "same-file");
         continue;
       }
-      // 2. via imports
+      // 2. via imports (including `import { realName as alias }`)
       let matched = false;
       for (const imp of importTargets) {
-        const importedNames = imp.names.map((n) => n.replace(/^default:/, "").replace(/.* as /, ""));
         const isWildcard = imp.names.includes("*");
-        if (!isWildcard && !importedNames.includes(call.calleeName)) continue;
-        for (const id of candidates) {
-          if (symbols.get(id)!.file === imp.targetFile && symbols.get(id)!.exported) {
-            addEdge(call.callerId, id, "import");
-            matched = true;
-          }
+        const bindings = imp.names.map(parseImportName);
+        const bind = bindings.find((b) => b.local === call.calleeName);
+        if (!isWildcard && !bind) continue;
+        const exportedName = isWildcard ? call.calleeName : bind!.exported;
+        const targetIds = (exportedName === "default" ? [...symbols.values()] : byName.get(exportedName) ?? [])
+          .map((x) => (typeof x === "string" ? x : x.id))
+          .filter((id) => {
+            const s = symbols.get(id)!;
+            return s.file === imp.targetFile && s.exported;
+          });
+        let ids = targetIds;
+        if (exportedName === "default") {
+          const named = targetIds.filter((id) => symbols.get(id)!.name === bind!.local);
+          ids = named.length > 0 ? named : targetIds.length === 1 ? targetIds : [];
+        }
+        for (const id of ids) {
+          addEdge(call.callerId, id, "import");
+          matched = true;
         }
       }
       if (matched) continue;

@@ -19,7 +19,7 @@ import { CallSite, FileIndex, ImportInfo, SymbolInfo, SymbolKind } from "./types
 type SyntaxNode = any;
 
 /** Bump whenever extraction logic changes; stale entries are reparsed. */
-export const PARSER_VERSION = 3;
+export const PARSER_VERSION = 4;
 
 export type LangKey = "typescript" | "tsx" | "javascript";
 
@@ -79,6 +79,7 @@ export class StructuralParser {
     }
 
     collectCalls(root, source, symbols, relPath, calls);
+    markReExports(root, symbols);
 
     symbols.sort((a, b) => a.id.localeCompare(b.id));
     imports.sort((a, b) => a.line - b.line || a.module.localeCompare(b.module));
@@ -210,6 +211,16 @@ const FUNCTION_INITIALIZER_TYPES = new Set([
  * at the function BODY (`=>` body / `{`).
  */
 function signatureOf(node: SyntaxNode, source: string): string {
+  // Types/interfaces/enums ARE their signature — include the whole node.
+  // Cutting at `body` made `interface I` identical for any members.
+  if (
+    node.type === "interface_declaration" ||
+    node.type === "type_alias_declaration" ||
+    node.type === "enum_declaration"
+  ) {
+    return collapseWs(source.slice(node.startIndex, node.endIndex));
+  }
+
   let end = node.endIndex;
   const value = node.childForFieldName("value");
   if (value && FUNCTION_INITIALIZER_TYPES.has(value.type)) {
@@ -228,8 +239,27 @@ function signatureOf(node: SyntaxNode, source: string): string {
   let sig = collapseWs(source.slice(node.startIndex, end));
   if (sig.endsWith("=>")) sig = sig.slice(0, -2).trim();
   if (sig.endsWith("=")) sig = sig.slice(0, -1).trim();
-  if (sig.length > 200) sig = sig.slice(0, 197) + "...";
   return sig;
+}
+
+/** `export { foo }` / `export { foo as bar }` marks the local symbol exported. */
+function markReExports(root: SyntaxNode, symbols: SymbolInfo[]): void {
+  for (const child of root.namedChildren) {
+    if (child.type !== "export_statement") continue;
+    if (child.childForFieldName("declaration")) continue;
+    const visit = (n: SyntaxNode) => {
+      if (n.type === "export_specifier") {
+        const name = n.childForFieldName("name");
+        if (name) {
+          for (const s of symbols) {
+            if (s.name === name.text) s.exported = true;
+          }
+        }
+      }
+      for (const c of n.namedChildren) visit(c);
+    };
+    visit(child);
+  }
 }
 
 function makeSymbol(

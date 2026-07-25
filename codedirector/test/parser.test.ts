@@ -171,3 +171,36 @@ test("plain const: changing only the VALUE keeps the signature stable", async ()
     p.parseFile("src/fn.ts", src, hashContent(src)).symbols.find((s) => s.name === "f")!.signature;
   assert.equal(bodyOf(`export const f = (x) => x + 1;\n`), bodyOf(`export const f = (x) => x + 2;\n`));
 });
+
+test("interface/type/enum signatures include members (api-unchanged must see them)", async () => {
+  const p = await makeParser();
+  const sig = (src: string, name: string) =>
+    p.parseFile("x.ts", src, hashContent(src)).symbols.find((s) => s.name === name)!.signature;
+  assert.notEqual(
+    sig("export interface I { a: string }\n", "I"),
+    sig("export interface I { a: string; b: number }\n", "I"),
+  );
+  assert.notEqual(
+    sig("export type H = (a: string) => void;\n", "H"),
+    sig("export type H = (a: string, b: number) => void;\n", "H"),
+  );
+  assert.notEqual(sig("export enum E { A = 1 }\n", "E"), sig("export enum E { A = 1, B = 2 }\n", "E"));
+});
+
+test("long function signatures are not truncated for hashing", async () => {
+  const p = await makeParser();
+  const params = Array.from({ length: 40 }, (_, i) => `p${i}: number`).join(", ");
+  const a = p.parseFile("x.ts", `export function f(${params}): void {}\n`, "a").symbols[0].signature;
+  const b = p.parseFile("x.ts", `export function f(${params}, extra: boolean): void {}\n`, "b").symbols[0]
+    .signature;
+  assert.ok(a.length > 200, `full signature kept (${a.length} chars)`);
+  assert.notEqual(a, b, "parameter past 200 chars still changes the signature");
+});
+
+test("export { name } marks the local symbol exported", async () => {
+  const p = await makeParser();
+  const fi = p.parseFile("x.ts", "function inner() {}\nexport { inner };\n", "h");
+  const inner = fi.symbols.find((s) => s.name === "inner");
+  assert.ok(inner);
+  assert.equal(inner!.exported, true);
+});

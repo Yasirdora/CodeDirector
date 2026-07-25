@@ -100,14 +100,13 @@ test("verify: tests-pass is measured — pass and fail", async () => {
   assert.ok(failItem.detail.includes("add works"), `failing test named: ${failItem.detail}`);
 });
 
-test("verify: tests-pass with an empty glob is unchecked, reason named", async () => {
+test("verify: tests-pass with an empty glob is a violation, not a silent pass", async () => {
   const { root, lock } = await setup([{ kind: "tests-pass", glob: "test/**/*.spec.js" }]);
   const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
-  assert.equal(outcome.exitCode, 0, "unchecked is not a violation");
+  assert.equal(outcome.exitCode, 1, "empty tests-pass glob fails closed");
   const item = find(outcome.record.verification!.items, "tests-pass")[0];
-  assert.equal(item.verdict, "unchecked");
-  assert.equal(item.evidenceClass, "unchecked");
-  assert.ok(item.reason?.includes("matched no test files"), `reason: ${item.reason}`);
+  assert.equal(item.verdict, "violated");
+  assert.ok(item.detail.includes("matched no test files"), `detail: ${item.detail}`);
 });
 
 test("verify: output-unchanged round-trips and detects change", async () => {
@@ -238,10 +237,13 @@ test("verify: typecheck proven-clean with a local compiler, unchecked without on
   assert.ok(tc3!.reason!.length > 0, "unavailability reason named");
 });
 
-test("verify: no tsconfig means no typecheck item at all", async () => {
+test("verify: no tsconfig surfaces typecheck as Unchecked, not omitted", async () => {
   const { root, lock } = await setup([]);
   const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
-  assert.ok(!outcome.record.verification!.items.some((i) => i.source === "typecheck"));
+  const tc = outcome.record.verification!.items.find((i) => i.source === "typecheck");
+  assert.ok(tc, "typecheck item present");
+  assert.equal(tc!.verdict, "unchecked");
+  assert.ok(tc!.reason?.includes("no tsconfig.json"));
 });
 
 test("verify: standalone verifyLock uses the latest baseline", async () => {

@@ -17,6 +17,8 @@ import { workTreeStatusPorcelain } from "../checkpoint";
 import { IntentLock, DEPENDENCY_MANIFESTS } from "../lock/types";
 import { signatureHash } from "../lock/check";
 import { runShellProbe, sha256 } from "./probe";
+import { currentHead, listHidden, runIsolated, snapshotWorkTree } from "./tree";
+import { dependencyFingerprint } from "./deps";
 
 /**
  * Pre-change state of one output-unchanged KEEP clause: the clause's command
@@ -29,8 +31,16 @@ export interface BaselineOutput {
   exitCode: number | null;
   /** sha256 of stdout at baseline time; absent when the command failed. */
   stdoutSha256?: string;
+  /** sha256 of stderr at baseline time. */
+  stderrSha256?: string;
   /** Why no hash was captured (timeout, spawn error, non-zero exit). */
   error?: string;
+}
+
+export interface HiddenHash {
+  path: string;
+  flag: "S" | "h";
+  hash: string;
 }
 
 export interface Baseline {
@@ -38,15 +48,21 @@ export interface Baseline {
   capturedAt: string;
   /** Checkpoint tag taken just before this baseline, when run via `cdir run`. */
   checkpointTag?: string;
+  /** HEAD sha at capture — classification diffs against this, not "current HEAD". */
+  head?: string;
   /** api-unchanged KEEP surface: symbol id -> sha256 of its signature. */
   signatures: Record<string, string>;
-  /** no-new-dependency surface: manifest relpath -> sha256 of contents. */
+  /** no-new-dependency surface: manifest relpath -> fingerprint. */
   manifests: Record<string, string>;
-  /** output-unchanged KEEP surface: command -> captured stdout hash. */
+  /** output-unchanged KEEP surface: command -> captured stdout/stderr hashes. */
   outputs?: Record<string, BaselineOutput>;
   /** Raw `git status --porcelain` at capture time and its sha256. */
   gitStatus: string;
   gitStatusHash: string;
+  /** git-root-relative path -> content sha256 of dirty / untracked / hidden files. */
+  workTreeHashes?: Record<string, string>;
+  /** skip-worktree / assume-unchanged files at capture. */
+  hidden?: HiddenHash[];
 }
 
 export interface BaselineOptions {
@@ -80,20 +96,23 @@ export function captureBaseline(
   if (wantsManifestDiff) {
     for (const m of DEPENDENCY_MANIFESTS) {
       const p = path.join(rootDir, m);
-      if (fs.existsSync(p)) manifests[m] = hashContent(fs.readFileSync(p, "utf8"));
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, "utf8");
+        manifests[m] = m === "package.json" ? dependencyFingerprint(raw) : hashContent(raw);
+      }
     }
   }
 
   // output-unchanged: run each clause's command NOW (pre-change) and pin its
-  // stdout hash — the pre-state is gone by verify time, so it must be
-  // captured here, outside the source tree.
+  // stdout+stderr hashes. The probe is isolated — mutations it makes are
+  // restored so the command under test sees the real pre-change tree.
   const outputTimeout = opts.outputTimeoutMs ?? 30_000;
   const outputs: Record<string, BaselineOutput> = {};
   let capturedAnyOutput = false;
   for (const clause of lock.keep) {
     if (clause.kind !== "output-unchanged" || !clause.command) continue;
     capturedAnyOutput = true;
-    const probe = runShellProbe(rootDir, clause.command, outputTimeout);
+    const probe = runIsolated(rootDir, () => runShellProbe(rootDir, clause.command!, outputTimeout));
     if (probe.error || probe.timedOut) {
       outputs[clause.command] = {
         command: clause.command,
@@ -111,20 +130,25 @@ export function captureBaseline(
         command: clause.command,
         exitCode: probe.exitCode,
         stdoutSha256: sha256(probe.stdout),
+        stderrSha256: sha256(probe.stderr),
       };
     }
   }
 
   const status = workTreeStatusPorcelain(rootDir);
+  const snap = snapshotWorkTree(rootDir);
   return {
     lockId: lock.id,
     capturedAt: new Date().toISOString(),
     checkpointTag,
+    head: currentHead(rootDir) ?? undefined,
     signatures,
     manifests,
     ...(capturedAnyOutput ? { outputs } : {}),
     gitStatus: status,
     gitStatusHash: hashContent(status),
+    workTreeHashes: snap.hashes,
+    hidden: listHidden(rootDir),
   };
 }
 
