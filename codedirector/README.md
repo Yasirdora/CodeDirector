@@ -307,6 +307,18 @@ Per the blueprint's phasing, honestly:
 - **Heuristic parsing.** Call edges are name-resolved, not type-resolved;
   compiler-grade precision (LSP) is a later phase.
 
+### Where we deliberately stop
+
+`cdir` is a contract checker, not a sandbox. Known evasion paths are
+instrumented and reported, and every success claim carries its evidence
+class — but we do not claim "the agent couldn't have cheated," only "if it
+had, you would see it." Kernel-level isolation, a read-only verifier process,
+and merge-only-in-budget worktrees are real options, and we have chosen not
+to build them yet. The next layer gets picked by evidence, not by anxiety:
+we consolidate what exists, let users hit the referee in daily work, and let
+their complaints — not our imagination — decide what hardens next. The name
+"lock" belongs to the YAML contract; it is not a security claim.
+
 ## Architecture
 
 ```
