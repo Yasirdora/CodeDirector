@@ -1,4 +1,4 @@
-# Repo Analysis: `the seed repository` — Research Notes for "Code Director"
+# Repo Analysis: the seed repository — Research Notes for "Code Director"
 
 **Repo:** https://github.com/the seed repository (branch `main`)
 **Status:** Accessible and substantive. Analyzed 2026-09-11 via the GitHub repo page, raw files, and the GitHub git-tree API.
@@ -8,7 +8,7 @@
 
 ## What the repository actually is
 
-The entire behavioral payload is one Markdown file, `skills/seed-repo/SKILL.md` (7,207 bytes), containing 10 output-formatting rules plus escape hatches. Everything else is distribution plumbing: plugin manifests for Claude Code, Codex, Cursor, OpenCode, Pi, OMP, Qwen, Gemini, Zed, Copilot, Hermes, Antigravity, AstronClaw; SessionStart hooks in `.mjs`/`.sh`/`.ps1`; a TypeScript extension for Pi/OMP; 6 localized READMEs and 5 localized INSTALL docs; CI workflows; and a Python eval harness (`scripts/run_evals.py`, `scripts/judge.py`) with 14 test cases and published results.
+The entire behavioral payload is one Markdown file — the skill's `SKILL.md` (7,207 bytes) — containing 10 output-formatting rules plus escape hatches. Everything else is distribution plumbing: plugin manifests for Claude Code, Codex, Cursor, OpenCode, Pi, OMP, Qwen, Gemini, Zed, Copilot, Hermes, Antigravity, AstronClaw; SessionStart hooks in `.mjs`/`.sh`/`.ps1`; a TypeScript extension for Pi/OMP; 6 localized READMEs and 5 localized INSTALL docs; CI workflows; and a Python eval harness (`scripts/run_evals.py`, `scripts/judge.py`) with 14 test cases and published results.
 
 The README's own one-liner is accurate: *"A skill for your coding assistant that stops it from burying the answer. Action first. Steps numbered. No 'Hope this helps!'"* ([README.md](https://raw.githubusercontent.com/the seed repository/main/README.md))
 
@@ -18,7 +18,7 @@ The README's own one-liner is accurate: *"A skill for your coding assistant that
 
 ### 1. What problem is it solving?
 
-LLM coding assistants produce responses padded with preamble ("Great question!"), tangents ("By the way, your dependency is also stale"), vague sequencing, and closers ("Hope this helps!"). For a reader with attention-load-style attention constraints — but the repo explicitly says *"attention-load-friendly outputs. No attention-load diagnosis needed!"* — this friction "is where work dies." The SKILL.md frames five cognitive facts as the design basis, e.g. *"Working memory is small. Anything not on screen is forgotten"* and *"Starting is the hardest step. The first action must be obvious, small, and doable now."* (SKILL.md)
+LLM coding assistants produce responses padded with preamble ("Great question!"), tangents ("By the way, your dependency is also stale"), vague sequencing, and closers ("Hope this helps!"). For a reader whose attention is under load — and the repo's own tagline disclaims any diagnosis — this friction "is where work dies." The SKILL.md frames five cognitive facts as the design basis, e.g. *"Working memory is small. Anything not on screen is forgotten"* and *"Starting is the hardest step. The first action must be obvious, small, and doable now."* (SKILL.md)
 
 It is purely an **output-shaping** problem. Nothing in the repo touches the input side: understanding what the user wants, detecting ambiguity in the request before acting, or managing scope.
 
@@ -26,7 +26,7 @@ It is purely an **output-shaping** problem. Nothing in the repo touches the inpu
 
 - **The user can execute.** Rules assume a technically capable reader who can "Run `npm install jsonwebtoken@latest`, then edit `src/auth.ts:42`" — the opposite of Code Director's assumed non-technical user.
 - **The intent is already clear.** Ambiguity is handled in exactly one escape hatch (*"Real ambiguity in the request. One short clarifying question beats guessing and rewriting"*), and it is the thinnest part of the ruleset. There is no model of *what* is ambiguous or *how much* ambiguity justifies blocking.
-- **Session-scoped, single-agent context.** State is "a flag file and an injected ruleset," e.g. `touch ~/.claude/.seed-repo-always` toggles always-on mode. No persistence model beyond a session, no memory of prior tasks.
+- **Session-scoped, single-agent context.** State is "a flag file and an injected ruleset": a dotfile flag under `~/.claude/` toggles always-on mode. No persistence model beyond a session, no memory of prior tasks.
 - **Prose is the bottleneck.** The whole theory of change is that reformatting text output fixes the interaction. The repo never questions whether the underlying task decomposition was correct.
 - **Prompt injection is sufficient.** It assumes the model will follow the style rules if injected; there is no enforcement mechanism beyond evals run at development time.
 - **The operator's harness is benign.** Eval docs acknowledge leakage risk: *"without it, user-level plugins, hooks, memory, and output styles leak into every condition"* ([evals/README.md](https://raw.githubusercontent.com/the seed repository/main/evals/README.md)) — i.e., they know prompt-level styling is fragile and environment-dependent.
@@ -69,15 +69,15 @@ And a **pre-send check** — a self-review rubric: *"if the reader reads only th
 
 ### 6. What should Code Director explicitly avoid?
 
-- **The attention-load diagnosis framing as product identity** (see Q7) — for a commercial product it invites trivialization-of-disability criticism and narrows the perceived market.
-- **One-shot prompt injection as the mechanism.** SKILL.md admits fragility indirectly — the Pi extension must *re-inject rules after compaction drops them* and track whether the ruleset is "still live in the context the model actually receives" (extensions/seed-repo.ts). Prompt-only behavior control is leaky; Code Director's scope control and ambiguity gates need structural enforcement (state machines, tool gating), not just instructions.
+- **The diagnostic framing as product identity** (see Q7) — for a commercial product it invites trivialization-of-disability criticism and narrows the perceived market.
+- **One-shot prompt injection as the mechanism.** SKILL.md admits fragility indirectly — the Pi extension must *re-inject rules after compaction drops them* and track whether the ruleset is "still live in the context the model actually receives" (the Pi extension source). Prompt-only behavior control is leaky; Code Director's scope control and ambiguity gates need structural enforcement (state machines, tool gating), not just instructions.
 - **Rule 8's failure mode.** The repo's own evals found rule 8 *"pressures the model to name a cause even when the evidence does not identify one"* — the grader flagged a response that *"asserts 'missing auth header' as the definitive cause and prescribes a specific fix without any evidence"* ([evals/RESULTS.md](https://raw.githubusercontent.com/the seed repository/main/evals/RESULTS.md)). Any style rule that mandates a confident structure can manufacture false confidence. Code Director must never let format requirements override calibrated uncertainty.
 - **Absolute release gates.** Their gate rule "It has no blocking findings" means *"no candidate can ever pass while any blocker survives anywhere in the case set, however much it improves"* — a known-degenerate gate they shipped anyway.
-- **Session-scope thinking.** Code Director needs cross-session scope/intent memory; flag files and "stays on until 'stop attention-load mode'" don't scale.
+- **Session-scope thinking.** Code Director needs cross-session scope/intent memory; flag files and "stays on until a stop phrase" don't scale.
 
-### 7. Is the attention-load framing actually necessary?
+### 7. Is the diagnostic framing actually necessary?
 
-No — and the repo half-admits it. The tagline *"No attention-load diagnosis needed!"* and the credit line *"Adapted for how an LLM should respond, not how a human should organize their day"* ([README.md](https://raw.githubusercontent.com/the seed repository/main/README.md)) reveal the framing is a marketing hook and an organizing metaphor, not a functional requirement. Every rule would be equally valid for: busy executives, non-native speakers, mobile users, non-technical stakeholders, anyone in a hurry. The five "attention-load facts" (small working memory, initiation friction, time-estimate flattening, dopamine scarcity) are just... human cognition under load. The framing does real work in one place: it gives the ruleset a memorable identity and a defensible *reason* for ruthlessness ("this isn't rudeness, it's accessibility"). But it also caps the ceiling — nobody builds an enterprise product on a meme-named repo called `seed-repo`. For Code Director, the correct generalization is **cognitive-load-aware interaction design**, not a disability persona.
+No — and the repo half-admits it. The tagline disclaims the diagnosis outright, and the credit line *"Adapted for how an LLM should respond, not how a human should organize their day"* ([README.md](https://raw.githubusercontent.com/the seed repository/main/README.md)) reveal the framing is a marketing hook and an organizing metaphor, not a functional requirement. Every rule would be equally valid for: busy executives, non-native speakers, mobile users, non-technical stakeholders, anyone in a hurry. The five stated cognitive facts (small working memory, initiation friction, time-estimate flattening, reward scarcity) are just... human cognition under load. The framing does real work in one place: it gives the ruleset a memorable identity and a defensible *reason* for ruthlessness ("this isn't rudeness, it's accessibility"). But it also caps the ceiling — nobody builds an enterprise product on a meme-named prompt pack. For Code Director, the correct generalization is **cognitive-load-aware interaction design**, not a diagnostic persona.
 
 ### 8. Is there a much larger market/problem hiding underneath it?
 
@@ -88,9 +88,9 @@ Yes, two of them:
 
 ### 9. What technical approaches does the repository use?
 
-- **Prompt engineering as the sole behavioral mechanism**: a YAML-frontmatter `SKILL.md` in the emerging cross-vendor "Agent Skills" format, with `disable-model-invocation: true` so it's opt-in via `/seed-repo`.
+- **Prompt engineering as the sole behavioral mechanism**: a YAML-frontmatter `SKILL.md` in the emerging cross-vendor "Agent Skills" format, with `disable-model-invocation: true` so it's opt-in via a slash command.
 - **Hook-based injection**: a `SessionStart` hook ([hooks/always-on.mjs](https://raw.githubusercontent.com/the seed repository/main/hooks/always-on.mjs)) that checks for a flag file, strips frontmatter, and writes the ruleset to stdout for injection — with defensive design (*"Never block session start: any failure exits 0"*).
-- **Session-state machines in the Pi extension**: custom context message types (`seed-repo-rules`, `seed-repo-disabled`), persistence via `sessionManager` entries, re-injection after compaction, stop-phrase interception, and a UI status indicator (`● attention-load ON`).
+- **Session-state machines in the Pi extension**: custom context message types for ruleset state, persistence via `sessionManager` entries, re-injection after compaction, stop-phrase interception, and an on/off UI status indicator.
 - **A genuinely serious LLM-eval harness**: 14 hand-labeled cases ([evals/cases.jsonl](https://raw.githubusercontent.com/the seed repository/main/evals/cases.jsonl)) spanning safety, ambiguity, progress reporting, casual messages; runner isolation (`--setting-sources ""` so operator config doesn't contaminate baselines); pinned models; per-condition dollar budgets; resumable runs keyed by `(case, trial, condition, runner)`; **structural blinding** — *"each condition is relabelled A/B/C before the prompt is built, and the label order is permuted per group"* with deterministic permutation *"from a digest of the group key rather than a random source"*; rubric markers (`<!-- judge:begin -->`) so condition-identifying release-gate text never reaches the grader; a 5-dimension weighted rubric (Correctness 35%, Autonomy 25%, Actionability 20%, Safety 10%, Concision 10%); and published results including a **FAILED release gate** ([evals/RESULTS.md](https://raw.githubusercontent.com/the seed repository/main/evals/RESULTS.md)).
 - **Multi-runtime packaging**: ~14 plugin manifests/adapters, sync CI (`cursor-skill-sync.yml`), unit tests for hooks, install docs, and eval scripts (`python3 -m unittest discover -s tests -v`).
 
@@ -142,7 +142,7 @@ Nearly everything except the interaction principles:
 | Pre-send first-line/last-line check | Borrow as output contract |
 | Eval harness philosophy (blind, weighted, isolated, honest) | Borrow philosophy; rebuild cases for intent translation |
 | Prompt-injection-only mechanism | Avoid; use structural enforcement |
-| attention-load framing as identity | Avoid; generalize to cognitive-load design |
+| Diagnostic framing as identity | Avoid; generalize to cognitive-load design |
 | Rule 8 confident cause-naming | Avoid; confidence must be explicit, not formatted |
 | Session-scope, flag-file state | Rebuild; durable cross-session intent/scope state |
 | Ambiguity handling | Rebuild from scratch; it's a footnote here and the core of Code Director |

@@ -4,7 +4,7 @@ Code Director
 A system for translating human software intent into safe, verifiable technical execution — and an honest assessment of how much of that is already built by someone else.
 
 Prepared 11 Sep 2026
-Seed material the seed repository @ 6f1f982
+Seed material: a cognitive-load-oriented prompt pack @ commit 6f1f982
 Method repo teardown + landscape scan + HCI literature
 Verdict narrow but real — see §49
 I · Findings
@@ -17,7 +17,7 @@ Why current tools struggle
 04
 Research findings
 05
-Repo analysis: seed-repo
+Repo analysis: the seed repository
 06
 Competitive landscape
 07
@@ -217,7 +217,7 @@ Canonical artifact
 One 7.2KB SKILL.md
 Everything else
 Distribution, evals, i18n
-First correction to the brief's framing: this is not an attention-load app, and it is not small. It is a prompt contract, a multi-harness distribution system, and a genuinely rigorous evaluation harness, in that order of line count and reverse order of originality. The attention-load framing is packaging on a general thesis — that assistant output should be shaped for action rather than for the appearance of helpfulness — and the README already concedes this: "No attention-load diagnosis needed!"
+First correction to the brief's framing: this is not a diagnostic app, and it is not small. It is a prompt contract, a multi-harness distribution system, and a genuinely rigorous evaluation harness, in that order of line count and reverse order of originality. The diagnostic framing is packaging on a general thesis — that assistant output should be shaped for action rather than for the appearance of helpfulness — and the README already concedes this with a tagline that disclaims the diagnosis outright.
 
 What problem is it actually solving?
 Not cognition. Output discipline. It targets the last mile of the text channel: preamble, tangents, buried actions, false closers, lost state between turns. 39.6k stars is meaningful evidence that this failure is widespread and felt — but it is evidence about annoyance, not about correctness or trust.
@@ -272,7 +272,7 @@ SWE-agent	Research scaffold; thesis is the ACI	Custom navigation/search commands
 Devin	Autonomous teammate; async, ticket-shaped	Proprietary	Ticket	Self-reported; the trust problem in pure form
 GitHub Spec Kit	constitution → specify → plan → tasks → implement; strict left-to-right dependency	Delegated to host agent	Best in class — artifacts on disk	Delegated. No gate.
 AWS Kiro	Spec-first IDE: requirements/design/tasks; steering files	IDE index	EARS ("WHEN … THE SYSTEM SHALL …") + SMT-based contradiction detection	Acceptance criteria are testable but unenforced
-seed-repo	Response-shape contract over any harness	None	None	None
+the seed repo	Response-shape contract over any harness	None	None	None
 What this table says
 Context retrieval is commoditized. Two mature public designs (Aider's PageRank repo map; Cursor's merkle+embeddings) and everyone else has something adequate. Not a differentiator. Do not spend the company here.
 Plan-before-act is commoditized. Cline, Claude Code, Spec Kit, Kiro. Model C in the brief's §26 is already the industry standard.
@@ -293,7 +293,7 @@ tree-sitter + ast-grep	Incremental parsing; structural search/replace with patte
 approvaltests / jest snapshots / insta (Rust)	Characterization testing — pinning current behavior without specifying it	The entire KEEP baseline mechanism
 Cyan4973/xxHash, merkle libs	Fast content addressing for incremental index invalidation	Index freshness without full re-scan
 anthropics/claude-code hooks	PreToolUse interception — the documented community pattern for blocking edits outside a planned file list	Proof the enforcement primitive exists; productize it
-the seed repository	Eval harness with structural blinding and a published failing gate; multi-harness adapters; context markers	Eval discipline; adapter shape
+the seed repo	Eval harness with structural blinding and a published failing gate; multi-harness adapters; context markers	Eval discipline; adapter shape
 08
 Academic & HCI research
 Interaction theory
@@ -786,7 +786,7 @@ OpenHands Agent SDK or Claude Agent SDK — execution substrate
 MCP SDK — expose verification to other agents (§35)
 39
 GitHub projects to study
-See §7 for the annotated list. In priority order for a building team: aider (repo map — read repomap.py line by line), OpenHands (runtime and SDK — decide build-vs-adopt in week one), cline (mode boundaries as permission sets), spec-kit (artifact pipeline, and to understand exactly how much of the intent-capture surface is already taken), SWE-agent (ACI design discipline), and seed-repo (eval harness and adapter shape).
+See §7 for the annotated list. In priority order for a building team: aider (repo map — read repomap.py line by line), OpenHands (runtime and SDK — decide build-vs-adopt in week one), cline (mode boundaries as permission sets), spec-kit (artifact pipeline, and to understand exactly how much of the intent-capture surface is already taken), SWE-agent (ACI design discipline), and the seed repo (eval harness and adapter shape).
 
 40
 MVP definition
@@ -942,7 +942,7 @@ Whether that is a company depends almost entirely on whether characterization ba
 
 —
 Sources
-Seed repository — the seed repository, cloned and inspected at commit 6f1f982; tests and eval validation run locally.
+Seed repository — a cognitive-load-oriented prompt pack, cloned and inspected at commit 6f1f982; tests and eval validation run locally.
 Verification load — When Help Hurts: Verification Load and Fatigue with AI Coding Assistants (CHI 2026) · Sonar verification gap · METR productivity experiment · Stack Overflow trust gap · Faros review-burden data
 Evaluation validity — Building to the Test · Coding Benchmarks Are Misaligned with Agentic Software Engineering · Inside the Scaffold · AI coding benchmarks explained
 Ambiguity & intent — ClarifyGPT · ClarifyCodeBench · AssumptionMiner · Requirement ambiguity in function-level code generation
