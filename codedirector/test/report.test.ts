@@ -14,7 +14,7 @@ import { loadLock, saveLock } from "../src/lock/store";
 import { IntentLock, KeepClause } from "../src/lock/types";
 import { runWithLock } from "../src/run/run";
 import { buildReport, finalizeLockStatus } from "../src/report/report";
-import { formatReport, formatReportJson, formatReportMarkdown } from "../src/report/format";
+import { formatReport, formatReportJson, formatReportMarkdown, summarizeReport } from "../src/report/format";
 import { enforceArtifactRule, VerificationItem } from "../src/verify/types";
 import { stableStringify } from "../src/core/store";
 import { makeGitRepo } from "./helpers";
@@ -205,4 +205,80 @@ test("report: verifyCommand round-trips through the lock YAML", async () => {
   });
   const loaded = loadLock(root, lock.id)!;
   assert.equal(loaded.verifyCommand, "npm test");
+});
+
+test("report summary: verified run leads with Done, counts match the detail", async () => {
+  const { root, lock } = await setup([
+    { kind: "api-unchanged", symbols: ["src/math.js#add"] },
+    { kind: "tests-pass", glob: "test/*.test.js" },
+    { kind: "custom", text: "code stays readable" },
+  ]);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// faster\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0);
+  const report = await buildReport(root, lock.id, {
+    verification: outcome.record.verification,
+    run: outcome.record,
+    runRecordPath: outcome.recordPath,
+  });
+
+  const summary = summarizeReport(report);
+  assert.ok(summary.startsWith("Done — verified."), `lead: ${summary}`);
+  assert.ok(summary.includes("Only src/math.js changed, within the agreed scope."), summary);
+  const held = report.items.filter((i) => i.verdict === "held").length;
+  assert.ok(summary.includes(`${held} ${held === 1 ? "promise" : "promises"} held (checked).`), `summary names ${held} held: ${summary}`);
+  const unc = report.items.filter((i) => i.verdict === "unchecked").length;
+  assert.ok(summary.includes(`${unc === 1 ? "1 thing needs" : `${unc} things need`} your judgment`), `summary names ${unc} unchecked: ${summary}`);
+  // summary is the first block of the terminal report
+  assert.ok(formatReport(report).startsWith(summary), "summary leads the report");
+  // and the markdown report
+  assert.ok(formatReportMarkdown(report).includes(`**${summary}**`), "summary in markdown");
+});
+
+test("report summary: scope violation leads with Blocked + the undo action, never claims verified", async () => {
+  const { root, lock } = await setup([{ kind: "tests-pass", glob: "test/*.test.js" }]);
+  const cmd = append("src/math.js", "// ok\n") + ";" + append("src/evil.js", "// outside\n");
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", cmd], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 1);
+  const report = await buildReport(root, lock.id, {
+    verification: outcome.record.verification,
+    run: outcome.record,
+    runRecordPath: outcome.recordPath,
+  });
+
+  assert.equal(report.verdict, "failed");
+  const summary = summarizeReport(report);
+  assert.ok(summary.startsWith("Blocked: src/evil.js was outside the agreed scope."), `lead: ${summary}`);
+  assert.ok(summary.includes("Nothing was reverted — run `cdir undo` to restore."), summary);
+  assert.ok(!summary.includes("verified"), "never claims verified on a failed run");
+  const unc = report.items.filter((i) => i.verdict === "unchecked").length;
+  if (unc > 0) assert.ok(summary.includes("your judgment"), "unchecked items still named");
+});
+
+test("report summary: deny lead, broken KEEP lead, and command-failure lead", async () => {
+  // denied file
+  const d = await setup([], (l) => { l.deny = ["src/untested.js"]; });
+  const dOut = await runWithLock(d.root, d.lock.id, [NODE, "-e", append("src/untested.js", "// pwn\n")], { stdio: "pipe" });
+  const dReport = await buildReport(d.root, d.lock.id, { verification: dOut.record.verification, run: dOut.record, runRecordPath: dOut.recordPath });
+  const dSum = summarizeReport(dReport);
+  assert.ok(dSum.startsWith("Blocked: src/untested.js is off-limits"), dSum);
+  assert.ok(!dSum.includes("verified"));
+
+  // broken KEEP clause, no scope violation
+  const k = await setup([{ kind: "api-unchanged", symbols: ["src/math.js#add"] }]);
+  const breakSig = 'const fs=require("fs");fs.writeFileSync("src/math.js",fs.readFileSync("src/math.js","utf8").replace("add(a, b)","add(a, b, c)"))';
+  const kOut = await runWithLock(k.root, k.lock.id, [NODE, "-e", breakSig], { stdio: "pipe" });
+  const kReport = await buildReport(k.root, k.lock.id, { verification: kOut.record.verification, run: kOut.record, runRecordPath: kOut.recordPath });
+  const kSum = summarizeReport(kReport);
+  assert.ok(kSum.startsWith("Blocked: api-unchanged"), kSum);
+  assert.ok(kSum.includes("cdir undo"), kSum);
+  assert.ok(!kSum.includes("verified"));
+
+  // command exits non-zero, no violations
+  const c = await setup([]);
+  const cOut = await runWithLock(c.root, c.lock.id, [NODE, "-e", "process.exit(3)"], { stdio: "pipe" });
+  assert.equal(cOut.exitCode, 1);
+  const cReport = await buildReport(c.root, c.lock.id, { verification: cOut.record.verification, run: cOut.record, runRecordPath: cOut.recordPath });
+  const cSum = summarizeReport(cReport);
+  assert.ok(cSum.startsWith("The command itself failed."), cSum);
+  assert.ok(!cSum.includes("verified"));
 });

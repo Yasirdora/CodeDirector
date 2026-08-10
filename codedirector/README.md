@@ -2,6 +2,24 @@
 
 **The contract/verification layer around coding agents.**
 
+## What is this?
+
+Code Director records what you asked for, runs the change inside that
+agreement, and then tells you what it checked — and what it could not.
+You write down the goal, the files in scope, and the promises that must
+hold ("these APIs don't change", "these tests still pass"); that record
+is called a Lock. When the work runs, `cdir` watches every file it
+touches, flags anything outside the agreed scope, and verifies each
+promise it can. The result is a Change Report that opens with a plain
+summary and lists the evidence underneath — including an honest list of
+what no machine check could confirm. The minimal flow is three commands:
+`cdir lock new "<what you want>"`, then `cdir run IL-0001 -- <command>`,
+then `cdir report IL-0001`. It is for anyone who lets an agent (or a
+teammate, or themselves on a tired Tuesday) edit a repository and wants
+the scope kept and the claims proven, not narrated.
+
+## The principle
+
 Code Director is built on one principle: **the human states what must be
 true; the system finds out whether it is.** It does not trust an agent's
 prose. It builds a structural model of the repository, computes what a
@@ -220,7 +238,13 @@ still run. Updates the lock status; exit 0 only when verified.
 
 ### `cdir report <lock-id> [--format=terminal|md|json]`
 
-Renders the **Change Report** — the product's signature artifact:
+Renders the **Change Report** — the product's signature artifact. It opens
+with a plain-language summary generated from the same data as the detail
+("Done — verified. Only src/preview.ts changed, within the agreed scope. 2
+promises held (checked). 1 thing needs your judgment…" — or, on failure,
+"Blocked: src/export.ts was outside the agreed scope. Nothing was reverted —
+run `cdir undo` to restore."). The summary never says "verified" when
+violations exist; the detail follows underneath:
 
 - lock id + the original utterance, verbatim and immutable;
 - changed files with classification (in-budget / out-of-budget / denied) and

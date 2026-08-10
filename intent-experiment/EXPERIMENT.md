@@ -1,5 +1,11 @@
 # EXPERIMENT.md — Can an intent layer turn messy human requests into better coding-agent actions?
 
+*In plain terms: we gave the same nine messy requests to the same coding agent
+twice — once raw, once after an intent layer clarified what was wanted — and
+measured the difference. Clarifying first eliminated every misunderstanding we
+observed, but cost noticeably more tokens and a few unnecessary questions. The
+details, and why this is a signal rather than proof, follow.*
+
 **One research question:** can we consistently take messy human requests and turn them into
 better coding-agent actions — with fewer misunderstandings, fewer unnecessary questions, fewer
 tokens, and fewer unintended changes?

@@ -18,10 +18,95 @@ function orderedChecked(items: VerificationItem[]): VerificationItem[] {
 }
 
 // ---------------------------------------------------------------------
+// Plain-language summary
+
+function plural(n: number, one: string, many?: string): string {
+  return n === 1 ? `${n} ${one}` : `${n} ${many ?? one + "s"}`;
+}
+
+/**
+ * One-glance summary, generated from the same data the detail below renders
+ * (blueprint's depth principle applied to the product itself). Register:
+ * competent colleague. Hard rule: the word "verified" appears only when the
+ * report's verdict is verified — which requires zero violations and a
+ * successful command.
+ */
+export function summarizeReport(report: ChangeReport): string {
+  const sentences: string[] = [];
+  const held = report.items.filter((i) => i.verdict === "held");
+  const violatedItems = report.items.filter((i) => i.verdict === "violated");
+  const unchecked = report.items.filter((i) => i.verdict === "unchecked");
+  const outOfScope = report.changed.filter((c) => c.class !== "in-budget");
+  const undoHint = "Nothing was reverted — run `cdir undo` to restore.";
+
+  // 1. Outcome first.
+  if (report.verdict === "verified") {
+    sentences.push("Done — verified.");
+  } else if (outOfScope.length > 0) {
+    const first = outOfScope[0];
+    const what =
+      first.class === "denied"
+        ? `${first.path} is off-limits`
+        : `${first.path} was outside the agreed scope`;
+    const more = outOfScope.length > 1 ? ` (${outOfScope.length - 1} more below)` : "";
+    sentences.push(`Blocked: ${what}${more}. ${undoHint}`);
+  } else if (violatedItems.length > 0) {
+    sentences.push(`Blocked: ${violatedItems[0].subject} — ${violatedItems[0].detail}. ${undoHint}`);
+  } else if (report.violations.length > 0) {
+    sentences.push(`Blocked: ${report.violations[0]}. ${undoHint}`);
+  } else {
+    sentences.push(`The command itself failed. ${undoHint}`);
+  }
+
+  // 2. Scope.
+  if (report.changed.length > 0) {
+    if (outOfScope.length === 0) {
+      const names = report.changed.map((c) => c.path);
+      sentences.push(
+        names.length <= 3
+          ? `Only ${names.join(", ")} changed, within the agreed scope.`
+          : `${plural(names.length, "file")} changed, all within the agreed scope.`,
+      );
+    } else {
+      const outside = outOfScope.length === 1 ? "1 was" : `${outOfScope.length} were`;
+      sentences.push(
+        `${plural(report.changed.length, "file")} changed in total; ${outside} outside or off-limits.`,
+      );
+    }
+  }
+
+  // 3. Checked promises.
+  if (held.length > 0) {
+    sentences.push(`${plural(held.length, "promise")} held (checked).`);
+  }
+
+  // 4. What still needs a human.
+  if (unchecked.length > 0) {
+    const named = unchecked
+      .slice(0, 2)
+      .map((i) => i.reason ?? i.detail)
+      .join("; ");
+    const more = unchecked.length > 2 ? `; +${unchecked.length - 2} more` : "";
+    sentences.push(
+      `${unchecked.length === 1 ? "1 thing needs" : `${unchecked.length} things need`} your judgment: ${named}${more}.`,
+    );
+  }
+
+  // 5. Incidental observations.
+  if (report.findings.length > 0) {
+    sentences.push(`${plural(report.findings.length, "observation")} noted along the way (not verified).`);
+  }
+
+  return sentences.join(" ");
+}
+
+// ---------------------------------------------------------------------
 // Terminal
 
 export function formatReport(report: ChangeReport): string {
   const lines: string[] = [];
+  lines.push(summarizeReport(report));
+  lines.push(``);
   lines.push(`CHANGE REPORT · ${report.lockId} · verdict: ${report.verdict.toUpperCase()}`);
   lines.push(`Said   "${report.utterance}"`);
   lines.push(`Goal   ${report.goal}`);
@@ -105,6 +190,8 @@ export function formatReport(report: ChangeReport): string {
 export function formatReportMarkdown(report: ChangeReport): string {
   const lines: string[] = [];
   lines.push(`# Change Report · ${report.lockId} · **${report.verdict.toUpperCase()}**`);
+  lines.push(``);
+  lines.push(`**${summarizeReport(report)}**`);
   lines.push(``);
   lines.push(`> "${report.utterance}"`);
   lines.push(``);

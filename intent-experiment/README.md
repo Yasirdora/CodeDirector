@@ -1,5 +1,12 @@
 # intent-experiment
 
+*In plain terms: people ask for code changes in messy, ambiguous ways, and
+coding agents tend to guess instead of asking. This package tests, side by
+side, whether inserting a small "intent layer" — which pins down what the
+human actually meant before the agent acts — produces measurably better
+behavior. Everything here is harness and evidence; the verdict lives in
+EXPERIMENT.md.*
+
 **A rigorous A/B benchmark for one question:** can an *intent layer* between a
 messy human request and a coding agent produce better agent actions — fewer
 misunderstandings, fewer unnecessary questions, fewer tokens, fewer unintended

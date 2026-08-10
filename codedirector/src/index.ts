@@ -173,4 +173,4 @@ export {
   type Finding,
   type BuildReportOptions,
 } from "./report/report";
-export { formatReport, formatReportMarkdown, formatReportJson } from "./report/format";
+export { formatReport, formatReportMarkdown, formatReportJson, summarizeReport } from "./report/format";
