@@ -1,36 +1,37 @@
 # Code Director (`cdir`)
 
-**The contract/verification layer around coding agents.**
+**You say what must not change. cdir runs the work, watches what moves, and tells you what it checked — and what it couldn't.**
 
 ## What is this?
 
-Code Director records what you asked for, runs the change inside that
-agreement, and then tells you what it checked — and what it could not.
-You write down the goal, the files in scope, and the promises that must
-hold ("these APIs don't change", "these tests still pass"); that record
-is called a Lock. When the work runs, `cdir` watches every file it
-touches, flags anything outside the agreed scope, and verifies each
-promise it can. The result is a Change Report that opens with a plain
-summary and lists the evidence underneath — including an honest list of
-what no machine check could confirm. The minimal flow is three commands:
-`cdir lock new "<what you want>"`, then `cdir run IL-0001 -- <command>`,
-then `cdir report IL-0001`. It is for anyone who lets an agent (or a
-teammate, or themselves on a tired Tuesday) edit a repository and wants
-the scope kept and the claims proven, not narrated.
+You write down the job: the goal, the files in scope, and the promises
+that must hold — "these APIs don't change," "these tests still pass,"
+"no new dependencies." That record is a Lock: a plain YAML file in your
+repo, one you can read and edit.
+
+Then the work happens inside it — a script, a coding agent, your own
+edits. `cdir` watches every file the work touches, blocks nothing on its
+own, and afterwards shows you exactly what happened: what changed, what
+stayed inside the agreement, which promises it could verify, and which
+nobody could verify. The answer comes in plain English first; the
+evidence sits underneath for when you want it.
+
+```
+cdir lock new "make the preview feel instant, don't touch export"
+cdir run IL-0001 -- <the command that does the work>
+cdir report IL-0001
+```
+
+It is for anyone who lets an agent — or a teammate, or themselves on a
+tired Tuesday — edit a repository, and wants the scope kept and the
+claims shown, not narrated.
 
 ## The principle
 
-Code Director is built on one principle: **the human states what must be
-true; the system finds out whether it is.** It does not trust an agent's
-prose. It builds a structural model of the repository, computes what a
-change could affect, enforces the scope the human approved, and reports
-every claim with an evidence class.
-
-This repository contains **Stage 1** (CLI scaffold, incremental structural
-index, ranked repo map, blast-radius analysis), **Stage 2** (Intent Lock
-authoring/validation, checkpoint/undo, and the `cdir run` scope-enforcing
-execution wrapper), and **Stage 3** (the verification ladder over evidence
-classes, the Change Report, and the eval harness).
+**You state what must be true. cdir finds out whether it is.** It does
+not take an agent's word for it: it maps the repository, computes what a
+change could affect, holds the work to the scope you approved, and marks
+every claim with how it was checked.
 
 ## Evidence classes
 
