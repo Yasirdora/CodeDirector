@@ -1,6 +1,6 @@
 # Code Director (`cdir`)
 
-**You say what must not change. cdir runs the work, watches what moves, and tells you what it checked — and what it couldn't.**
+**Say what you want done — and what must stay untouched. cdir runs the work, watches what moves, and tells you what it checked — and what it couldn't.**
 
 ## What is this?
 
