@@ -13,7 +13,7 @@ name: tests-pass-fail
 files:                      # written into a temp git repo, then committed
   src/math.js: |
     export function add(a, b) { return a + b; }
-lock:                       # Intent Lock fragment; the harness fills in
+lock:                       # Vibe Check fragment; the harness fills in
   utterance: make math faster   # id/status/schemaVersion/budget.symbols/etc.
   keep:
     - kind: tests-pass

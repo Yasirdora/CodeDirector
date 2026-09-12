@@ -1,11 +1,11 @@
 /**
  * Human-readable Lock rendering (`cdir lock show`), modeled on the
- * blueprint's Intent Lock panel: per-clause checkability markers
+ * blueprint's Vibe Check panel: per-clause checkability markers
  *   ✓ machine-checkable (structural diff or executed by the verifier)
  *   ? not machine-checkable — human judges
  */
 
-import { IntentLock, KeepClause, CHECKABILITY_MARK, clauseCheckability } from "./types";
+import { VibeCheck, KeepClause, CHECKABILITY_MARK, clauseCheckability } from "./types";
 import { LockCheckResult } from "./check";
 
 function describeClause(c: KeepClause): string {
@@ -24,9 +24,9 @@ function describeClause(c: KeepClause): string {
   }
 }
 
-export function formatLock(lock: IntentLock, check?: LockCheckResult): string {
+export function formatLock(lock: VibeCheck, check?: LockCheckResult): string {
   const lines: string[] = [];
-  lines.push(`Intent Lock · ${lock.id} · status: ${lock.status}`);
+  lines.push(`Vibe Check · ${lock.id} · status: ${lock.status}`);
   lines.push(``);
   lines.push(`Said    "${lock.utterance}"`);
   lines.push(`Goal    ${lock.goal}`);
@@ -99,7 +99,7 @@ export function formatLock(lock: IntentLock, check?: LockCheckResult): string {
 }
 
 /** One-line summary for `cdir lock ls`. */
-export function formatLockLine(lock: IntentLock): string {
+export function formatLockLine(lock: VibeCheck): string {
   const said = lock.utterance.length > 60 ? lock.utterance.slice(0, 57) + "..." : lock.utterance;
   return `${lock.id}  ${lock.status.padEnd(9)}  ${said}`;
 }

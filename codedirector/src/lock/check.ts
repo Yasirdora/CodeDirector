@@ -12,7 +12,7 @@ import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { RepoIndex } from "../core/types";
 import { buildGraph } from "../core/graph";
-import { IntentLock, KeepClause, clauseCheckability } from "./types";
+import { VibeCheck, KeepClause, clauseCheckability } from "./types";
 import { validateGlob } from "./glob";
 
 /** sha256 of a symbol signature — the api-unchanged evidence primitive. */
@@ -80,7 +80,7 @@ function checkClause(clause: KeepClause, index: RepoIndex | null): ClauseCheck {
   return { clause, checkability, errors, note };
 }
 
-export function checkLock(rootDir: string, lock: IntentLock, index: RepoIndex | null): LockCheckResult {
+export function checkLock(rootDir: string, lock: VibeCheck, index: RepoIndex | null): LockCheckResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 

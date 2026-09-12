@@ -6,7 +6,7 @@
  *   cdir index [--root DIR]            Build/refresh the structural index
  *   cdir map <query> [options]         Ranked repo map around anchor symbols
  *   cdir why <symbol> [--json]         Blast radius for a symbol
- *   cdir lock new "<utterance>" [...]  Draft an Intent Lock (status: draft)
+ *   cdir lock new "<utterance>" [...]  Draft an Vibe Check (status: draft)
  *   cdir lock ls                       List Locks
  *   cdir lock show <id>                Render a Lock with checkability markers
  *   cdir lock check <id>               Validate a Lock (non-zero exit on invalid)
@@ -49,7 +49,7 @@ Usage:
   cdir why <symbol> [--root DIR] [--json] Blast radius: definition, callers,
                                           transitive callers, tests, co-change
 
-  cdir lock new "<utterance>" [--root DIR]  Draft an Intent Lock from your words:
+  cdir lock new "<utterance>" [--root DIR]  Draft an Vibe Check from your words:
           [--goal TEXT] [--keep SPEC]       anchors + blast radius propose the
           [--deny GLOB] [--budget-files F]  budget and deny list; you edit, then
                                           activate. SPECs: api-unchanged:<file>#<sym>,

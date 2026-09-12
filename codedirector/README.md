@@ -115,7 +115,7 @@ Exit codes: `0` success · `1` failure (e.g. symbol not found) · `2` usage erro
 
 ### `cdir lock new "<utterance>" [--goal TEXT] [--keep SPEC] [--deny GLOB] [--budget-files F]`
 
-Drafts an **Intent Lock** — a compiled, enforceable contract, human-readable
+Drafts an **Vibe Check** — a compiled, enforceable contract, human-readable
 YAML versioned at `.codedirector/locks/IL-<NNNN>-<slug>.yaml`. The command is
 interactive-free: it resolves anchor symbols from your words, computes blast
 radius, and PROPOSES `budget.files` (defining files of the top-ranked
@@ -362,7 +362,7 @@ src/
     why.ts          blast-radius report (composed from graph + git)
     git.ts          co-change mining via git log --name-only
   lock/
-    types.ts        IntentLock / KeepClause / LockBudget / schema v1
+    types.ts        VibeCheck / KeepClause / LockBudget / schema v1
     yaml.ts         stable YAML round-trip + strict validation
     glob.ts         glob matching/validation for deny, budget, test globs
     store.ts        .codedirector/locks/IL-NNNN-slug.yaml persistence
@@ -420,10 +420,10 @@ Import from the package root (`codedirector` / `dist/src/index.js`):
 
 **Stage 2 additions (for Stage 3 — verification + Change Report):**
 
-- Intent Lock: `loadLock`, `listLocks`, `saveLock`, `nextLockId`,
+- Vibe Check: `loadLock`, `listLocks`, `saveLock`, `nextLockId`,
   `draftLock`, `parseKeepClause`, `checkLock`, `signatureHash`,
   `lockToYaml` / `lockFromYaml` (stable YAML round-trip), `formatLock`;
-  types `IntentLock`, `KeepClause`, `KeepClauseKind`, `LockBudget`,
+  types `VibeCheck`, `KeepClause`, `KeepClauseKind`, `LockBudget`,
   `LockAssumption`, `LockStatus`, `ClauseCheckability`; glob helpers
   `matchPath`, `validateGlob`, `globToRegExp`.
 - Checkpoint/undo: `createCheckpoint`, `latestCheckpoint`, `undo`,

@@ -11,7 +11,7 @@ import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { draftLock } from "../src/lock/draft";
 import { loadLock, saveLock } from "../src/lock/store";
-import { IntentLock, KeepClause } from "../src/lock/types";
+import { VibeCheck, KeepClause } from "../src/lock/types";
 import { runWithLock } from "../src/run/run";
 import { buildReport, finalizeLockStatus } from "../src/report/report";
 import { formatReport, formatReportJson, formatReportMarkdown, summarizeReport } from "../src/report/format";
@@ -31,7 +31,7 @@ const FILES = {
     `import { add } from "../src/math.js";\ntest("add works", () => assert.equal(add(2, 3), 5));\n`,
 };
 
-async function setup(keep: KeepClause[], customize?: (lock: IntentLock) => void): Promise<{ root: string; lock: IntentLock }> {
+async function setup(keep: KeepClause[], customize?: (lock: VibeCheck) => void): Promise<{ root: string; lock: VibeCheck }> {
   const root = makeGitRepo(FILES);
   const { index } = await buildIndex(root);
   const { lock } = draftLock(root, index, "make math faster", {

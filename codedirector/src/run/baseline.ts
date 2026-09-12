@@ -14,7 +14,7 @@ import { buildGraph } from "../core/graph";
 import { hashContent } from "../core/builder";
 import { indexDir, stableStringify } from "../core/store";
 import { workTreeStatusPorcelain } from "../checkpoint";
-import { IntentLock, DEPENDENCY_MANIFESTS } from "../lock/types";
+import { VibeCheck, DEPENDENCY_MANIFESTS } from "../lock/types";
 import { signatureHash } from "../lock/check";
 import { runShellProbe, sha256 } from "./probe";
 import { currentHead, listHidden, runIsolated, snapshotWorkTree } from "./tree";
@@ -76,7 +76,7 @@ export function baselinesDir(rootDir: string): string {
 
 export function captureBaseline(
   rootDir: string,
-  lock: IntentLock,
+  lock: VibeCheck,
   index: RepoIndex,
   checkpointTag?: string,
   opts: BaselineOptions = {},

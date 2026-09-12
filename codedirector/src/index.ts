@@ -1,5 +1,5 @@
 /**
- * Public API surface for later Code Director stages (Intent Lock, scope
+ * Public API surface for later Code Director stages (Vibe Check, scope
  * enforcement, checkpoint/undo, Change Report, eval harness).
  *
  * Stage-2+ code should import from here, not reach into core internals:
@@ -65,7 +65,7 @@ export {
 
 export { coChange, isGitRepo, type CoChangeResult } from "./core/git";
 
-// Stage 2 — Intent Lock
+// Stage 2 — Vibe Check
 export {
   LOCK_SCHEMA_VERSION,
   DEPENDENCY_MANIFESTS,
@@ -76,7 +76,7 @@ export {
   type KeepClause,
   type LockBudget,
   type LockAssumption,
-  type IntentLock,
+  type VibeCheck,
   type ClauseCheckability,
 } from "./lock/types";
 export { lockToYaml, lockFromYaml, LockParseError } from "./lock/yaml";

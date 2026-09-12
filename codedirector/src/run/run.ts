@@ -23,7 +23,7 @@ import { buildIndex, hashContent } from "../core/builder";
 import { buildGraph } from "../core/graph";
 import { ensureCodedirectorIgnore, indexDir, stableStringify } from "../core/store";
 import { createCheckpoint, Checkpoint } from "../checkpoint";
-import { IntentLock } from "../lock/types";
+import { VibeCheck } from "../lock/types";
 import { loadLock, saveLock } from "../lock/store";
 import { signatureHash } from "../lock/check";
 import { Baseline, baselineFileHash, captureBaseline, saveBaseline } from "./baseline";
@@ -92,7 +92,7 @@ export interface RunOutcome {
 
 function checkKeepClauses(
   rootDir: string,
-  lock: IntentLock,
+  lock: VibeCheck,
   baseline: Baseline,
   indexAfter: RepoIndex,
 ): KeepResult[] {

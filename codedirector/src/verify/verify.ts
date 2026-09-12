@@ -26,7 +26,7 @@ import * as path from "node:path";
 import { RepoIndex } from "../core/types";
 import { buildIndex, hashContent } from "../core/builder";
 import { buildGraph } from "../core/graph";
-import { IntentLock, DEPENDENCY_MANIFESTS } from "../lock/types";
+import { VibeCheck, DEPENDENCY_MANIFESTS } from "../lock/types";
 import { loadLock } from "../lock/store";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
@@ -120,7 +120,7 @@ function uncheckedItem(
 // Rung 1 — structural (proven), diffed against the baseline
 
 function verifyApiUnchanged(
-  lock: IntentLock,
+  lock: VibeCheck,
   baseline: Baseline | null,
   baselineRel: string | undefined,
   indexAfter: RepoIndex,
@@ -156,7 +156,7 @@ function verifyApiUnchanged(
 
 function verifyNoNewDependency(
   rootDir: string,
-  lock: IntentLock,
+  lock: VibeCheck,
   baseline: Baseline | null,
   baselineRel: string | undefined,
 ): VerificationItem[] {
@@ -283,7 +283,7 @@ function failingTestNames(output: string): string[] {
   return names;
 }
 
-function verifyTestsPass(rootDir: string, lock: IntentLock, opts: VerifyOptions): VerificationItem[] {
+function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions): VerificationItem[] {
   const items: VerificationItem[] = [];
   const timeout = opts.testTimeoutMs ?? 60_000;
   for (const clause of lock.keep) {
@@ -334,7 +334,7 @@ function verifyTestsPass(rootDir: string, lock: IntentLock, opts: VerifyOptions)
   return items;
 }
 
-function verifyCommand(rootDir: string, lock: IntentLock, opts: VerifyOptions): VerificationItem[] {
+function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): VerificationItem[] {
   if (!lock.verifyCommand) return [];
   const subject = `verifyCommand · ${lock.verifyCommand}`;
   const timeout = opts.testTimeoutMs ?? 60_000;
@@ -355,7 +355,7 @@ function verifyCommand(rootDir: string, lock: IntentLock, opts: VerifyOptions): 
 // ---------------------------------------------------------------------
 // Rung 4 — output-unchanged (measured, differential vs baseline)
 
-function verifyOutputUnchanged(rootDir: string, lock: IntentLock, baseline: Baseline | null, baselineRel: string | undefined, opts: VerifyOptions): VerificationItem[] {
+function verifyOutputUnchanged(rootDir: string, lock: VibeCheck, baseline: Baseline | null, baselineRel: string | undefined, opts: VerifyOptions): VerificationItem[] {
   const items: VerificationItem[] = [];
   const timeout = opts.outputTimeoutMs ?? 30_000;
   for (const clause of lock.keep) {
@@ -408,7 +408,7 @@ function verifyOutputUnchanged(rootDir: string, lock: IntentLock, baseline: Base
 // ---------------------------------------------------------------------
 // Rung 5 — custom (always unchecked; the human judges)
 
-function verifyCustom(lock: IntentLock): VerificationItem[] {
+function verifyCustom(lock: VibeCheck): VerificationItem[] {
   const items: VerificationItem[] = [];
   for (const clause of lock.keep) {
     if (clause.kind !== "custom") continue;
@@ -426,7 +426,7 @@ function verifyCustom(lock: IntentLock): VerificationItem[] {
  */
 export function verifyWithBaseline(
   rootDir: string,
-  lock: IntentLock,
+  lock: VibeCheck,
   baseline: Baseline | null,
   baselineRel: string | undefined,
   indexAfter: RepoIndex,

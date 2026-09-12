@@ -1,5 +1,5 @@
 /**
- * ImagePipeline — the public API an Intent Lock would pin.
+ * ImagePipeline — the public API an Vibe Check would pin.
  * renderPreview: fast approximate path used during drag.
  * renderExport: the exact path; its output must stay byte-identical.
  */

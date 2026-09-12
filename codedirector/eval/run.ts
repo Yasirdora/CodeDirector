@@ -24,7 +24,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import YAML from "yaml";
-import { IntentLock, LOCK_SCHEMA_VERSION } from "../src/lock/types";
+import { VibeCheck, LOCK_SCHEMA_VERSION } from "../src/lock/types";
 import { saveLock } from "../src/lock/store";
 import { EvidenceClass, Verdict } from "../src/verify/types";
 import { ChangeReport } from "../src/report/report";
@@ -51,7 +51,7 @@ interface EvalCase {
     goal?: string;
     interpretation?: string;
     change?: string;
-    keep?: IntentLock["keep"];
+    keep?: VibeCheck["keep"];
     deny?: string[];
     verifyCommand?: string;
     budget: { files: string[]; maxFiles?: number; maxLines?: number };
@@ -87,7 +87,7 @@ function validateCase(raw: unknown, file: string): EvalCase {
   return c;
 }
 
-function composeLock(c: EvalCase): IntentLock {
+function composeLock(c: EvalCase): VibeCheck {
   return {
     schemaVersion: LOCK_SCHEMA_VERSION,
     id: "IL-0001",
@@ -192,7 +192,7 @@ function runCase(cliPath: string, c: EvalCase): CaseResult {
     }
     if (c.expect.status !== undefined) {
       const lockFile = fs.readdirSync(path.join(tmp, ".codedirector", "locks"))[0];
-      const status = (YAML.parse(fs.readFileSync(path.join(tmp, ".codedirector", "locks", lockFile), "utf8")) as IntentLock).status;
+      const status = (YAML.parse(fs.readFileSync(path.join(tmp, ".codedirector", "locks", lockFile), "utf8")) as VibeCheck).status;
       if (status !== c.expect.status) {
         failures.push(`lock status: expected ${c.expect.status}, got ${status}`);
       }

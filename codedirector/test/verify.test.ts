@@ -12,7 +12,7 @@ import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { draftLock } from "../src/lock/draft";
 import { loadLock, saveLock } from "../src/lock/store";
-import { IntentLock, KeepClause } from "../src/lock/types";
+import { VibeCheck, KeepClause } from "../src/lock/types";
 import { captureBaseline, saveBaseline, latestBaselinePath, loadBaseline } from "../src/run/baseline";
 import { runWithLock } from "../src/run/run";
 import { verifyLock, verifyWithBaseline } from "../src/verify/verify";
@@ -36,7 +36,7 @@ function fixtureFiles(): Record<string, string> {
   };
 }
 
-async function setup(keep: KeepClause[], customize?: (lock: IntentLock) => void): Promise<{ root: string; lock: IntentLock }> {
+async function setup(keep: KeepClause[], customize?: (lock: VibeCheck) => void): Promise<{ root: string; lock: VibeCheck }> {
   const root = makeGitRepo(fixtureFiles());
   const { index } = await buildIndex(root);
   const { lock } = draftLock(root, index, "make math faster", {

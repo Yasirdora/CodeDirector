@@ -8,7 +8,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { IntentLock } from "./types";
+import { VibeCheck } from "./types";
 import { lockFromYaml, lockToYaml } from "./yaml";
 
 export function locksDir(rootDir: string): string {
@@ -75,7 +75,7 @@ function writeSealedUtterance(rootDir: string, id: string, utterance: string): v
 }
 
 /** Load a Lock by id ("IL-0001"). Returns null when not found; throws LockParseError on bad YAML. */
-export function loadLock(rootDir: string, id: string): IntentLock | null {
+export function loadLock(rootDir: string, id: string): VibeCheck | null {
   const p = lockPathFor(rootDir, id);
   if (!p) return null;
   const lock = lockFromYaml(fs.readFileSync(p, "utf8"));
@@ -85,10 +85,10 @@ export function loadLock(rootDir: string, id: string): IntentLock | null {
 }
 
 /** List all Locks, ordered by id. */
-export function listLocks(rootDir: string): IntentLock[] {
+export function listLocks(rootDir: string): VibeCheck[] {
   return scanLockFiles(rootDir)
     .map((e) => loadLock(rootDir, e.id))
-    .filter((l): l is IntentLock => l !== null);
+    .filter((l): l is VibeCheck => l !== null);
 }
 
 /**
@@ -96,7 +96,7 @@ export function listLocks(rootDir: string): IntentLock[] {
  * if the slug changed (utterance is immutable, so it should not), the old
  * file is removed. Returns the written path.
  */
-export function saveLock(rootDir: string, lock: IntentLock): string {
+export function saveLock(rootDir: string, lock: VibeCheck): string {
   fs.mkdirSync(locksDir(rootDir), { recursive: true });
   const sealed = readSealedUtterance(rootDir, lock.id);
   if (lock.status !== "draft") {

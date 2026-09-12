@@ -1,12 +1,12 @@
 /**
- * Intent Lock tests: YAML round-trip, draft proposal quality on the demo
+ * Vibe Check tests: YAML round-trip, draft proposal quality on the demo
  * repo, clause parsing/admission, and lock validation.
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildIndex } from "../src/core/builder";
-import { IntentLock, LOCK_SCHEMA_VERSION } from "../src/lock/types";
+import { VibeCheck, LOCK_SCHEMA_VERSION } from "../src/lock/types";
 import { lockFromYaml, lockToYaml, LockParseError } from "../src/lock/yaml";
 import { draftLock, parseKeepClause } from "../src/lock/draft";
 import { checkLock } from "../src/lock/check";
@@ -14,7 +14,7 @@ import { listLocks, loadLock } from "../src/lock/store";
 import { matchPath, validateGlob } from "../src/lock/glob";
 import { copyDemoRepo, copyFixture } from "./helpers";
 
-function sampleLock(): IntentLock {
+function sampleLock(): VibeCheck {
   return {
     schemaVersion: LOCK_SCHEMA_VERSION,
     id: "IL-0001",

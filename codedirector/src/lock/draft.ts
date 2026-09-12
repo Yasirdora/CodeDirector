@@ -16,7 +16,7 @@ import { execFileSync } from "node:child_process";
 import { RepoIndex, SymbolInfo } from "../core/types";
 import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
 import { buildRepoMap, resolveAnchorsDetailed, type AnchorStrength } from "../core/map";
-import { IntentLock, KeepClause, LOCK_SCHEMA_VERSION, DEPENDENCY_MANIFESTS } from "./types";
+import { VibeCheck, KeepClause, LOCK_SCHEMA_VERSION, DEPENDENCY_MANIFESTS } from "./types";
 import { nextLockId, saveLock } from "./store";
 
 export interface DraftOptions {
@@ -37,7 +37,7 @@ export interface DraftOptions {
 }
 
 export interface DraftResult {
-  lock: IntentLock;
+  lock: VibeCheck;
   path: string;
   anchors: SymbolInfo[];
   /** Files proposed by blast-radius analysis (before any --budget-files override). */
@@ -186,7 +186,7 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
 
   const budgetFiles = opts.budgetFiles && opts.budgetFiles.length > 0 ? opts.budgetFiles : proposedFiles;
 
-  const assumptions: IntentLock["assumptions"] = [];
+  const assumptions: VibeCheck["assumptions"] = [];
   if (anchors.length > 0 && !anchorsWeak) {
     assumptions.push({
       text:
@@ -222,7 +222,7 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
     });
   }
 
-  const lock: IntentLock = {
+  const lock: VibeCheck = {
     schemaVersion: LOCK_SCHEMA_VERSION,
     id: nextLockId(rootDir),
     status: "draft",

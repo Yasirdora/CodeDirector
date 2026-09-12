@@ -23,7 +23,7 @@ import * as path from "node:path";
 import { RepoIndex } from "../core/types";
 import { buildIndex } from "../core/builder";
 import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
-import { IntentLock } from "../lock/types";
+import { VibeCheck } from "../lock/types";
 import { loadLock, saveLock } from "../lock/store";
 import { BudgetStats, RunRecord, runsDir } from "../run/run";
 import { ClassifiedChange } from "../run/classify";
@@ -182,7 +182,7 @@ export async function buildReport(
  * Persist the report's verdict onto the Lock: verified when everything
  * passed, failed on any violation. `cdir lock show` reflects it.
  */
-export function finalizeLockStatus(rootDir: string, report: ChangeReport): IntentLock {
+export function finalizeLockStatus(rootDir: string, report: ChangeReport): VibeCheck {
   const lock = loadLock(rootDir, report.lockId);
   if (!lock) throw new ReportError(`no such lock: ${report.lockId}`);
   lock.status = report.verdict;

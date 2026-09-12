@@ -1,5 +1,5 @@
 /**
- * Intent Lock data model (schema v1).
+ * Vibe Check data model (schema v1).
  *
  * A Lock is a compiled, enforceable contract: every KEEP clause is either
  * machine-checkable now, deferred to a later stage (stored, executed by the
@@ -70,7 +70,7 @@ export interface LockAssumption {
   confirmed: boolean;
 }
 
-export interface IntentLock {
+export interface VibeCheck {
   schemaVersion: number;
   /** "IL-NNNN" */
   id: string;

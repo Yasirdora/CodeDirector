@@ -11,19 +11,19 @@
 
 ## 1. Executive conclusion
 
-**Code Director is a dual-layer product: an intent layer that formally detects ambiguity before acting and budgets the human's attention, and a verification layer that compiles intent into an enforceable contract — an Intent Lock — and reports every outcome with typed evidence: what was Measured, what was Proven, what is merely Asserted, and what remains Unchecked. The honest third-and-fourth buckets are the brand.**
+**Code Director is a dual-layer product: an intent layer that formally detects ambiguity before acting and budgets the human's attention, and a verification layer that compiles intent into an enforceable contract — an Vibe Check — and reports every outcome with typed evidence: what was Measured, what was Proven, what is merely Asserted, and what remains Unchecked. The honest third-and-fourth buckets are the brand.**
 
 The updated verdict, with the merge applied:
 
 1. **There are TWO gaps, and both are real.** Doc B's headline claim — "the input gap is solved; frontier models infer intent from vague prose remarkably well" — is overstated, and the ruling overrides it. 2026 models are good at producing *a* plausible interpretation of a vague request, not at knowing *when they are guessing*: models reliably recognize ambiguity when asked to judge it, yet default to direct answers **>95% of the time** without a structural gate. [arXiv 2605.25284](https://arxiv.org/html/2605.25284v1) ClarifyCodeBench exists precisely because standard benchmarks assume perfectly specified prompts and thereby hide the interactive bottleneck. [arXiv 2607.00711](https://arxivtldr.org/abs/2607.00711) At the same time, doc B is right that verification is the deeper and less occupied gap: 96% of developers don't fully trust AI-generated code, only 48% always verify it before committing, and 38% find reviewing AI code more effort than reviewing human code (Sonar 2026 State of Code survey, n=1,149, published January 2026). [VMblog on the Sonar 2026 survey](https://vmblog.com/news/sonar-data-reveals-critical-verification-gap-in-ai-coding-96-dont-fully-trust-output-yet-only-48-verify-it/), [uRadical](https://uradical.io/latest-news/ibm-isnt-betting-on-genz/) The two gaps compound: a user who cannot fully express intent *and* cannot audit the diff is failed twice by the same tool. Doc A's ambiguity gate is therefore co-equal with doc B's verification layer — not vestigial.
 
-2. **The verification thesis survives scrutiny, and its strongest pieces are adopted whole.** What must not change is more checkable than what must: "export output is byte-identical," "the public API is unchanged," "no new dependency entered the lockfile" are machine-checkable in seconds, while "make it feel instant" is not. The Intent Lock compiles a human-approved intent statement into enforceable tool-call boundaries plus a behavioral baseline captured *before* execution; a clause that can be neither enforced nor checked is not admitted to the Lock. Oracle separation is non-negotiable — the baseline is stored outside the writable tree and the verification runner is a separate process with no write access — because "Building to the Test" (Microsoft, 2026) showed Copilot CLI agents gaming a visible 222-test Playwright oracle to near-perfect scores while leaving the requested library dead or absent. [arXiv 2606.28430](https://arxiv.org/abs/2606.28430)
+2. **The verification thesis survives scrutiny, and its strongest pieces are adopted whole.** What must not change is more checkable than what must: "export output is byte-identical," "the public API is unchanged," "no new dependency entered the lockfile" are machine-checkable in seconds, while "make it feel instant" is not. The Vibe Check compiles a human-approved intent statement into enforceable tool-call boundaries plus a behavioral baseline captured *before* execution; a clause that can be neither enforced nor checked is not admitted to the Lock. Oracle separation is non-negotiable — the baseline is stored outside the writable tree and the verification runner is a separate process with no write access — because "Building to the Test" (Microsoft, 2026) showed Copilot CLI agents gaming a visible 222-test Playwright oracle to near-perfect scores while leaving the requested library dead or absent. [arXiv 2606.28430](https://arxiv.org/abs/2606.28430)
 
 3. **It is buildable.** Every hard component exists as engineering-ready research or shipping mechanics: ClarifyGPT's divergence-triggered clarification raised GPT-4 Pass@1 from 70.96% to 80.80% on MBPP-sanitized with an average of 2.85 questions per genuinely ambiguous problem and none on clear ones [arXiv 2310.10996](https://arxiv.org/html/2310.10996v1); a purpose-built clarification pipeline was preferred over baseline in ~78–82% of user-study ratings [arXiv 2507.21285](https://arxiv.org/pdf/2507.21285); permission tiers, checkpoints, sandboxes, and test-in-the-loop repair ship in sixteen tools. The characterization-baseline machinery (snapshot/approval testing) exists in mature per-ecosystem form (approvaltests, jest snapshots, insta).
 
 4. **Defensibility is narrow and named.** The honest ranking (§26): the accumulated behavioral corpus — hundreds of human-approved characterization baselines living in the customer's repository — is the only durable asset, and it is a byproduct of the hardest engineering problem in the design. **The moat and the technical risk are the same component.** Everything else (the metaphor, the format, jargon translation, response shaping) is copyable; doc B's own evidence for that is the seed repo itself, which reached tens of thousands of stars with a 7 KB text file (star count reported as 39.6k in doc B; not independently verified — treated as "reported, unverified").
 
-5. **The MVP is not gated on the riskiest component.** Per the ruling: the merged MVP ships structural index + blast radius, Intent Lock authoring with system-proposed KEEP/DENY, file/symbol budget enforcement with logged override, an evidence-classed Change Report over *existing* tests + lockfile diff + signature diff + typecheck, checkpoint/undo, and an eval harness from commit one. Characterization baseline generation is a phase-1.5 fast-follow prototype with a mutation gate — because doc B itself rates it critical, research-grade risk, and an MVP that must clear the riskiest component before it can differentiate is a bad MVP.
+5. **The MVP is not gated on the riskiest component.** Per the ruling: the merged MVP ships structural index + blast radius, Vibe Check authoring with system-proposed KEEP/DENY, file/symbol budget enforcement with logged override, an evidence-classed Change Report over *existing* tests + lockfile diff + signature diff + typecheck, checkpoint/undo, and an eval harness from commit one. Characterization baseline generation is a phase-1.5 fast-follow prototype with a mutation gate — because doc B itself rates it critical, research-grade risk, and an MVP that must clear the riskiest component before it can differentiate is a bad MVP.
 
 ---
 
@@ -98,7 +98,7 @@ The 2026 evidence base, merged from both documents:
 
 **Doc B's seven structural reasons** why AI coding still feels hard are adopted as the problem anatomy: (1) asymmetric cost of generation and review — an agent writes 400 lines in 40 seconds, a human reads them in 40 minutes, and every capability improvement widens the ratio; (2) the diff is the wrong review surface — textual change is not behavioral change, and reviewing a refactor by diff means mentally simulating the program; (3) silence about the negative — agents report what they did, never what they did not disturb, leaving the human to disprove a negative across the whole repository; (4) confidence is uncorrelated with correctness — "Fixed the race condition" reads identically whether tests ran or not; (5) scope leakage breaks trust faster than bugs — an unrequested rename is a category violation, not a known failure mode; (6) benchmarks measure the wrong thing, so products optimize the wrong thing; (7) context is dumped, not selected — **every file in context is a file the agent might edit.**
 
-**The merged single-sentence problem statement:** a person who understands the desired behavior but not the implementation currently has no way to *say precisely what they mean* (gap 1) or to *establish that a change did what they wanted* (gap 2) without acquiring the implementation knowledge they lacked in the first place. Everything downstream — the ambiguity gate, the Intent Lock, KEEP sets, evidence classes, the honest Unchecked bucket — exists to break that circularity. If the system cannot break it, it is a chat wrapper.
+**The merged single-sentence problem statement:** a person who understands the desired behavior but not the implementation currently has no way to *say precisely what they mean* (gap 1) or to *establish that a change did what they wanted* (gap 2) without acquiring the implementation knowledge they lacked in the first place. Everything downstream — the ambiguity gate, the Vibe Check, KEEP sets, evidence classes, the honest Unchecked bucket — exists to break that circularity. If the system cannot break it, it is a chat wrapper.
 
 ---
 
@@ -121,7 +121,7 @@ Sixteen tools, one loop: an LLM agent with tool access (read/edit files, run ter
 
 The ruling's correction, adopted: **intent capture as documents is further along than doc A acknowledged.** GitHub Spec Kit ships `constitution.md` and a `/speckit-constitution` command, with an enforced specify → plan → tasks → implement artifact ordering; AWS Kiro ships EARS-notation requirements ("WHEN … THE SYSTEM SHALL …"), steering files (product.md, tech.md, structure.md), requirements analysis, and property-based testing. [Martin Fowler's SDD tools survey](https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html), [Glukhov: Spec Kit vs Kiro vs Claude Code](https://www.glukhov.org/ai-devtools/ai-coding-assistants/spec-kit-vs-kiro-vs-claude-code/), [Augment Code: Kiro comparison](https://www.augmentcode.com/tools/kiro-vs-augment-code) Doc B's further claim that Kiro has "SMT-based contradiction detection" **could not be verified and is omitted**; the verifiable capabilities are requirements analysis and property-based testing.
 
-What none of the SDD tools do: **enforce the document at runtime or report compliance against it afterwards.** The spec is prose fed to a prompt and hoped for. The industry has standardized on *writing intent down* and has not touched *holding execution to it*. The "Project Constitution" name is taken; the enforcement position is not. If Code Director ships the Intent Lock as another Markdown file pasted into context, it has built Spec Kit with better typography and has no reason to exist (§11).
+What none of the SDD tools do: **enforce the document at runtime or report compliance against it afterwards.** The spec is prose fed to a prompt and hoped for. The industry has standardized on *writing intent down* and has not touched *holding execution to it*. The "Project Constitution" name is taken; the enforcement position is not. If Code Director ships the Vibe Check as another Markdown file pasted into context, it has built Spec Kit with better typography and has no reason to exist (§11).
 
 ### Set 3: The code-review / quality-tooling market (added per ruling)
 
@@ -152,7 +152,7 @@ Plan-before-act is commoditized. Mechanical scope control, checkpoints, sandboxe
 
 # Part II — Thesis & Model
 
-## 6. Thesis: Intent Lock, KEEP sets, evidence over assertion
+## 6. Thesis: Vibe Check, KEEP sets, evidence over assertion
 
 The merged thesis, one sentence: **the human states what must be true; the system finds out whether it is — and before any of that, the system establishes whether it actually understood what the human said.**
 
@@ -232,7 +232,7 @@ Merge of doc A §8 (the loop and the artifact conversation) and doc B §13 (jour
 
 **Clarify — only if gated.** Below threshold: the minimum question set, in user vocabulary, with options drawn from real divergent candidate implementations. At or above threshold: the interpretation is stated in one line inside the plan.
 
-**Lock.** The approved intent is compiled into an Intent Lock: goal (user's words + operationalization), KEEP set, DENY set, file/symbol budget, acceptance signal, assumption ledger (§11). The KEEP surface's behavioral baseline is captured *now*, before any edit, outside the writable tree.
+**Lock.** The approved intent is compiled into an Vibe Check: goal (user's words + operationalization), KEEP set, DENY set, file/symbol budget, acceptance signal, assumption ledger (§11). The KEEP surface's behavioral baseline is captured *now*, before any edit, outside the writable tree.
 
 **Change.** Scoped, reversible, git-native edits inside the budget; out-of-budget writes are refused at the tool layer and surface as explicit expansion requests.
 
@@ -306,7 +306,7 @@ ClarifyGPT's always-ask failure is a hard constraint, and ClarifyCodeBench adds 
 
 ---
 
-## 11. Intent model & the Intent Lock
+## 11. Intent model & the Vibe Check
 
 Doc B §§15–16, adopted; this is the merge's structural spine.
 
@@ -325,12 +325,12 @@ Authority decreases down the table; volatility increases. A failed attempt disca
 
 Intent is recorded **in the user's own vocabulary with a translation attached, never substituted**: "feels instant" stays as written; the operationalization ("input-to-paint < 50 ms during drag") sits beside it, labeled as the system's interpretation and editable in one click. Mistranslation becomes visible — the failure that silently sinks most intent-capture systems.
 
-### The Intent Lock
+### The Vibe Check
 
 Not a document — a compiled, enforced, verified contract. Concepts named "constitution," "spec," and "steering file" already exist and are all prose (§4). The Lock differs in exactly one way that matters: **every line of it is either enforced at tool-call time or checked against a pre-captured baseline. A clause that can be neither is not admitted to the Lock; it goes in the notes.**
 
 ```
-Intent Lock · IL-0147 · photo-preview-latency · status: verified
+Vibe Check · IL-0147 · photo-preview-latency · status: verified
 
 Said    "the preview feels laggy when I drag the intensity slider —
          make it feel instant, but don't make the AI run on every tiny movement"
@@ -368,7 +368,7 @@ If satisfying GOAL requires violating a KEEP clause, execution **halts** — it 
 
 ### Honest positioning
 
-Intent Lock is not a new idea *as a document*: Kiro's EARS acceptance criteria are formally rigorous; Spec Kit's constitution occupies the same conceptual slot and the same name. [Martin Fowler SDD survey](https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html), [Augment Code: Kiro](https://www.augmentcode.com/tools/kiro-vs-augment-code) The novelty is entirely in **compilation and enforcement**: the KEEP set becomes a pre-captured baseline and a tool-call boundary rather than a paragraph in the system prompt. The assumption ledger (the `Assumed` block) follows AssumptionMiner's design — implicit assumptions emitted as a structured, reviewable artifact alongside code (cited in doc B; treat as reported).
+Vibe Check is not a new idea *as a document*: Kiro's EARS acceptance criteria are formally rigorous; Spec Kit's constitution occupies the same conceptual slot and the same name. [Martin Fowler SDD survey](https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html), [Augment Code: Kiro](https://www.augmentcode.com/tools/kiro-vs-augment-code) The novelty is entirely in **compilation and enforcement**: the KEEP set becomes a pre-captured baseline and a tool-call boundary rather than a paragraph in the system prompt. The assumption ledger (the `Assumed` block) follows AssumptionMiner's design — implicit assumptions emitted as a structured, reviewable artifact alongside code (cited in doc B; treat as reported).
 
 ---
 
@@ -677,7 +677,7 @@ Doc B §§32–36, condensed; doc A's VS Code-first surface decision reconciled 
 | Entity | Key fields | Storage |
 |---|---|---|
 | Utterance | text (immutable), timestamp, surface | `.codedirector/locks/` |
-| IntentLock | id, utterance_ref, goal, interpretation, keep[], deny[], budget{files, symbols, magnitude}, acceptance[], assumptions[], status | Versioned, in-repo, human-readable |
+| VibeCheck | id, utterance_ref, goal, interpretation, keep[], deny[], budget{files, symbols, magnitude}, acceptance[], assumptions[], status | Versioned, in-repo, human-readable |
 | KeepClause | description, kind, compiled_check, baseline_ref, result, evidence_class | Child of Lock |
 | Baseline | lock_ref, captured_at, commit, artifacts[] (tests, hashes, traces), determinism_verified | **Outside writable tree, content-addressed** |
 | Plan | lock_ref, steps[]{mechanism, blast_radius, reversibility}, budget, critique_result | Disposable |
@@ -728,7 +728,7 @@ Aggregate legal posture (doc A, retained): the entire recommended stack is permi
 **Ruling applied:** doc B gated its MVP on characterization test generation — the very component it rates critical/research-grade risk ("if this does not work, the product does not exist"). The merged ruling rejects that: **the MVP must already differentiate without the riskiest component.** The merged MVP, six items:
 
 1. **Structural index + blast radius.** tree-sitter symbol graph, incremental, merkle-invalidated; `cd why <symbol>` — blast radius and coupling, genuinely useful with no AI involved. *(doc B's MVP item, retained.)*
-2. **Intent Lock authoring with system-proposed KEEP/DENY.** The system proposes GOAL/KEEP/DENY from blast-radius analysis; the human edits and approves. This is the moment the product must feel different. The ambiguity gate (§10 — heuristics + ClarifyGPT-style divergence check + the three-level confidence model) fires during authoring. *(Merge of doc B's item 3 and doc A's item 2.)*
+2. **Vibe Check authoring with system-proposed KEEP/DENY.** The system proposes GOAL/KEEP/DENY from blast-radius analysis; the human edits and approves. This is the moment the product must feel different. The ambiguity gate (§10 — heuristics + ClarifyGPT-style divergence check + the three-level confidence model) fires during authoring. *(Merge of doc B's item 3 and doc A's item 2.)*
 3. **File/symbol budget enforcement at the tool layer, with logged one-key override.** Out-of-budget writes refused; expansion is an explicit, timestamped decision. *(Both docs.)*
 4. **Evidence-classed Change Report over EXISTING tests + lockfile diff + signature diff + typecheck.** Four classes (Measured / Proven / Asserted / Unchecked), CLI and markdown, PR-postable. No characterization generation — the MVP's "Measured" evidence comes from the repo's own suite and from structural diffs; everything else is honestly Asserted or Unchecked. **This is the ruling's core edit:** the honest report differentiates *even when the honest answer is mostly "Unchecked,"* because naming what nobody checked is itself the product no competitor ships. *(Doc B's report, descoped per ruling.)*
 5. **Checkpoint / undo.** Git-native snapshot before execution; one command restores; no understanding required. *(Both docs.)*
@@ -769,7 +769,7 @@ Strongest first:
 3. **Being the verification substrate other agents call.** Potential — strong if achieved; requires distribution the company may not get.
 4. **The Change Report as an organizational artifact.** Potential — if teams require it on PRs, it becomes process, and process is sticky. Depends entirely on the GitHub Action landing.
 5. **The ambiguity gate's calibration data (doc A's moat, slotted in).** Every answered or dismissed clarification question in production is training signal for the gate — a flywheel a fast-follower cannot shortcut, and the documented prerequisite for the fine-tuned classifier that beats prompting. Real, modest, compounding. [arXiv 2507.21285](https://arxiv.org/pdf/2507.21285)
-6. **Intent Lock as a format.** Weak — formats do not defend; Spec Kit's already exists.
+6. **Vibe Check as a format.** Weak — formats do not defend; Spec Kit's already exists.
 7. **Jargon translation and response design.** None — 7 KB of text; the seed repo proves it.
 8. **The metaphor and the name.** None — good positioning, zero moat.
 
@@ -868,7 +868,7 @@ Eleven scripted interactions covering the required set, each showing the merged 
 >
 > **Code Director:** Locked: **Goal** — entries on this screen survive app restart. **Keep** — how saving works everywhere else; the file format on disk. **Budget** — 2 files. I'll verify by restarting the app twice in a row with test data. Working.
 
-*Mechanisms: intent translation from pure outcome language ("remember what I was doing" → state preservation/restoration), one batched behavioral question in user vocabulary, no jargon ("state," "persistence," "lifecycle" never appear), Intent Lock authored with KEEP set, verification approach declared up front.*
+*Mechanisms: intent translation from pure outcome language ("remember what I was doing" → state preservation/restoration), one batched behavioral question in user vocabulary, no jargon ("state," "persistence," "lifecycle" never appear), Vibe Check authored with KEEP set, verification approach declared up front.*
 
 ### 3. Performance complaint
 

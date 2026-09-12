@@ -1,5 +1,5 @@
 /**
- * Stable YAML round-trip for Intent Locks.
+ * Stable YAML round-trip for Vibe Checks.
  *
  * Writes are deterministic: keys are emitted in a fixed schema order and
  * list order is semantic (never re-sorted on write — the human's ordering
@@ -9,7 +9,7 @@
 
 import YAML from "yaml";
 import {
-  IntentLock,
+  VibeCheck,
   KeepClause,
   KEEP_CLAUSE_KINDS,
   LOCK_SCHEMA_VERSION,
@@ -21,7 +21,7 @@ import {
 export class LockParseError extends Error {}
 
 function err(msg: string): never {
-  throw new LockParseError(`Intent Lock YAML: ${msg}`);
+  throw new LockParseError(`Vibe Check YAML: ${msg}`);
 }
 
 // ---------------------------------------------------------------------
@@ -46,7 +46,7 @@ function assumptionToYaml(a: LockAssumption): Record<string, unknown> {
 }
 
 /** Serialize a Lock to YAML with canonical key order. Stable for stable input. */
-export function lockToYaml(lock: IntentLock): string {
+export function lockToYaml(lock: VibeCheck): string {
   const doc: Record<string, unknown> = {
     schemaVersion: lock.schemaVersion,
     id: lock.id,
@@ -123,7 +123,7 @@ function parseAssumption(v: unknown, i: number): LockAssumption {
 }
 
 /** Parse and validate a Lock YAML document. Throws LockParseError. */
-export function lockFromYaml(text: string): IntentLock {
+export function lockFromYaml(text: string): VibeCheck {
   let raw: unknown;
   try {
     raw = YAML.parse(text);
@@ -156,7 +156,7 @@ export function lockFromYaml(text: string): IntentLock {
   return {
     schemaVersion: LOCK_SCHEMA_VERSION,
     id: reqString(raw, "id", "lock"),
-    status: status as IntentLock["status"],
+    status: status as VibeCheck["status"],
     utterance: reqString(raw, "utterance", "lock"),
     goal: reqString(raw, "goal", "lock"),
     interpretation: reqString(raw, "interpretation", "lock"),

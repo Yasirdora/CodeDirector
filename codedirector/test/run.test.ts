@@ -11,7 +11,7 @@ import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { draftLock } from "../src/lock/draft";
 import { saveLock } from "../src/lock/store";
-import { IntentLock } from "../src/lock/types";
+import { VibeCheck } from "../src/lock/types";
 import { runWithLock, RunError } from "../src/run/run";
 import { undo } from "../src/checkpoint";
 import { makeDemoGitRepo } from "./helpers";
@@ -20,7 +20,7 @@ const NODE = process.execPath;
 const append = (file: string, text: string) =>
   `${JSON.stringify(text)};require("fs").appendFileSync(${JSON.stringify(file)},${JSON.stringify(text)})`;
 
-async function setup(customize?: (lock: IntentLock) => void): Promise<{ root: string; lock: IntentLock }> {
+async function setup(customize?: (lock: VibeCheck) => void): Promise<{ root: string; lock: VibeCheck }> {
   const root = makeDemoGitRepo();
   const { index } = await buildIndex(root);
   const { lock } = draftLock(root, index, "make the preview feel instant", {

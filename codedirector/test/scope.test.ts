@@ -12,7 +12,7 @@ import { buildIndex } from "../src/core/builder";
 import { buildGraph, directCallers } from "../src/core/graph";
 import { draftLock } from "../src/lock/draft";
 import { loadLock, saveLock } from "../src/lock/store";
-import { IntentLock } from "../src/lock/types";
+import { VibeCheck } from "../src/lock/types";
 import { runWithLock } from "../src/run/run";
 import { runIsolated } from "../src/run/tree";
 import { dependencyFingerprint } from "../src/run/deps";
@@ -23,8 +23,8 @@ const NODE = process.execPath;
 
 async function active(
   files: Record<string, string>,
-  customize: (lock: IntentLock) => void,
-): Promise<{ root: string; lock: IntentLock }> {
+  customize: (lock: VibeCheck) => void,
+): Promise<{ root: string; lock: VibeCheck }> {
   const root = makeGitRepo(files);
   const { index } = await buildIndex(root);
   const { lock } = draftLock(root, index, "probe", { now: "2026-01-01T00:00:00.000Z", createdBy: "t" });

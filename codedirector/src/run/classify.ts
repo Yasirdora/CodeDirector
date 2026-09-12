@@ -11,7 +11,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
-import { IntentLock } from "../lock/types";
+import { VibeCheck } from "../lock/types";
 import { matchPath } from "../lock/glob";
 import { gitPrefix, gitStatusPorcelain, porcelainLinePaths, toRootRelative } from "../checkpoint";
 import { Baseline } from "./baseline";
@@ -164,7 +164,7 @@ function changedFilesSinceBaseline(
 }
 
 /** Classify a single path against the Lock. */
-export function classifyPath(lock: IntentLock, relPath: string): ClassifiedChange {
+export function classifyPath(lock: VibeCheck, relPath: string): ClassifiedChange {
   const normalized = relPath.replace(/\\/g, "/");
   for (const d of lock.deny) {
     if (matchPath(d, normalized)) {
@@ -176,7 +176,7 @@ export function classifyPath(lock: IntentLock, relPath: string): ClassifiedChang
 }
 
 /** Classify all run-touched files against the Lock. */
-export function classifyChanges(rootDir: string, lock: IntentLock, baseline?: Baseline | null): ClassifiedChange[] {
+export function classifyChanges(rootDir: string, lock: VibeCheck, baseline?: Baseline | null): ClassifiedChange[] {
   return changedFiles(rootDir, baseline).map((c) => ({ ...classifyPath(lock, c.path), status: c.status }));
 }
 
