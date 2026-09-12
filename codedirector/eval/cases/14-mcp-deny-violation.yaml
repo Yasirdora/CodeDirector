@@ -1,0 +1,22 @@
+name: mcp-deny-violation
+# An MCP-driven run (lock_check → lock_activate → run_locked over the protocol)
+# that touches a DENY-listed file must fail with the deny violation named.
+mcp: true
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: make math faster
+  goal: same behavior, faster
+  change: math internals only
+  deny: ["package.json"]
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").appendFileSync("package.json","\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "DENY: package.json"

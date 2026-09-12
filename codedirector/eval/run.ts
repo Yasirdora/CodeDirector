@@ -45,6 +45,8 @@ interface EvalExpect {
 
 interface EvalCase {
   name: string;
+  /** When true, the run is driven through the MCP server (lock_check → lock_activate → run_locked). */
+  mcp?: boolean;
   files: Record<string, string>;
   lock: {
     utterance?: string;
@@ -87,11 +89,11 @@ function validateCase(raw: unknown, file: string): EvalCase {
   return c;
 }
 
-function composeLock(c: EvalCase): VibeCheck {
+function composeLock(c: EvalCase, status: VibeCheck["status"] = "active"): VibeCheck {
   return {
     schemaVersion: LOCK_SCHEMA_VERSION,
     id: "IL-0001",
-    status: "active",
+    status,
     utterance: c.lock.utterance ?? c.name,
     goal: c.lock.goal ?? c.name,
     interpretation: c.lock.interpretation ?? c.name,
@@ -139,15 +141,22 @@ function runCase(cliPath: string, c: EvalCase): CaseResult {
     git(tmp, ["init", "-q"]);
     git(tmp, ["add", "-A"]);
     git(tmp, ["commit", "-qm", "init"]);
-    saveLock(tmp, composeLock(c));
+    // MCP cases start from a draft — activation must go through the protocol.
+    saveLock(tmp, composeLock(c, c.mcp ? "draft" : "active"));
 
-    const run = spawnSync("sh", ["-c", `${process.execPath} ${JSON.stringify(cliPath)} run IL-0001 --root ${JSON.stringify(tmp)} -- ${c.command}`], {
-      encoding: "utf8",
-      timeout: 180_000,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const run = c.mcp
+      ? spawnSync(process.execPath, [path.join(__dirname, "mcp-drive.js"), tmp, "IL-0001", c.command], {
+          encoding: "utf8",
+          timeout: 180_000,
+          stdio: ["ignore", "pipe", "pipe"],
+        })
+      : spawnSync("sh", ["-c", `${process.execPath} ${JSON.stringify(cliPath)} run IL-0001 --root ${JSON.stringify(tmp)} -- ${c.command}`], {
+          encoding: "utf8",
+          timeout: 180_000,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
     if (run.error) {
-      failures.push(`cdir run spawn failed: ${run.error.message}`);
+      failures.push(`${c.mcp ? "mcp-drive" : "cdir run"} spawn failed: ${run.error.message}`);
       return { name: c.name, passed: false, failures, tmp };
     }
     if (run.status !== c.expect.exitCode) {
