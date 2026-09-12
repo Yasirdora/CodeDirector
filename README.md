@@ -11,6 +11,20 @@ Every agent on the market is racing to produce more change per minute. The bindi
 
 ---
 
+## ⚡ Installation
+
+Code Director is packaged as an npm CLI tool. You can install it globally directly from the repository:
+
+```bash
+git clone https://github.com/Yasirdora/codedirector.git
+cd codedirector/codedirector
+npm install -g .
+```
+
+Once installed, you can use the `cdir` command anywhere.
+
+---
+
 ## 🧭 The Core Thesis
 
 Code Director operates on two foundational layers:

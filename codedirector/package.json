@@ -1,7 +1,7 @@
 {
   "name": "codedirector",
-  "version": "0.1.0",
-  "description": "Contract/verification layer around coding agents: structural index, blast radius, Intent Lock, scope enforcement, evidence-classed change reports.",
+  "version": "0.2.0",
+  "description": "Contract/verification layer around coding agents: structural index, blast radius, Vibe Check, scope enforcement, evidence-classed change reports.",
   "license": "MIT",
   "type": "commonjs",
   "bin": {
