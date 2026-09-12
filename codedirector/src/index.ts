@@ -174,3 +174,4 @@ export {
   type BuildReportOptions,
 } from "./report/report";
 export { formatReport, formatReportMarkdown, formatReportJson, summarizeReport } from "./report/format";
+export { startMcpServer } from "./mcp/server";

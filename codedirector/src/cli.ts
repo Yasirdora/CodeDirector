@@ -91,6 +91,11 @@ Usage:
                                           then the Unchecked bucket (always
                                           visible), then asserted findings
 
+  cdir mcp [--root DIR]                   Serve the Code Director workflow over
+                                          MCP (stdio) — the supported integration
+                                          path for agents (Gemini CLI first;
+                                          see integrations/gemini/)
+
   cdir help                               Show this help
 
 Options:
@@ -409,6 +414,13 @@ async function main(): Promise<number> {
         if (e instanceof CheckpointError) fail(e.message);
         throw e;
       }
+    }
+
+    case "mcp": {
+      // Blocks until the client disconnects; stdio is the protocol channel.
+      const { startMcpServer } = await import("./mcp/server");
+      await startMcpServer(root);
+      return 0;
     }
 
     case "run": {
