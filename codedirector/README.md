@@ -37,6 +37,21 @@ not take an agent's word for it: it maps the repository, computes what a
 change could affect, holds the work to the scope you approved, and marks
 every claim with how it was checked.
 
+## What it costs (read this first)
+
+**Code Director uses more tokens than a raw agent.** In the pilot benchmark
+(9 paired tasks), directed runs cost **+72% total tokens** and bought 9/9
+correctness against 7/9 raw — two tasks the unguided agent genuinely
+misunderstood. The premium is prompt-side: skill instructions, the scope
+draft, richer working context. The fence itself — hooks, locks,
+verification, reports — is deterministic code and costs **zero** tokens.
+
+This is a correctness-for-tokens trade, not a free lunch. For trivial
+one-file edits the skill's fast lane keeps the ceremony small; for anything
+that would hurt if built wrong, one avoided misunderstanding usually costs
+more than the premium. Data and its limits:
+[intent-experiment/EXPERIMENT.md](../intent-experiment/EXPERIMENT.md).
+
 ## Evidence classes
 
 Every claim the system makes is one of:

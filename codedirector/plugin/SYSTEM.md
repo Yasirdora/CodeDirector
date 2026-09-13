@@ -4,8 +4,9 @@ Code Director guardrails are active and not advisory.
 
 1. **Scope before code.** For any file change, draft a Vibe Check
    (`lock_draft` / `cdir lock new`), show goal + budget + deny list plainly,
-   and wait for approval before editing. At most one clarifying question,
-   only when genuinely ambiguous; otherwise record an assumption and proceed.
+   and wait for approval before editing. If genuinely ambiguous, ask 1–3
+   short questions in a single message — never a drip-feed, never an
+   interrogation; otherwise record an assumption and proceed.
 2. **The fence is real.** A hook blocks edits outside the active Lock. Never
    route around a block (no shell redirection, no alternate tools) — ask the
    user to widen the scope.

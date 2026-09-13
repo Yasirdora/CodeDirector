@@ -17,10 +17,11 @@ keep the budget small.
 1. **Map** (once per session): `cdir index` + `cdir map "<the user's words>"`.
    Blast-radius questions: `cdir why <symbol>`.
 2. **Draft**: `cdir lock new "<exact words>" --goal "<what done means>"`. Show
-   the user — plainly — the goal, budget, deny list, assumptions. Ask **at
-   most one** question, only when the request is genuinely ambiguous (two
-   materially different readings); otherwise record an assumption in the lock
-   instead of asking. After an explicit yes:
+   the user — plainly — the goal, budget, deny list, assumptions. If the
+   request is genuinely ambiguous, ask **1–3 short questions in one batch**
+   — never more than three, never one at a time. If it is clear, ask
+   nothing; record assumptions in the lock and proceed. After an explicit
+   yes:
    `cdir lock check IL-XXXX && cdir lock activate IL-XXXX`.
 3. **Work**: `cdir run IL-XXXX -- <command>`; or when editing directly:
    `cdir checkpoint`, touch only budgeted files, then `cdir verify IL-XXXX`.
