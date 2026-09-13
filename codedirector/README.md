@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="brand/logo.png" width="128" alt="Code Director logo">
+  <img src="brand/logo.svg" width="128" alt="Code Director logo">
 </p>
 
 # Code Director (`cdir`)
