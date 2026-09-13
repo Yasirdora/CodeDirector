@@ -32,6 +32,7 @@ import { stableStringify } from "./core/store";
 import { draftLock, parseKeepClause, type DraftOptions } from "./lock/draft";
 import { getProfile, mergeDraftOptions, PROFILE_NAMES } from "./lock/profiles";
 import { listLocks, loadLock, saveLock } from "./lock/store";
+import { sealLock } from "./lock/seal";
 import { checkLock } from "./lock/check";
 import { formatLock, formatLockLine } from "./lock/show";
 import { createCheckpoint, latestCheckpoint, undo, CheckpointError } from "./checkpoint";
@@ -321,7 +322,11 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
       if (!id) fail("lock activate requires an id, e.g. cdir lock activate IL-0001", 2);
       const lock = loadLock(root, id);
       if (!lock) fail(`no such lock: ${id}`);
-      if (lock.status !== "draft") fail(`lock ${id} has status "${lock.status}" — only drafts can be activated`);
+      // draft → active, or re-activation of an active Lock (the re-approval
+      // path after a seal mismatch). verified/failed/abandoned are history.
+      if (lock.status !== "draft" && lock.status !== "active") {
+        fail(`lock ${id} has status "${lock.status}" — it cannot be activated`);
+      }
       const index = await indexOnDemand(root);
       const result = checkLock(root, lock, index);
       if (!result.ok) {
@@ -330,6 +335,7 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
       }
       lock.status = "active";
       saveLock(root, lock);
+      sealLock(root, lock); // the approval seals the contract
       process.stdout.write(`${id} is now active — run inside it with \`cdir run ${id} -- <command...>\`\n`);
       return 0;
     }

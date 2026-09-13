@@ -28,6 +28,7 @@ import { buildIndex, hashContent } from "../core/builder";
 import { buildGraph } from "../core/graph";
 import { VibeCheck, DEPENDENCY_MANIFESTS } from "../lock/types";
 import { loadLock } from "../lock/store";
+import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
 import { Baseline, baselineFileHash, latestBaselinePath, loadBaseline } from "../run/baseline";
@@ -475,6 +476,10 @@ export function verifyWithBaseline(
 export async function verifyLock(rootDir: string, lockId: string, opts: VerifyOptions = {}): Promise<VerificationReport> {
   const lock = loadLock(rootDir, lockId);
   if (!lock) throw new VerifyError(`no such lock: ${lockId} (see \`cdir lock ls\`)`);
+  // Sealed contract: verifying against a Lock edited after approval would
+  // grade the agent's own amendment — refuse until the user re-approves.
+  const seal = sealViolation(rootDir, lock);
+  if (seal) throw new VerifyError(seal);
   const baselinePath = opts.baselinePath ?? latestBaselinePath(rootDir, lockId) ?? undefined;
   let baseline: Baseline | null = null;
   if (baselinePath) {

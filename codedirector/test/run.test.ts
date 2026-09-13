@@ -10,7 +10,9 @@ import * as path from "node:path";
 import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { draftLock } from "../src/lock/draft";
-import { saveLock } from "../src/lock/store";
+import { checkLock } from "../src/lock/check";
+import { loadLock, lockPathFor, saveLock } from "../src/lock/store";
+import { sealLock, sealViolation } from "../src/lock/seal";
 import { VibeCheck } from "../src/lock/types";
 import { runWithLock, RunError } from "../src/run/run";
 import { undo } from "../src/checkpoint";
@@ -186,6 +188,66 @@ test("run: a draft lock refuses to run", async () => {
     () => runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" }),
     (e: unknown) => e instanceof RunError && /draft/.test((e as Error).message),
   );
+});
+
+test("run: an active lock edited after approval is refused (seal mismatch)", async () => {
+  const { root, lock } = await setup();
+  sealLock(root, lock); // activation pins the approved content
+  const p = lockPathFor(root, lock.id)!;
+  fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace("maxLines: 400", "maxLines: 600"));
+  await assert.rejects(
+    () => runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" }),
+    (e: unknown) =>
+      e instanceof RunError &&
+      /modified after approval \(seal mismatch\)/.test((e as Error).message) &&
+      /cdir lock check IL-\d+ && cdir lock activate/.test((e as Error).message),
+  );
+});
+
+test("run: re-approval (check + activate) re-seals a modified lock and the run proceeds", async () => {
+  const { root, lock } = await setup((l) => {
+    l.budget.maxLines = 40;
+  });
+  sealLock(root, lock);
+  const p = lockPathFor(root, lock.id)!;
+  fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace("maxLines: 40", "maxLines: 600"));
+  await assert.rejects(
+    () => runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" }),
+    /seal mismatch/,
+  );
+  // the user reviews the edited scope and re-approves: check + activate re-seals
+  const edited = loadLock(root, lock.id)!;
+  assert.equal(edited.budget.maxLines, 600, "the edit is real, not shadowed");
+  const { index } = await buildIndex(root);
+  assert.ok(checkLock(root, edited, index).ok, "edited lock still validates");
+  edited.status = "active";
+  saveLock(root, edited);
+  sealLock(root, edited);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// faster\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+});
+
+test("run: internal status transitions (verified/failed) never trip the seal", async () => {
+  const { root, lock } = await setup();
+  sealLock(root, lock);
+  const ok = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// faster\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(ok.exitCode, 0);
+  const after = loadLock(root, lock.id)!;
+  assert.equal(after.status, "verified");
+  // back to active (a new work session): the saveLock refresh keeps the seal valid
+  after.status = "active";
+  saveLock(root, after);
+  assert.equal(sealViolation(root, loadLock(root, lock.id)!), null);
+  const again = await runWithLock(root, lock.id, [NODE, "-e", append("src/pipeline.ts", "// x\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(again.exitCode, 1, "out-of-budget failure, not a seal refusal");
+  assert.equal(loadLock(root, lock.id)!.status, "failed");
+  assert.equal(sealViolation(root, loadLock(root, lock.id)!), null);
 });
 
 test("run: no-new-dependency KEEP clause diffs manifests against the baseline", async () => {

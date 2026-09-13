@@ -10,6 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { VibeCheck } from "./types";
 import { lockFromYaml, lockToYaml } from "./yaml";
+import { refreshSeal } from "./seal";
 
 export function locksDir(rootDir: string): string {
   return path.join(rootDir, ".codedirector", "locks");
@@ -108,5 +109,8 @@ export function saveLock(rootDir: string, lock: VibeCheck): string {
   const prev = lockPathFor(rootDir, lock.id);
   fs.writeFileSync(target, lockToYaml(lock), "utf8");
   if (prev && prev !== target) fs.rmSync(prev);
+  // Internal writes (activation, run status transitions) re-pin the seal so
+  // the approved contract stays valid; status is outside the sealed hash.
+  refreshSeal(rootDir, lock);
   return target;
 }

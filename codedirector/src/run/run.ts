@@ -25,6 +25,7 @@ import { ensureCodedirectorIgnore, indexDir, stableStringify } from "../core/sto
 import { createCheckpoint, Checkpoint } from "../checkpoint";
 import { VibeCheck, DEPENDENCY_MANIFESTS } from "../lock/types";
 import { loadLock, saveLock } from "../lock/store";
+import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { Baseline, baselineFileHash, captureBaseline, saveBaseline } from "./baseline";
 import { changedFiles, changedLineCount, ClassifiedChange, classifyChanges } from "./classify";
@@ -196,6 +197,10 @@ export async function runWithLock(
   if (lock.status === "abandoned") {
     throw new RunError(`lock ${lockId} has status "abandoned" — it cannot run again`);
   }
+  // Sealed contract: an active Lock whose content drifted from the approved
+  // hash refuses to run until the user re-approves (lock check + activate).
+  const seal = sealViolation(rootDir, lock);
+  if (seal) throw new RunError(seal);
 
   ensureCodedirectorIgnore(rootDir);
 

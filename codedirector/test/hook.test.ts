@@ -110,6 +110,32 @@ test(".codedirector state is always writable (the layer manages itself)", () => 
   assert.equal(d.action, "allow");
 });
 
+test("an active lock file is sealed: edits blocked; drafts, finished locks, other state allowed", () => {
+  const root = copyDemoRepo();
+  saveLock(root, lockWith({})); // active IL-0001
+  const activeFile = ".codedirector/locks/IL-0001-make-the-preview-feel-instant.yaml";
+  const d = decidePreToolUse(root, editPayload(activeFile));
+  assert.equal(d.action, "block");
+  if (d.action === "block") {
+    assert.match(d.reason, /active, sealed Vibe Check/);
+    assert.match(d.reason, /lock check \+ lock activate to re-seal/);
+  }
+  // drafts MUST stay editable (pre-approval), verified/failed are history
+  saveLock(root, lockWith({ id: "IL-0002", status: "draft" }));
+  assert.equal(
+    decidePreToolUse(root, editPayload(".codedirector/locks/IL-0002-make-the-preview-feel-instant.yaml")).action,
+    "allow",
+  );
+  saveLock(root, lockWith({ id: "IL-0003", status: "verified" }));
+  assert.equal(
+    decidePreToolUse(root, editPayload(".codedirector/locks/IL-0003-make-the-preview-feel-instant.yaml")).action,
+    "allow",
+  );
+  // everything else under .codedirector stays writable
+  assert.equal(decidePreToolUse(root, editPayload(".codedirector/index.json")).action, "allow");
+  assert.equal(decidePreToolUse(root, editPayload(".codedirector/seals.json")).action, "allow");
+});
+
 test("budget globs are honored", () => {
   const root = copyDemoRepo();
   saveLock(root, lockWith({ budget: { files: ["src/**"], symbols: [], maxFiles: 9, maxLines: 999 } }));

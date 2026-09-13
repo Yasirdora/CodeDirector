@@ -24,6 +24,7 @@ import { draftLock, type DraftOptions } from "../lock/draft";
 import { getProfile, mergeDraftOptions, PROFILE_NAMES } from "../lock/profiles";
 import { checkLock } from "../lock/check";
 import { loadLock, saveLock } from "../lock/store";
+import { sealLock } from "../lock/seal";
 import { runWithLock } from "../run/run";
 import { buildReport } from "../report/report";
 import { formatReport, formatReportJson, formatReportMarkdown } from "../report/format";
@@ -227,12 +228,16 @@ const TOOLS: ToolDef[] = [
       const lockId = str(a, "lockId");
       const lock = loadLock(root, lockId);
       if (!lock) return fail(`no such lock: ${lockId}`);
-      if (lock.status !== "draft") return fail(`lock ${lockId} has status "${lock.status}" — only drafts can be activated`);
+      // draft → active, or re-activation of an active Lock (re-approval after a seal mismatch).
+      if (lock.status !== "draft" && lock.status !== "active") {
+        return fail(`lock ${lockId} has status "${lock.status}" — it cannot be activated`);
+      }
       const index = await indexFor(root);
       const result = checkLock(root, lock, index);
       if (!result.ok) return fail(`lock ${lockId} failed validation: ${result.errors.join("; ")}`);
       lock.status = "active";
       saveLock(root, lock);
+      sealLock(root, lock); // the approval seals the contract
       return ok(`${lockId} is now active — execute ONLY via run_locked ${lockId}`);
     },
   },

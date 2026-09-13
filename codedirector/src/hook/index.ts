@@ -17,7 +17,8 @@
  *     verification after the fact.
  *
  * Semantics when a Lock is active (status: active, highest id wins):
- *   - target under .codedirector/      → allow (the layer manages itself)
+ *   - target under .codedirector/      → allow (the layer manages itself),
+ *     EXCEPT an active lock file — a sealed contract the agent must not amend
  *   - target outside the project root  → block (out of jurisdiction)
  *   - target matches a deny entry      → block
  *   - target outside budget.files      → block
@@ -25,6 +26,7 @@
  * with the run-time classifier, which sees the whole change.
  */
 
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { listLocks } from "../lock/store";
 import { matchPath } from "../lock/glob";
@@ -64,6 +66,19 @@ const NO_LOCK_MESSAGE =
   "Draft one (lock_draft / cdir lock new) and wait for the user's approval before editing.";
 
 /**
+ * Best-effort check: does this file hold an ACTIVE (sealed) Lock? A cheap
+ * status-line scrape, not a full YAML parse — any problem (missing file,
+ * odd formatting) returns false and the edit is allowed (fail-open doctrine).
+ */
+function isActiveLockFile(absPath: string): boolean {
+  try {
+    return /^status:\s*active\s*$/m.test(fs.readFileSync(absPath, "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Decide whether an edit-ish tool call may proceed. Pure apart from reading
  * Lock files under rootDir — no writes, no subprocesses, no throws by design.
  */
@@ -89,7 +104,18 @@ export function decidePreToolUse(rootDir: string, payload: HookPayload): HookDec
       };
     }
     if (rel === ".codedirector" || rel.startsWith(".codedirector/")) {
-      return { action: "allow" }; // the layer may manage its own state
+      // The layer manages its own state — with one exception: an ACTIVE lock
+      // file is a sealed contract; the agent must never amend its own approval.
+      if (rel.startsWith(".codedirector/locks/") && isActiveLockFile(abs)) {
+        return {
+          action: "block",
+          reason:
+            `codedirector: ${rel} is an active, sealed Vibe Check. The contract can only change ` +
+            `with the user's re-approval — ask the user, then lock check + lock activate to re-seal. ` +
+            `Do not edit it directly.`,
+        };
+      }
+      return { action: "allow" };
     }
 
     for (const pattern of lock.deny) {
