@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { VibeCheck, LOCK_SCHEMA_VERSION } from "../src/lock/types";
 import { saveLock } from "../src/lock/store";
-import { decidePreToolUse, targetFileOf } from "../src/hook/index";
+import { decidePreToolUse, targetFileOf, runHookCommand } from "../src/hook/index";
 import { copyDemoRepo } from "./helpers";
 
 function lockWith(overrides: Partial<VibeCheck>): VibeCheck {
@@ -141,4 +141,59 @@ test("malformed payloads fail open", () => {
   const root = copyDemoRepo();
   assert.equal(decidePreToolUse(root, {}).action, "allow");
   assert.equal(decidePreToolUse(root, { tool_name: "Edit" }).action, "remind");
+});
+
+/** Capture stdout/stderr writes around one runHookCommand call. */
+async function captureHook(root: string, stdinText: string) {
+  const out: string[] = [];
+  const err: string[] = [];
+  const origOut = process.stdout.write.bind(process.stdout);
+  const origErr = process.stderr.write.bind(process.stderr);
+  process.stdout.write = ((chunk: unknown) => (out.push(String(chunk)), true)) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: unknown) => (err.push(String(chunk)), true)) as typeof process.stderr.write;
+  try {
+    const code = await runHookCommand(root, stdinText);
+    return { code, stdout: out.join(""), stderr: err.join("") };
+  } finally {
+    process.stdout.write = origOut;
+    process.stderr.write = origErr;
+  }
+}
+
+test("runHookCommand block emits deny JSON on stdout, reason on stderr, exit 2", async () => {
+  const root = copyDemoRepo();
+  saveLock(root, lockWith({}));
+  const r = await captureHook(root, JSON.stringify(editPayload("src/export.ts")));
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /deny list/);
+  const wire = JSON.parse(r.stdout.trim());
+  assert.equal(wire.decision, "deny");
+  assert.match(wire.reason, /IL-0001/);
+});
+
+test("runHookCommand remind emits allow with additionalContext, exit 0", async () => {
+  const root = copyDemoRepo();
+  const r = await captureHook(root, JSON.stringify(editPayload("src/anything.ts")));
+  assert.equal(r.code, 0);
+  const wire = JSON.parse(r.stdout.trim());
+  assert.equal(wire.decision, "allow");
+  assert.match(wire.message, /no active Vibe Check/);
+  assert.equal(wire.hookSpecificOutput.hookEventName, "PreToolUse");
+  assert.match(wire.hookSpecificOutput.additionalContext, /no active Vibe Check/);
+});
+
+test("runHookCommand allow stays silent and exits 0", async () => {
+  const root = copyDemoRepo();
+  saveLock(root, lockWith({}));
+  const r = await captureHook(root, JSON.stringify(editPayload("src/preview.ts")));
+  assert.equal(r.code, 0);
+  assert.equal(r.stdout, "");
+  assert.equal(r.stderr, "");
+});
+
+test("runHookCommand fails open on unparseable stdin", async () => {
+  const root = copyDemoRepo();
+  const r = await captureHook(root, "not json at all {");
+  assert.equal(r.code, 0);
+  assert.equal(r.stdout, "");
 });

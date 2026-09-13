@@ -6,8 +6,10 @@
  * { tool_name, tool_input, cwd } — and this module decides whether the
  * tool call may proceed:
  *
- *   - exit 0: allow. stdout may carry a JSON { "message": ... } reminder.
- *   - exit 2: block. stderr carries the reason; the agent receives it as a
+ *   - exit 0: allow. stdout may carry a JSON reminder
+ *     ({ "decision": "allow", hookSpecificOutput.additionalContext, ... }).
+ *   - exit 2: block. stderr carries the reason and stdout carries
+ *     { "decision": "deny", "reason": ... }; the agent receives it as a
  *     failed tool result and can choose an alternative.
  *   - anything unexpected: fail OPEN (allow). A misbehaving fence must
  *     never brick a session; per the hook contract, blocking is reserved
@@ -131,9 +133,21 @@ export function readStdin(stream: NodeJS.ReadStream): Promise<string> {
 }
 
 /**
- * CLI entry for `cdir hook`. Maps the decision onto the hook contract:
- * allow → exit 0 (reminders as a JSON message on stdout), block → exit 2
- * with the reason on stderr. Unparseable payloads fail open.
+ * CLI entry for `cdir hook`. Maps the decision onto the hook contract.
+ *
+ * Two contract dialects are emitted at once so the same binary works with
+ * Claude Code, Grok Build, and other agent hooks:
+ *
+ *   - block: exit 2 with the reason on stderr (legacy contract), plus
+ *     {"decision":"deny","reason":...} on stdout (JSON contract). Either
+ *     channel alone is enough for hosts that read one of them.
+ *   - remind: exit 0 with {"decision":"allow"} and the reminder carried as
+ *     hookSpecificOutput.additionalContext, so hosts that inject context
+ *     show it to the model; a plain {"message"} field is kept for hosts
+ *     that surface that instead.
+ *   - allow: exit 0, no output.
+ *
+ * Unparseable payloads fail open.
  */
 export async function runHookCommand(rootDir: string, stdinText: string): Promise<number> {
   let payload: HookPayload = {};
@@ -147,9 +161,19 @@ export async function runHookCommand(rootDir: string, stdinText: string): Promis
   switch (decision.action) {
     case "block":
       process.stderr.write(decision.reason + "\n");
+      process.stdout.write(JSON.stringify({ decision: "deny", reason: decision.reason }) + "\n");
       return 2;
     case "remind":
-      process.stdout.write(JSON.stringify({ message: decision.message }) + "\n");
+      process.stdout.write(
+        JSON.stringify({
+          decision: "allow",
+          message: decision.message,
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            additionalContext: decision.message,
+          },
+        }) + "\n"
+      );
       return 0;
     default:
       return 0;
