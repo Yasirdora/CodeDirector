@@ -181,13 +181,26 @@ export function classifyChanges(rootDir: string, lock: VibeCheck, baseline?: Bas
 }
 
 /**
- * Lines changed vs the baseline HEAD (or current HEAD when no baseline),
- * plus the full line count of newly untracked files.
+ * Lines changed by the run, plus the full line count of newly untracked
+ * files. Tracked files are measured vs the baseline HEAD, but a file the
+ * run never touched (current bytes == baseline bytes) is excluded —
+ * pre-existing dirt must not count against the budget; classifyChanges
+ * already excludes it and line counting follows the same rule. A touched
+ * file counts its full delta vs the baseline HEAD, so a file with both
+ * pre-existing and run changes can overcount (tripwire, not proof).
  */
 export function changedLineCount(rootDir: string, untrackedPaths: string[], baseline?: Baseline | null): number {
   let total = 0;
   const prefix = gitPrefix(rootDir);
   const from = baseline?.head ?? "HEAD";
+  const pre = baseline?.workTreeHashes ?? {};
+  const headNow = currentHead(rootDir);
+  const committed = new Set<string>();
+  if (baseline?.head && headNow && headNow !== baseline.head) {
+    for (const row of nameStatusRange(rootDir, baseline.head, headNow)) {
+      for (const p of row.paths) committed.add(displayPath(rootDir, p));
+    }
+  }
   try {
     const numstat = execFileSync("git", ["diff", "--numstat", from], {
       cwd: rootDir,
@@ -199,19 +212,20 @@ export function changedLineCount(rootDir: string, untrackedPaths: string[], base
       const m = /^(\d+)\t(\d+)\t(.+)$/.exec(line);
       if (!m) continue;
       const rel = toRootRelative(prefix, m[3]);
-      if (rel === null) {
-        total += parseInt(m[1], 10) + parseInt(m[2], 10);
-        continue;
+      const preHash = pre[m[3]] ?? (rel !== null ? pre[rel] : undefined);
+      if (preHash !== undefined && (rel === null || !committed.has(rel))) {
+        const now = hashGitPath(rootDir, m[3]) ?? (rel !== null ? hashGitPath(rootDir, rel) : null);
+        if (now === preHash) continue; // pre-existing dirt, untouched by the run
       }
       total += parseInt(m[1], 10) + parseInt(m[2], 10);
     }
   } catch {
     /* no HEAD or git failure — untracked count still reported */
   }
-  const pre = new Set(Object.keys(baseline?.workTreeHashes ?? {}));
+  const preKeys = new Set(Object.keys(baseline?.workTreeHashes ?? {}));
   for (const p of untrackedPaths) {
     const gitPath = prefix ? prefix + p : p;
-    if (pre.has(gitPath) || pre.has(p)) continue;
+    if (preKeys.has(gitPath) || preKeys.has(p)) continue;
     try {
       const text = fs.readFileSync(path.join(rootDir, p), "utf8");
       total += text === "" ? 0 : text.split("\n").length;

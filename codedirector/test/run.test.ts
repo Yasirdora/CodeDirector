@@ -53,6 +53,33 @@ test("run: in-budget edit exits 0 and writes a run record", async () => {
   assert.ok(fs.existsSync(path.join(root, outcome.record.baselinePath)), "baseline written");
 });
 
+test("run: pre-existing dirty tree does not count against maxLines", async () => {
+  // Field case: a repo with ~1.5k lines of unrelated uncommitted work;
+  // the run edits one in-budget file by a line. The 40-line cap must see
+  // the run's delta only — pre-existing dirt is neither a classification
+  // hit nor line budget. Dirt sits in a DENIED file on purpose: untouched
+  // bytes must not trip the deny rule either.
+  const { root, lock } = await setup((l) => {
+    l.budget.maxLines = 40;
+  });
+  const dirt = Array.from({ length: 60 }, (_, i) => `// unrelated dirt ${i}`).join("\n") + "\n";
+  fs.appendFileSync(path.join(root, "src/export.ts"), dirt);
+  fs.appendFileSync(path.join(root, "src/slider.ts"), dirt);
+
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// faster\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.record.exitCode, 0);
+  assert.equal(outcome.exitCode, 0);
+  assert.deepEqual(outcome.record.violations, []);
+  assert.equal(outcome.record.changed.length, 1, "only the run-touched file is classified");
+  assert.equal(outcome.record.changed[0].path, "src/preview.ts");
+  assert.ok(
+    outcome.record.budget.linesChanged <= 5,
+    `only the run's own lines count against maxLines, got ${outcome.record.budget.linesChanged}`,
+  );
+});
+
 test("run: out-of-budget edit exits non-zero and names the offending path", async () => {
   const { root, lock } = await setup();
   const outcome = await runWithLock(
