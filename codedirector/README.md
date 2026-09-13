@@ -281,6 +281,20 @@ the lock, fresh index, all rungs. Without any baseline, structural and output
 checks report Unchecked ("no pre-change baseline") while tests and typecheck
 still run. Updates the lock status; exit 0 only when verified.
 
+### `cdir hook`
+
+**PreToolUse bridge for agent lifecycle hooks** (agent lifecycle hooks and compatible systems). Reads the agent's hook payload JSON from stdin
+(`tool_name`, `tool_input`, `cwd`) and decides whether an edit-ish tool
+call may proceed against the active Lock: deny-listed and out-of-budget
+files are blocked (exit 2, reason on stderr — the agent receives it as a
+failed tool result); edits with no active Lock are allowed with a workflow
+reminder (exit 0, JSON `message` on stdout); non-edit tools, unknown
+payload shapes, and any internal error **fail open** (exit 0). Paths under
+`.codedirector/` are always allowed — the layer manages its own state.
+Per-edit enforcement covers file membership only; `maxFiles` / `maxLines`
+stay with the run-time classifier, and the hook cannot see inside shell
+commands — `cdir run` verification remains the hard floor.
+
 ### `cdir report <lock-id> [--format=terminal|md|json]`
 
 Renders the **Change Report** — the product's signature artifact. It opens
