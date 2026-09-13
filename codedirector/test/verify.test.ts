@@ -181,6 +181,39 @@ test("verify: lock-level verifyCommand is measured", async () => {
   assert.ok(fail.record.violations.some((v) => v.includes("VERIFY verify-command")), `violations: ${fail.record.violations.join("; ")}`);
 });
 
+test("verify: verifyTimeoutMs precedence — lock field applies, CLI/API override wins", async () => {
+  // verifyCommand sleeps 2s; the lock's 100ms timeout must kill it...
+  const { root, lock } = await setup([], (l) => {
+    l.verifyCommand = `${JSON.stringify(NODE)} -e "setTimeout(()=>{},2000)"`;
+    l.verifyTimeoutMs = 100;
+  });
+  const timed = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  const timedItem = timed.record.verification!.items.find((i) => i.source === "verify-command");
+  assert.equal(timedItem?.verdict, "unchecked");
+  assert.ok(timedItem?.reason?.includes("timed out after 100ms"), `reason: ${timedItem?.reason}`);
+
+  // ...and an explicit testTimeoutMs overrides the lock field, letting it pass.
+  saveLock(root, { ...lock, status: "active" });
+  const overridden = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// more\n")], {
+    stdio: "pipe",
+    verifyOptions: { testTimeoutMs: 10_000 },
+  });
+  const heldItem = overridden.record.verification!.items.find((i) => i.source === "verify-command");
+  assert.equal(heldItem?.verdict, "held", `detail: ${heldItem?.detail}`);
+});
+
+test("verify: explicit testTimeoutMs applies when the lock has no verifyTimeoutMs", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.verifyCommand = `${JSON.stringify(NODE)} -e "setTimeout(()=>{},2000)"`;
+  });
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], {
+    stdio: "pipe",
+    verifyOptions: { testTimeoutMs: 100 },
+  });
+  const item = outcome.record.verification!.items.find((i) => i.source === "verify-command");
+  assert.ok(item?.reason?.includes("timed out after 100ms"), "explicit override applies, reason names the value");
+});
+
 test("verify: typecheck proven-clean with a local compiler, unchecked without one", async () => {
   // Repo WITH a compiler: symlink the codedirector node_modules in.
   // (__dirname is dist/test once compiled — up two levels to the package root.)

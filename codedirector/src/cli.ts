@@ -79,18 +79,22 @@ Usage:
 
   cdir run <lock-id> [--root DIR]         Verified execution: checkpoint, capture
           [--allow-expand] -- <cmd...>    baseline, run the command, enforce
-          [--no-report]                   budget + deny, then verify every KEEP
+          [--no-report] [--test-timeout MS]
+                                          budget + deny, then verify every KEEP
                                           clause (structural diffs, typecheck,
                                           tests, output hashes) and emit the
                                           Change Report. Exit 0 only when the
                                           command succeeded AND no violations.
-                                          Without a lock id: refused (the whole
-                                          point is the contract).
+                                          --test-timeout overrides the lock's
+                                          verifyTimeoutMs (default 60s) for
+                                          tests and verifyCommand. Without a
+                                          lock id: refused (the whole point is
+                                          the contract).
 
   cdir verify <lock-id> [--root DIR]      Re-run the verification ladder against
-                                          the latest baseline (tests, typecheck,
+          [--test-timeout MS]             the latest baseline (tests, typecheck,
                                           output hashes) without re-running the
-                                          change command
+                                          change command; --test-timeout as above
   cdir report <lock-id> [--root DIR]      Render the Change Report: violations
           [--format=terminal|md|json]     first, then verified claims with
                                           evidence classes + artifact refs,
@@ -466,8 +470,10 @@ async function main(): Promise<number> {
         fail(`run requires a command after "--", e.g. cdir run ${lockId} -- npm test`, 2);
       }
       try {
+        const testTimeoutMs = flags.has("test-timeout") ? intFlag(flags, "test-timeout", 60_000) : undefined;
         const outcome = await runWithLock(root, lockId, runCommand, {
           allowExpand: flags.has("allow-expand"),
+          ...(testTimeoutMs !== undefined ? { verifyOptions: { testTimeoutMs } } : {}),
         });
         process.stdout.write(formatRunReport(outcome) + "\n");
         // The Change Report is auto-emitted at the end of every run.
@@ -491,7 +497,8 @@ async function main(): Promise<number> {
       const lockId = positional[0];
       if (!lockId) fail("verify requires a lock id, e.g. cdir verify IL-0001", 2);
       try {
-        const report = await buildReport(root, lockId);
+        const testTimeoutMs = flags.has("test-timeout") ? intFlag(flags, "test-timeout", 60_000) : undefined;
+        const report = await buildReport(root, lockId, testTimeoutMs !== undefined ? { testTimeoutMs } : {});
         finalizeLockStatus(root, report);
         const fmt = flagStr(flags, "format") ?? "terminal";
         process.stdout.write(renderReport(report, fmt) + "\n");

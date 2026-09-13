@@ -252,13 +252,21 @@ const TOOLS: ToolDef[] = [
           items: { type: "string" },
           description: 'The command as argv, e.g. ["node", "scripts/build.js"]. Runs in the repo root.',
         },
+        testTimeoutMs: {
+          type: "number",
+          description: "Optional timeout (ms) for test runs and the lock's verifyCommand; overrides the lock's verifyTimeoutMs (default 60s).",
+        },
       },
       required: ["lockId", "command"],
     },
     handler: async (root, a) => {
       const lockId = str(a, "lockId");
       const command = strArray(a, "command");
-      const outcome = await runWithLock(root, lockId, command, { stdio: "pipe" });
+      const testTimeoutMs = typeof a.testTimeoutMs === "number" && a.testTimeoutMs > 0 ? a.testTimeoutMs : undefined;
+      const outcome = await runWithLock(root, lockId, command, {
+        stdio: "pipe",
+        ...(testTimeoutMs !== undefined ? { verifyOptions: { testTimeoutMs } } : {}),
+      });
       const report = await buildReport(root, lockId, {
         verification: outcome.record.verification,
         run: outcome.record,

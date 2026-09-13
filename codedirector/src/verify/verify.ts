@@ -49,7 +49,7 @@ export interface VerifyOptions {
   typecheck?: boolean;
   /** tsc --noEmit timeout (default 120s). */
   typecheckTimeoutMs?: number;
-  /** Per-test-run and verifyCommand timeout (default 60s). */
+  /** Per-test-run and verifyCommand timeout (default: lock.verifyTimeoutMs, else 60s). */
   testTimeoutMs?: number;
   /** Per-output-command timeout (default 30s). */
   outputTimeoutMs?: number;
@@ -285,7 +285,7 @@ function failingTestNames(output: string): string[] {
 
 function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions): VerificationItem[] {
   const items: VerificationItem[] = [];
-  const timeout = opts.testTimeoutMs ?? 60_000;
+  const timeout = opts.testTimeoutMs ?? lock.verifyTimeoutMs ?? 60_000;
   for (const clause of lock.keep) {
     if (clause.kind !== "tests-pass") continue;
     const glob = clause.glob ?? "";
@@ -337,7 +337,7 @@ function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions):
 function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): VerificationItem[] {
   if (!lock.verifyCommand) return [];
   const subject = `verifyCommand · ${lock.verifyCommand}`;
-  const timeout = opts.testTimeoutMs ?? 60_000;
+  const timeout = opts.testTimeoutMs ?? lock.verifyTimeoutMs ?? 60_000;
   const probe = runIsolated(rootDir, () => runShellProbe(rootDir, lock.verifyCommand!, timeout, opts.env));
   const artifactRef = `sh -c ${JSON.stringify(lock.verifyCommand)} → exit ${probe.exitCode ?? "?"}`;
   if (probe.timedOut) {
