@@ -20,7 +20,8 @@ import { buildIndex } from "../core/builder";
 import { stableStringify } from "../core/store";
 import { buildRepoMap, formatRepoMap } from "../core/map";
 import { blastRadius, formatBlastRadius } from "../core/why";
-import { draftLock } from "../lock/draft";
+import { draftLock, type DraftOptions } from "../lock/draft";
+import { getProfile, mergeDraftOptions, PROFILE_NAMES } from "../lock/profiles";
 import { checkLock } from "../lock/check";
 import { loadLock, saveLock } from "../lock/store";
 import { runWithLock } from "../run/run";
@@ -162,15 +163,27 @@ const TOOLS: ToolDef[] = [
       properties: {
         utterance: { type: "string", description: "The human's request, verbatim." },
         goal: { type: "string", description: "What must be true when done (optional; defaults to the utterance)." },
+        profile: {
+          type: "string",
+          description:
+            `Optional draft preset (available: ${PROFILE_NAMES.join(", ")}). "apple" denies Pods/Carthage/lockfiles/` +
+            "signing assets/DerivedData (plus the generated .xcodeproj/.xcworkspace under XcodeGen or Tuist), " +
+            "keeps no-new-dependency, and sets verifyCommand to swift test with a 15-minute timeout when Package.swift exists.",
+        },
       },
       required: ["utterance"],
     },
     handler: async (root, a) => {
       const index = await indexFor(root);
       const goal = str(a, "goal", false);
-      const result = draftLock(root, index, str(a, "utterance"), {
-        ...(goal ? { goal } : {}),
-      });
+      const profileName = str(a, "profile", false);
+      let base: DraftOptions = {};
+      if (profileName) {
+        const profile = getProfile(profileName, root);
+        if (!profile) return fail(`unknown profile "${profileName}" (available: ${PROFILE_NAMES.join(", ")})`);
+        base = profile;
+      }
+      const result = draftLock(root, index, str(a, "utterance"), mergeDraftOptions(base, goal ? { goal } : {}));
       return json({
         lockId: result.lock.id,
         path: path.relative(root, result.path),

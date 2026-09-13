@@ -91,6 +91,11 @@ export interface VibeCheck {
    * measured evidence.
    */
   verifyCommand?: string;
+  /**
+   * Optional timeout (ms) for tests-pass runs and verifyCommand — long Apple
+   * test suites need more than the 60s default. CLI --test-timeout overrides.
+   */
+  verifyTimeoutMs?: number;
   budget: LockBudget;
   /** Acceptance signals (text in v1). */
   accept: string[];

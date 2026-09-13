@@ -29,7 +29,8 @@ import { loadIndex } from "./core/store";
 import { blastRadius, formatBlastRadius } from "./core/why";
 import { RepoIndex } from "./core/types";
 import { stableStringify } from "./core/store";
-import { draftLock, parseKeepClause } from "./lock/draft";
+import { draftLock, parseKeepClause, type DraftOptions } from "./lock/draft";
+import { getProfile, mergeDraftOptions, PROFILE_NAMES } from "./lock/profiles";
 import { listLocks, loadLock, saveLock } from "./lock/store";
 import { checkLock } from "./lock/check";
 import { formatLock, formatLockLine } from "./lock/show";
@@ -52,9 +53,14 @@ Usage:
   cdir lock new "<utterance>" [--root DIR]  Draft an Vibe Check from your words:
           [--goal TEXT] [--keep SPEC]       anchors + blast radius propose the
           [--deny GLOB] [--budget-files F]  budget and deny list; you edit, then
-                                          activate. SPECs: api-unchanged:<file>#<sym>,
-                                          tests-pass:<glob>, output-unchanged:<cmd>,
-                                          no-new-dependency, custom:<text>
+          [--verify-command CMD]            activate. SPECs: api-unchanged:<file>#<sym>,
+          [--profile NAME]                  tests-pass:<glob>, output-unchanged:<cmd>,
+                                            no-new-dependency, custom:<text>
+                                            --profile applies a preset bundle of draft
+                                            defaults (available: apple); explicit
+                                            --deny/--keep/--budget-files ADD to the
+                                            profile's values, --verify-command
+                                            overrides it
   cdir lock ls [--root DIR]               List Locks
   cdir lock show <id> [--root DIR]        Render a Lock (✓ machine-checkable ·
                                           ? human judges)
@@ -232,14 +238,21 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
           fail(e instanceof Error ? e.message : String(e), 2);
         }
       }
+      const profileName = flagStr(flags, "profile");
+      let base: DraftOptions = {};
+      if (profileName !== undefined) {
+        const profile = getProfile(profileName, root);
+        if (!profile) fail(`unknown profile "${profileName}" (available: ${PROFILE_NAMES.join(", ")})`, 2);
+        base = profile;
+      }
       const index = await indexOnDemand(root);
-      const result = draftLock(root, index, utterance, {
+      const result = draftLock(root, index, utterance, mergeDraftOptions(base, {
         goal: flagStr(flags, "goal"),
         keep: keep.length > 0 ? keep : undefined,
         deny: flagList(flags, "deny"),
         budgetFiles: flagList(flags, "budget-files"),
         verifyCommand: flagStr(flags, "verify-command"),
-      });
+      }));
       const lines: string[] = [];
       lines.push(`drafted ${result.lock.id} → ${path.relative(root, result.path)}`);
       if (result.anchors.length > 0) {

@@ -91,6 +91,7 @@ export {
   slugify,
 } from "./lock/store";
 export { draftLock, parseKeepClause, type DraftOptions, type DraftResult } from "./lock/draft";
+export { getProfile, mergeDraftOptions, PROFILE_NAMES, APPLE_VERIFY_TIMEOUT_MS } from "./lock/profiles";
 export {
   checkLock,
   signatureHash,
