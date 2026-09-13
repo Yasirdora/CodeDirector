@@ -60,6 +60,12 @@ skipped — only the ceremony shrinks.
 - "While I'm here" improvements the user did not ask for
 - Silent scope expansion, however obviously right it seems
 - Success claims without the report
+- Hand-edit lock files with write tools. Drafts are shaped with the lock
+  tools; status changes come only from `cdir lock activate` (or the MCP
+  `lock_activate`), which also seals the approved scope.
+- Re-activate after a seal break unless the user has explicitly approved
+  the new scope in words first. A seal refusal is a stop signal, not a
+  prompt to work around.
 
 ## MCP mapping
 

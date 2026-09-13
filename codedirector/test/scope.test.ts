@@ -12,6 +12,7 @@ import { buildIndex } from "../src/core/builder";
 import { buildGraph, directCallers } from "../src/core/graph";
 import { draftLock } from "../src/lock/draft";
 import { loadLock, saveLock } from "../src/lock/store";
+import { sealLock } from "../src/lock/seal";
 import { VibeCheck } from "../src/lock/types";
 import { runWithLock } from "../src/run/run";
 import { runIsolated } from "../src/run/tree";
@@ -31,6 +32,7 @@ async function active(
   lock.status = "active";
   customize(lock);
   saveLock(root, lock);
+  sealLock(root, lock);
   return { root, lock };
 }
 
@@ -117,6 +119,7 @@ test("scope: write outside --root is out-of-budget", async () => {
   lock.deny = [];
   lock.keep = [];
   saveLock(app, lock);
+  sealLock(app, lock);
   const r = await runWithLock(
     app,
     lock.id,

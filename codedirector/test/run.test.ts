@@ -36,6 +36,7 @@ async function setup(customize?: (lock: VibeCheck) => void): Promise<{ root: str
   customize?.(lock);
   lock.status = "active";
   saveLock(root, lock);
+  sealLock(root, lock); // setups mirror the official approval path (fail-closed on missing seals)
   return { root, lock };
 }
 
@@ -202,6 +203,34 @@ test("run: an active lock edited after approval is refused (seal mismatch)", asy
       /modified after approval \(seal mismatch\)/.test((e as Error).message) &&
       /cdir lock check IL-\d+ && cdir lock activate/.test((e as Error).message),
   );
+});
+
+test("run: an active lock with no seal is refused (fail-closed on hand-activation)", async () => {
+  // Field case: the agent hand-edited a draft to status: active with write
+  // tools instead of cdir lock activate, so no seal existed and the old
+  // fail-open check let it through. Now a missing seal must refuse.
+  const root = makeDemoGitRepo();
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "make the preview feel instant", {
+    now: "2026-09-11T00:00:00.000Z",
+    createdBy: "test",
+  });
+  lock.budget = { files: ["src/preview.ts"], symbols: [], maxFiles: 1, maxLines: 40 };
+  lock.status = "active";
+  saveLock(root, lock); // no sealLock — the hand-activation bypass
+  await assert.rejects(
+    () => runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" }),
+    (e: unknown) =>
+      e instanceof RunError &&
+      /no approval seal/.test((e as Error).message) &&
+      /cdir lock check IL-\d+ && cdir lock activate/.test((e as Error).message),
+  );
+  // the official path seals it and the run proceeds
+  sealLock(root, lock);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// ok\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
 });
 
 test("run: re-approval (check + activate) re-seals a modified lock and the run proceeds", async () => {

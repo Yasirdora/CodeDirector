@@ -12,6 +12,7 @@ import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { draftLock } from "../src/lock/draft";
 import { loadLock, saveLock } from "../src/lock/store";
+import { sealLock } from "../src/lock/seal";
 import { VibeCheck, KeepClause } from "../src/lock/types";
 import { captureBaseline, saveBaseline, latestBaselinePath, loadBaseline } from "../src/run/baseline";
 import { runWithLock } from "../src/run/run";
@@ -50,6 +51,7 @@ async function setup(keep: KeepClause[], customize?: (lock: VibeCheck) => void):
   customize?.(lock);
   lock.status = "active";
   saveLock(root, lock);
+  sealLock(root, lock);
   return { root, lock };
 }
 
@@ -140,6 +142,7 @@ test("verify: output-unchanged without a baseline capture is unchecked, not held
   lock.budget = { files: ["src/math.js"], symbols: [], maxFiles: 2, maxLines: 400 };
   lock.status = "active";
   saveLock(root, lock);
+  sealLock(root, lock);
 
   // Baseline captured BEFORE the clause is added (simulates a lock edited
   // after the run started): no outputs entry for the command.
@@ -165,6 +168,7 @@ test("verify: no-new-dependency flags a Podfile.lock change (Apple manifests)", 
   lock.budget = { files: ["src/math.js"], symbols: [], maxFiles: 2, maxLines: 400 };
   lock.status = "active";
   saveLock(root, lock);
+  sealLock(root, lock);
 
   const change =
     append("src/math.js", "// ok\n") +
@@ -201,6 +205,7 @@ test("verify: lock-level verifyCommand is measured", async () => {
 
   const failLock = { ...lock, verifyCommand: "node -e \"process.exit(2)\"" };
   saveLock(root, { ...failLock, status: "active" });
+  sealLock(root, { ...failLock, status: "active" });
   const fail = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// more\n")], { stdio: "pipe" });
   assert.equal(fail.exitCode, 1);
   assert.ok(fail.record.violations.some((v) => v.includes("VERIFY verify-command")), `violations: ${fail.record.violations.join("; ")}`);
@@ -219,6 +224,7 @@ test("verify: verifyTimeoutMs precedence — lock field applies, CLI/API overrid
 
   // ...and an explicit testTimeoutMs overrides the lock field, letting it pass.
   saveLock(root, { ...lock, status: "active" });
+  sealLock(root, { ...lock, status: "active" });
   const overridden = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// more\n")], {
     stdio: "pipe",
     verifyOptions: { testTimeoutMs: 10_000 },
@@ -256,6 +262,7 @@ test("verify: typecheck proven-clean with a local compiler, unchecked without on
   lock.budget = { files: ["src/ok.ts"], symbols: [], maxFiles: 1, maxLines: 100 };
   lock.status = "active";
   saveLock(root, lock);
+  sealLock(root, lock);
 
   const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/ok.ts", "export const y: number = 2;\n")], { stdio: "pipe" });
   assert.equal(
@@ -288,6 +295,7 @@ test("verify: typecheck proven-clean with a local compiler, unchecked without on
   d2.lock.budget = { files: ["src/ok.ts"], symbols: [], maxFiles: 1, maxLines: 100 };
   d2.lock.status = "active";
   saveLock(root2, d2.lock);
+  sealLock(root2, d2.lock);
   const outcome2 = await runWithLock(root2, d2.lock.id, [NODE, "-e", append("src/ok.ts", "// ok\n")], { stdio: "pipe" });
   const tc3 = outcome2.record.verification!.items.find((i) => i.source === "typecheck");
   assert.ok(tc3, "typecheck item present");
@@ -330,6 +338,7 @@ test("verify: standalone verifyLock with NO baseline marks structural checks unc
   lock.budget = { files: ["src/math.js"], symbols: [], maxFiles: 2, maxLines: 400 };
   lock.status = "active";
   saveLock(root, lock);
+  sealLock(root, lock);
 
   const { index: indexNow } = await buildIndex(root);
   const report = verifyWithBaseline(root, lock, null, undefined, indexNow);

@@ -26,6 +26,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import YAML from "yaml";
 import { VibeCheck, LOCK_SCHEMA_VERSION } from "../src/lock/types";
 import { saveLock } from "../src/lock/store";
+import { sealLock } from "../src/lock/seal";
 import { EvidenceClass, Verdict } from "../src/verify/types";
 import { ChangeReport } from "../src/report/report";
 
@@ -142,7 +143,9 @@ function runCase(cliPath: string, c: EvalCase): CaseResult {
     git(tmp, ["add", "-A"]);
     git(tmp, ["commit", "-qm", "init"]);
     // MCP cases start from a draft — activation must go through the protocol.
-    saveLock(tmp, composeLock(c, c.mcp ? "draft" : "active"));
+    const lock = composeLock(c, c.mcp ? "draft" : "active");
+    saveLock(tmp, lock);
+    if (lock.status === "active") sealLock(tmp, lock); // mirror the official approval path (fail-closed on missing seals)
 
     const run = c.mcp
       ? spawnSync(process.execPath, [path.join(__dirname, "mcp-drive.js"), tmp, "IL-0001", c.command], {

@@ -11,6 +11,7 @@ import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { draftLock } from "../src/lock/draft";
 import { loadLock, saveLock } from "../src/lock/store";
+import { sealLock } from "../src/lock/seal";
 import { VibeCheck, KeepClause } from "../src/lock/types";
 import { runWithLock } from "../src/run/run";
 import { buildReport, finalizeLockStatus } from "../src/report/report";
@@ -45,6 +46,7 @@ async function setup(keep: KeepClause[], customize?: (lock: VibeCheck) => void):
   customize?.(lock);
   lock.status = "active";
   saveLock(root, lock);
+  sealLock(root, lock);
   return { root, lock };
 }
 
