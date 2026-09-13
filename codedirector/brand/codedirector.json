@@ -1,0 +1,11 @@
+{
+  "name": "codedirector",
+  "displayName": "Code Director",
+  "base": "dark",
+  "colors": {
+    "primary": "#FED30B",
+    "accent": "#FFE88A",
+    "borderFocus": "#FED30B",
+    "roleUser": "#FED30B"
+  }
+}
