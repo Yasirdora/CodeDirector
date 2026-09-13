@@ -121,7 +121,8 @@ Agent CLI CLI setup — add to `~/.agents/mcp.json`:
 
 Other MCP-capable agents (Claude Code, Gemini CLI, …) take the same
 `cdir mcp` command in their own MCP config format. Step-by-step setup
-guides: [Gemini CLI](integrations/gemini/README.md).
+guides: [Gemini CLI](integrations/gemini/README.md) ·
+[Grok CLI](integrations/grok/README.md) (community build; contracts align).
 
 **2. Skill — the rulebook.** Copy [skills/codedirector/SKILL.md](skills/codedirector/SKILL.md)
 into your agent's skills directory (e.g. `.claude/skills/codedirector/` for
