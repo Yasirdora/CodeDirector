@@ -25,6 +25,26 @@ Once installed, you can use the `cdir` command anywhere.
 
 ---
 
+## 🚀 Quick Usage
+
+The core workflow is driven entirely by the `cdir` CLI. It maps your repository, enforces scope boundaries, and verifies the agent's work. 
+
+**Basic Manual Flow:**
+1. `cdir index` — builds a structural map of your codebase.
+2. `cdir lock draft "your prompt"` — generates a strict Vibe Check contract.
+3. `cdir lock check` — verifies that an agent didn't modify files outside the contract.
+4. `cdir report` — generates an evidence-based change report after work is complete.
+
+**Using it with an AI Agent:**
+Code Director is designed to automatically restrict and verify AI agents. You can plug it into any MCP-compatible agent by attaching its MCP server:
+```bash
+mcp add codedirector -- cdir mcp
+```
+
+For the complete command reference and detailed agent setup, see the **[CLI Documentation](./codedirector/README.md)**.
+
+---
+
 ## 🧭 The Core Thesis
 
 Code Director operates on two foundational layers:
