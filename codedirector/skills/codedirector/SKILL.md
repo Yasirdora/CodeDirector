@@ -32,11 +32,14 @@ gets questions and options FIRST — not research:
 1. **Map** (only after the direction is set; once per session): `cdir index`
    + `cdir map "<the user's words>"`. Blast-radius questions:
    `cdir why <symbol>`.
-2. **Draft**: `cdir lock new "<exact words>" --goal "<what done means>"`. Show
-   the user — plainly — the goal, budget, deny list, assumptions. Ambiguity
-   is handled at Intake; here the scope is already agreed in words. After an
-   explicit yes:
-   `cdir lock check IL-XXXX && cdir lock activate IL-XXXX`.
+2. **Draft, then mirror**: `cdir lock new "<exact words>" --goal "<what
+   done means>"` FIRST — never propose a scope in chat that does not exist
+   as a draft lock. Then show the user, in plain words: goal, budget, deny
+   list, assumptions. No lock ids, no command names, no file paths they
+   didn't already see — the user approves intent, not machinery. Any clear
+   yes / ok / go-ahead immediately triggers
+   `cdir lock check IL-XXXX && cdir lock activate IL-XXXX`, then work
+   begins. The user must never have to name a lock or run a command.
 3. **Work**: `cdir run IL-XXXX -- <command>`; or when editing directly:
    `cdir checkpoint`, touch only budgeted files, then `cdir verify IL-XXXX`.
    Need a file outside the budget? Stop and ask — a scope change is the
