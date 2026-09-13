@@ -1,5 +1,9 @@
 # Code Director + Grok CLI (community, superagent-ai)
 
+This guide is for the **community-built** `superagent-ai/grok-cli`. If you
+use the official Grok CLI from xAI (the `grok` binary), see
+[../grok-build](../grok-build/README.md) instead.
+
 Grok CLI's extension points match Code Director's contracts one-to-one:
 MCP servers via settings, SKILL.md skills, and lifecycle hooks that read
 JSON on stdin with exit 0 = allow / exit 2 = block — exactly what
