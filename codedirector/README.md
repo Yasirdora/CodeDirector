@@ -94,7 +94,8 @@ mcp add codedirector -- cdir mcp
 ```
 
 Other MCP-capable agents (Claude Code, Gemini CLI, …) take the same
-`cdir mcp` command in their own MCP config format.
+`cdir mcp` command in their own MCP config format. Step-by-step setup for
+Gemini CLI, including its `GEMINI.md` context file: [integrations/gemini](integrations/gemini/README.md).
 
 **2. Skill — the rulebook.** Copy [skills/codedirector/SKILL.md](skills/codedirector/SKILL.md)
 into your agent's skills directory (e.g. `.claude/skills/codedirector/` for
