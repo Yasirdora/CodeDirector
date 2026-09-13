@@ -66,7 +66,9 @@ async function indexFor(root: string) {
 }
 
 const WORKFLOW =
-  "Workflow: 1) lock_draft with the human's request, 2) show the proposed scope to the human, " +
+  "Workflow: 0) if the human's request is vague, offer 2–4 concrete directions and ask them to pick — " +
+  "NO tool calls, web searches, or repo scans before they answer; 1) lock_draft with the chosen direction, " +
+  "2) show the proposed scope to the human, " +
   "3) lock_check then lock_activate, 4) run_locked for ALL file-changing work, 5) report. " +
   "Never edit files with your own write tools while a Lock is active for the task.";
 
@@ -75,7 +77,8 @@ const TOOLS: ToolDef[] = [
     name: "repo_map",
     description:
       "Ranked map of the repository for a query — the symbols and files most relevant to a task, with anchors. " +
-      "Use it to understand the codebase before drafting a Lock. Read-only.",
+      "Use only AFTER the human has picked a direction, to draft the Lock — never for open-ended research " +
+      "before scope is agreed. Read-only.",
     inputSchema: {
       type: "object",
       properties: {

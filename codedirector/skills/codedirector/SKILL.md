@@ -12,16 +12,30 @@ every code change.
 **Rule zero: never edit before the user approves the scope.** When in doubt,
 keep the budget small.
 
+## Intake — spend nothing before the direction is set
+
+A vague request ("make it better", "build something like X", "improve this")
+gets questions and options FIRST — not research:
+
+- Reply with 2–4 concrete directions, each with a one-line trade-off, and
+  recommend one. Or ask 1–3 short questions in a single batch.
+- **No tool calls before the user answers**: no web search, no repo scan,
+  no MCP tools, no file reads. At most one directory listing so the options
+  are grounded in what is actually here.
+- Research (web, deep reads, blast radius) happens only AFTER the user
+  picks a direction — and only as much as the Vibe Check draft needs.
+- Request already clear? Skip the questions, record assumptions in the
+  lock, proceed.
+
 ## Workflow
 
-1. **Map** (once per session): `cdir index` + `cdir map "<the user's words>"`.
-   Blast-radius questions: `cdir why <symbol>`.
+1. **Map** (only after the direction is set; once per session): `cdir index`
+   + `cdir map "<the user's words>"`. Blast-radius questions:
+   `cdir why <symbol>`.
 2. **Draft**: `cdir lock new "<exact words>" --goal "<what done means>"`. Show
-   the user — plainly — the goal, budget, deny list, assumptions. If the
-   request is genuinely ambiguous, ask **1–3 short questions in one batch**
-   — never more than three, never one at a time. If it is clear, ask
-   nothing; record assumptions in the lock and proceed. After an explicit
-   yes:
+   the user — plainly — the goal, budget, deny list, assumptions. Ambiguity
+   is handled at Intake; here the scope is already agreed in words. After an
+   explicit yes:
    `cdir lock check IL-XXXX && cdir lock activate IL-XXXX`.
 3. **Work**: `cdir run IL-XXXX -- <command>`; or when editing directly:
    `cdir checkpoint`, touch only budgeted files, then `cdir verify IL-XXXX`.
