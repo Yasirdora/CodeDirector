@@ -11,6 +11,7 @@
  * Uses the SDK's low-level Server with plain JSON Schemas — no zod.
  */
 
+import * as os from "node:os";
 import * as path from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -63,6 +64,43 @@ function strArray(p: Record<string, unknown>, k: string): string[] {
 async function indexFor(root: string) {
   const { index } = await buildIndex(root);
   return index;
+}
+
+/**
+ * Resolve which project root a tool call operates on. Agents are often
+ * launched from the user's home directory; without a guard the server would
+ * happily index the entire home folder (multi-minute walks, locks written
+ * to the wrong place). An explicit per-call `root` always wins; a defaulted
+ * home-directory root is refused with instructions.
+ */
+export function resolveRoot(serverRoot: string, a: Record<string, unknown>): string {
+  const explicit = a.root;
+  if (typeof explicit === "string" && explicit.trim() !== "") return path.resolve(explicit);
+  if (serverRoot === os.homedir()) {
+    throw new Error(
+      `codedirector was started in your home directory (${serverRoot}), not a project. ` +
+        `Pass the project path as the "root" argument on every tool call ` +
+        `(e.g. {"root": "/path/to/project", ...}), or restart the agent from inside the project folder.`
+    );
+  }
+  return serverRoot;
+}
+
+/** Inject the optional per-call `root` override into a tool's input schema. */
+function withRootParam(schema: Record<string, unknown>): Record<string, unknown> {
+  const props = (schema.properties ?? {}) as Record<string, unknown>;
+  return {
+    ...schema,
+    properties: {
+      ...props,
+      root: {
+        type: "string",
+        description:
+          "Absolute path of the project this call operates on. REQUIRED when the agent was " +
+          "launched outside the project (e.g. from the home directory); otherwise omit.",
+      },
+    },
+  };
 }
 
 const WORKFLOW =
@@ -280,14 +318,15 @@ export async function startMcpServer(rootDir: string): Promise<void> {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+    tools: TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: withRootParam(t.inputSchema) })),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const tool = TOOLS.find((t) => t.name === req.params.name);
     if (!tool) return fail(`unknown tool: ${req.params.name}`);
     try {
-      return await tool.handler(root, (req.params.arguments ?? {}) as Record<string, unknown>);
+      const args = (req.params.arguments ?? {}) as Record<string, unknown>;
+      return await tool.handler(resolveRoot(root, args), args);
     } catch (e) {
       return fail(`${tool.name} failed: ${e instanceof Error ? e.message : String(e)}`);
     }

@@ -62,3 +62,16 @@ test("walker honors .gitignore and skips node_modules", async () => {
   assert.ok(!files.some((f) => f.startsWith("node_modules/")), "node_modules skipped");
   assert.equal(files.length, 4);
 });
+
+test("walker skips Xcode build-product directories", async () => {
+  const root = copyFixture();
+  for (const dir of ["DerivedData", ".build", ".swiftpm", "Pods", "Carthage"]) {
+    fs.mkdirSync(path.join(root, dir, "deep"), { recursive: true });
+    fs.writeFileSync(path.join(root, dir, "deep", "junk.ts"), "export const x = 1;\n");
+  }
+  const files = new RepoWalker(root).walk();
+  for (const dir of ["DerivedData", ".build", ".swiftpm", "Pods", "Carthage"]) {
+    assert.ok(!files.some((f) => f.startsWith(dir + "/")), `${dir} skipped`);
+  }
+  assert.equal(files.length, 4);
+});

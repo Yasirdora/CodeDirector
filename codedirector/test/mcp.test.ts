@@ -6,6 +6,7 @@
  */
 
 import assert from "node:assert/strict";
+import * as os from "node:os";
 import * as path from "node:path";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -181,6 +182,37 @@ test("mcp: repo_map and blast_radius answer over MCP", async () => {
 
     const missing = await client.callTool({ name: "blast_radius", arguments: { symbol: "noSuchSymbol" } });
     assert.ok(isError(missing), "unknown symbol is an error");
+  } finally {
+    await close();
+  }
+});
+
+test("mcp: home-directory root is refused with instructions; per-call root rescues it", async () => {
+  const project = makeGitRepo({ "src/lib.js": "export function helper(){return 1}\n" });
+  const { client, close } = await connect(os.homedir());
+  try {
+    const lost = await client.callTool({ name: "repo_map", arguments: { query: "helper" } });
+    assert.ok(isError(lost), "defaulted home root is an error, not a silent home-wide index");
+    assert.match(resultText(lost), /home directory/);
+    assert.match(resultText(lost), /"root" argument/);
+
+    const rescued = await client.callTool({ name: "repo_map", arguments: { query: "helper", root: project } });
+    assert.ok(!isError(rescued), resultText(rescued));
+    assert.ok(resultText(rescued).includes("helper"), resultText(rescued));
+  } finally {
+    await close();
+  }
+});
+
+test("mcp: tool schemas advertise the optional root override", async () => {
+  const root = makeGitRepo(FILES);
+  const { client, close } = await connect(root);
+  try {
+    const { tools } = await client.listTools();
+    for (const t of tools) {
+      const props = (t.inputSchema as { properties?: Record<string, unknown> }).properties ?? {};
+      assert.ok("root" in props, `${t.name} exposes the root override`);
+    }
   } finally {
     await close();
   }

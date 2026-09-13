@@ -2,8 +2,9 @@
  * Repository walker.
  *
  * Walks a root directory for indexable source files, always skipping
- * .git / node_modules / dist / .codedirector, and honoring the root
- * .gitignore (plus .ignore). Nested .gitignore files are NOT honored
+ * .git / node_modules / dist / .codedirector and the Xcode build-product
+ * directories (DerivedData, .build, .swiftpm, Pods, Carthage), and honoring
+ * the root .gitignore (plus .ignore). Nested .gitignore files are NOT honored
  * (documented MVP limitation); the common case — root-level ignore files —
  * is covered. Because the walker prunes ignored directories, everything
  * under an ignored directory is skipped automatically.
@@ -25,7 +26,18 @@ export const INDEXABLE_EXTENSIONS = new Set([
   ".cjs",
 ]);
 
-const ALWAYS_SKIP_DIRS = new Set([".git", "node_modules", "dist", ".codedirector"]);
+const ALWAYS_SKIP_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  ".codedirector",
+  // Apple/Xcode build products — routinely gigabytes, never source
+  "DerivedData",
+  ".build",
+  ".swiftpm",
+  "Pods",
+  "Carthage",
+]);
 
 interface IgnoreRule {
   negate: boolean;
