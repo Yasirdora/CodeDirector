@@ -93,8 +93,14 @@ Usage:
 
   cdir mcp [--root DIR]                   Serve the Code Director workflow over
                                           MCP (stdio) — the supported integration
-                                          path for agents (Gemini CLI first;
-                                          see integrations/gemini/)
+                                          path for agents (see integrations/)
+
+  cdir hook [--root DIR]                  PreToolUse bridge for agent lifecycle
+                                          hooks: reads the payload JSON from
+                                          stdin, allows (exit 0, with a reminder
+                                          when no Lock is active) or blocks
+                                          (exit 2) edits that violate the active
+                                          Lock's deny list or budget. Fails open.
 
   cdir help                               Show this help
 
@@ -421,6 +427,14 @@ async function main(): Promise<number> {
       const { startMcpServer } = await import("./mcp/server");
       await startMcpServer(root);
       return 0;
+    }
+
+    case "hook": {
+      // PreToolUse bridge for agent CLIs (agent lifecycle hooks, etc.):
+      // payload JSON on stdin, allow/remind on exit 0, block on exit 2.
+      const { runHookCommand, readStdin } = await import("./hook/index");
+      const stdinText = process.stdin.isTTY ? "" : await readStdin(process.stdin);
+      return runHookCommand(root, stdinText);
     }
 
     case "run": {
