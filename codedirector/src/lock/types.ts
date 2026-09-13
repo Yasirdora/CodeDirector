@@ -137,4 +137,10 @@ export const DEPENDENCY_MANIFESTS = [
   "package-lock.json",
   "yarn.lock",
   "pnpm-lock.yaml",
+  "Package.swift",
+  "Package.resolved",
+  "Podfile",
+  "Podfile.lock",
+  "Cartfile",
+  "Cartfile.resolved",
 ];

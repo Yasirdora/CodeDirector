@@ -165,6 +165,46 @@ test("mcp: full workflow — draft, activate, in-budget run, deny violation is a
   }
 });
 
+test("mcp: lock_draft accepts a profile and rejects an unknown one", async () => {
+  const root = makeGitRepo({
+    "Sources/App/main.swift": 'print("hi")\n',
+    "Package.swift": "// swift-tools-version:5.9\n",
+  });
+  const { client, close } = await connect(root);
+  try {
+    const { tools } = await client.listTools();
+    const draftTool = tools.find((t) => t.name === "lock_draft")!;
+    const props = (draftTool.inputSchema as { properties?: Record<string, unknown> }).properties ?? {};
+    assert.ok("profile" in props, "lock_draft exposes the profile argument");
+
+    const draft = await client.callTool({
+      name: "lock_draft",
+      arguments: { utterance: "add a greeting screen", profile: "apple" },
+    });
+    assert.ok(!isError(draft), resultText(draft));
+    const lockId = JSON.parse(resultText(draft)).lockId as string;
+
+    // the drafted YAML carries the apple defaults
+    const fs = await import("node:fs");
+    const lockDir = path.join(root, ".codedirector", "locks");
+    const file = fs.readdirSync(lockDir).find((n) => n.startsWith(lockId))!;
+    const yaml = fs.readFileSync(path.join(lockDir, file), "utf8");
+    assert.ok(yaml.includes("- Pods/**"), "apple deny defaults present");
+    assert.ok(yaml.includes("verifyCommand: swift test"), "swift test set for an SPM repo");
+    assert.ok(yaml.includes("verifyTimeoutMs: 900000"), "15-minute verify timeout set");
+
+    const bad = await client.callTool({
+      name: "lock_draft",
+      arguments: { utterance: "add a screen", profile: "windows" },
+    });
+    assert.ok(isError(bad), "unknown profile is an error");
+    assert.match(resultText(bad), /unknown profile "windows"/);
+    assert.match(resultText(bad), /available: apple/);
+  } finally {
+    await close();
+  }
+});
+
 test("mcp: repo_map and blast_radius answer over MCP", async () => {
   const root = makeGitRepo({
     "src/lib.js": "export function helper(){return 1}\n",

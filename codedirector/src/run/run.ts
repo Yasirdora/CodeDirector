@@ -23,7 +23,7 @@ import { buildIndex, hashContent } from "../core/builder";
 import { buildGraph } from "../core/graph";
 import { ensureCodedirectorIgnore, indexDir, stableStringify } from "../core/store";
 import { createCheckpoint, Checkpoint } from "../checkpoint";
-import { VibeCheck } from "../lock/types";
+import { VibeCheck, DEPENDENCY_MANIFESTS } from "../lock/types";
 import { loadLock, saveLock } from "../lock/store";
 import { signatureHash } from "../lock/check";
 import { Baseline, baselineFileHash, captureBaseline, saveBaseline } from "./baseline";
@@ -130,7 +130,7 @@ function checkKeepClauses(
           );
         }
         // a manifest that did not exist before but exists now is a new dependency surface
-        for (const m of ["package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml"]) {
+        for (const m of DEPENDENCY_MANIFESTS) {
           if (!(m in baseline.manifests) && fs.existsSync(path.join(rootDir, m))) {
             results.push({ kind: clause.kind, detail: `${m} appeared`, status: "violated" });
           }

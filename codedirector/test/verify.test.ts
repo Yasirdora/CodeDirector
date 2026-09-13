@@ -153,6 +153,31 @@ test("verify: output-unchanged without a baseline capture is unchecked, not held
   assert.equal(report.violations.length, 0);
 });
 
+test("verify: no-new-dependency flags a Podfile.lock change (Apple manifests)", async () => {
+  const root = makeGitRepo({
+    ...fixtureFiles(),
+    Podfile: "platform :ios, '17.0'\n",
+    "Podfile.lock": "PODS:\n  - Alamofire (5.9.0)\n",
+  });
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "make math faster", { now: "2026-09-11T00:00:00.000Z", createdBy: "test" });
+  lock.keep = [{ kind: "no-new-dependency" }];
+  lock.budget = { files: ["src/math.js"], symbols: [], maxFiles: 2, maxLines: 400 };
+  lock.status = "active";
+  saveLock(root, lock);
+
+  const change =
+    append("src/math.js", "// ok\n") +
+    ';require("fs").appendFileSync("Podfile.lock","  - SnapKit (5.7.0)\\n")';
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", change], { stdio: "pipe", allowExpand: true });
+  assert.equal(outcome.exitCode, 1);
+  const item = outcome.record.verification!.items.find((i) => i.subject === "no-new-dependency · Podfile.lock");
+  assert.ok(item, "Podfile.lock tracked as a dependency manifest");
+  assert.equal(item!.verdict, "violated");
+  assert.equal(item!.evidenceClass, "proven");
+  assert.ok(item!.detail.includes("Podfile.lock changed"), `detail: ${item!.detail}`);
+});
+
 test("verify: custom clauses are always unchecked — human judges", async () => {
   const { root, lock } = await setup([{ kind: "custom", text: "still feels snappy" }]);
   const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });

@@ -142,6 +142,17 @@ Whichever hook you use, the flow from your side stays the same: you say what
 you want, the agent shows you the scope before touching code, and you get a
 Change Report afterwards.
 
+### Apple projects
+
+Swift / SwiftUI repos get a draft preset:
+`cdir lock new "<words>" --profile apple`. The profile denies vendor dirs and
+dependency lockfiles (Pods, Carthage, SPM, Bundler), signing assets, and
+DerivedData; under XcodeGen or Tuist it also denies the generated
+`.xcodeproj` / `.xcworkspace` so nobody hand-edits them. When `Package.swift`
+exists it sets `verifyCommand: swift test` with a 15-minute
+`verifyTimeoutMs` (override with `--test-timeout` on run/verify). The matching
+agent rulebook: [skills/codedirector-apple/SKILL.md](skills/codedirector-apple/SKILL.md).
+
 ## Command reference
 
 ### `cdir index [--root DIR]`
@@ -178,7 +189,7 @@ Blast radius for a symbol — genuinely useful with no AI involved:
 
 Exit codes: `0` success · `1` failure (e.g. symbol not found) · `2` usage error.
 
-### `cdir lock new "<utterance>" [--goal TEXT] [--keep SPEC] [--deny GLOB] [--budget-files F]`
+### `cdir lock new "<utterance>" [--goal TEXT] [--keep SPEC] [--deny GLOB] [--budget-files F] [--profile NAME]`
 
 Drafts an **Vibe Check** — a compiled, enforceable contract, human-readable
 YAML versioned at `.codedirector/locks/IL-<NNNN>-<slug>.yaml`. The command is
@@ -196,13 +207,15 @@ written with `status: draft` — edit it, then
 The Lock schema (v1): `utterance` (your exact words, immutable), `goal`,
 `interpretation` (the system's operationalization — editable), `keep[]`,
 `deny[]`, `change`, `verifyCommand` (optional user test harness, e.g.
-`npm test` — run as measured evidence), `budget {files, symbols, maxFiles,
-maxLines}`, `accept[]`, `assumptions[]`. KEEP clause kinds:
+`npm test` — run as measured evidence), `verifyTimeoutMs` (optional timeout
+for it and `tests-pass` runs — the CLI's `--test-timeout` overrides it),
+`budget {files, symbols, maxFiles, maxLines}`, `accept[]`, `assumptions[]`.
+KEEP clause kinds:
 
 | Kind | Payload | Checked how |
 |---|---|---|
 | `api-unchanged` | symbol ids | ✓ signature hash, diffed against the pre-change baseline (proven) |
-| `no-new-dependency` | — | ✓ dependency maps in package.json + lockfile hashes vs baseline (proven) |
+| `no-new-dependency` | — | ✓ dependency maps in package.json + manifest/lockfile hashes (npm, SPM, CocoaPods, Carthage) vs baseline (proven) |
 | `output-unchanged` | entry command + fixtures | ✓ stdout **and stderr** sha256, captured at baseline, re-run at verify (measured) |
 | `tests-pass` | test glob | ✓ `node --test <glob>` (measured); empty glob is a violation |
 | `custom` | free text | ? not machine-checkable — always Unchecked, human judges |
@@ -235,7 +248,7 @@ checkpoint are **deleted** by undo (v0.1.0 left them in place). The files
 are enumerated and printed to stderr *before* deletion, and the deleted list
 is shown again in the undo output. Pass `--keep-untracked` to preserve them.
 
-### `cdir run <lock-id> [--allow-expand] [--no-report] -- <command...>`
+### `cdir run <lock-id> [--allow-expand] [--no-report] [--test-timeout MS] -- <command...>`
 
 Verified execution inside an active Lock:
 
@@ -295,12 +308,16 @@ The verifier writes nothing to the repository (the index refresh touches only
 `.codedirector/`). The probed commands themselves run with normal repo
 permissions — a fully sandboxed verifier is a later phase.
 
-### `cdir verify <lock-id>`
+### `cdir verify <lock-id> [--test-timeout MS]`
 
 Re-runs the ladder without re-running the change command: latest baseline for
 the lock, fresh index, all rungs. Without any baseline, structural and output
 checks report Unchecked ("no pre-change baseline") while tests and typecheck
 still run. Updates the lock status; exit 0 only when verified.
+
+`--test-timeout MS` (on both `run` and `verify`) sets the timeout for
+`tests-pass` runs and the lock's `verifyCommand`, overriding the lock's
+`verifyTimeoutMs` (default 60s).
 
 ### `cdir hook`
 
