@@ -77,6 +77,42 @@ npm link        # optional: puts `cdir` on your PATH
 
 Requires Node ≥ 20. No native builds: parsing is pure WASM.
 
+## Use it with an AI agent
+
+Installing `cdir` puts the tools on your machine — it does **not** tell any AI
+to use them. An agent only knows what its own instructions and conversation
+contain, so you must attach one of these hooks (any one works; together is
+best):
+
+**1. MCP — the toolbox.** Run `cdir mcp` as an MCP server in your agent's
+config. The agent gains eight tools (`repo_map`, `blast_radius`, `lock_draft`,
+`lock_check`, `lock_activate`, `run_locked`, `report`, `undo`). Example for a
+Agent CLI CLI setup:
+
+```sh
+mcp add codedirector -- cdir mcp
+```
+
+Other MCP-capable agents (Claude Code, Gemini CLI, …) take the same
+`cdir mcp` command in their own MCP config format.
+
+**2. Skill — the rulebook.** Copy [skills/codedirector/SKILL.md](skills/codedirector/SKILL.md)
+into your agent's skills directory (e.g. `.claude/skills/codedirector/` for
+Claude Code, or your agent's equivalent). The agent reads it at session start
+and follows the workflow without being reminded.
+
+**3. One-off — just tell it.** No setup at all; paste this into the chat:
+
+```
+This project has cdir installed. Read its README first, then follow its
+workflow for my request: draft a Vibe Check and wait for my approval
+before editing, work inside the approved scope, finish with cdir report.
+```
+
+Whichever hook you use, the flow from your side stays the same: you say what
+you want, the agent shows you the scope before touching code, and you get a
+Change Report afterwards.
+
 ## Command reference
 
 ### `cdir index [--root DIR]`

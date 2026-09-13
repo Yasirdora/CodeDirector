@@ -10,6 +10,7 @@
   "main": "dist/src/index.js",
   "files": [
     "dist",
+    "skills",
     "README.md",
     "LICENSE"
   ],
