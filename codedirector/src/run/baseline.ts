@@ -17,7 +17,7 @@ import { workTreeStatusPorcelain } from "../checkpoint";
 import { VibeCheck, DEPENDENCY_MANIFESTS } from "../lock/types";
 import { signatureHash } from "../lock/check";
 import { runShellProbe, sha256 } from "./probe";
-import { currentHead, listHidden, runIsolated, snapshotWorkTree } from "./tree";
+import { currentHead, listHidden, runIsolated, snapshotWorkTree, WorkTreeSnapshot } from "./tree";
 import { dependencyFingerprint } from "./deps";
 
 /**
@@ -63,6 +63,13 @@ export interface Baseline {
   workTreeHashes?: Record<string, string>;
   /** skip-worktree / assume-unchanged files at capture. */
   hidden?: HiddenHash[];
+  /**
+   * RootDir-relative directory holding a byte copy of every TRACKED file
+   * that was dirty vs HEAD at capture (tree/<gitPath> underneath). Line
+   * counting diffs the post-run file against its copy, so pre-existing dirt
+   * never counts against maxLines. Absent when the tree was clean.
+   */
+  treeDir?: string;
 }
 
 export interface BaselineOptions {
@@ -72,6 +79,39 @@ export interface BaselineOptions {
 
 export function baselinesDir(rootDir: string): string {
   return path.join(indexDir(rootDir), "baselines");
+}
+
+/** Timestamp slug shared by the baseline JSON file and its tree directory. */
+function baselineStamp(capturedAt: string): string {
+  return capturedAt.replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
+}
+
+/**
+ * Byte copies of the tracked-dirty files from the work-tree snapshot (the
+ * run's line delta is measured against these, not vs HEAD). Storage stays
+ * proportional: clean files are exact vs HEAD and need no copy, untracked
+ * files are covered by the untracked-counting rule. Returns the
+ * rootDir-relative directory, or undefined when nothing was dirty.
+ */
+function writeBaselineTree(
+  rootDir: string,
+  lockId: string,
+  capturedAt: string,
+  snap: WorkTreeSnapshot,
+): string | undefined {
+  const untracked = new Set(snap.untracked);
+  const dir = path.join(baselinesDir(rootDir), `${lockId}-${baselineStamp(capturedAt)}`, "tree");
+  let wrote = 0;
+  for (const [p, bytes] of Object.entries(snap.contents)) {
+    if (untracked.has(p)) continue;
+    if (p.split("/").includes(".codedirector")) continue;
+    const dest = path.join(dir, p);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, bytes);
+    wrote++;
+  }
+  if (wrote === 0) return undefined;
+  return path.relative(rootDir, dir).split(path.sep).join("/");
 }
 
 export function captureBaseline(
@@ -137,9 +177,11 @@ export function captureBaseline(
 
   const status = workTreeStatusPorcelain(rootDir);
   const snap = snapshotWorkTree(rootDir);
+  const capturedAt = new Date().toISOString();
+  const treeDir = writeBaselineTree(rootDir, lock.id, capturedAt, snap);
   return {
     lockId: lock.id,
-    capturedAt: new Date().toISOString(),
+    capturedAt,
     checkpointTag,
     head: currentHead(rootDir) ?? undefined,
     signatures,
@@ -149,13 +191,13 @@ export function captureBaseline(
     gitStatusHash: hashContent(status),
     workTreeHashes: snap.hashes,
     hidden: listHidden(rootDir),
+    ...(treeDir !== undefined ? { treeDir } : {}),
   };
 }
 
 export function saveBaseline(rootDir: string, baseline: Baseline): string {
   fs.mkdirSync(baselinesDir(rootDir), { recursive: true });
-  const ts = baseline.capturedAt.replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
-  const p = path.join(baselinesDir(rootDir), `${baseline.lockId}-${ts}.json`);
+  const p = path.join(baselinesDir(rootDir), `${baseline.lockId}-${baselineStamp(baseline.capturedAt)}.json`);
   fs.writeFileSync(p, stableStringify(baseline), "utf8");
   return p;
 }

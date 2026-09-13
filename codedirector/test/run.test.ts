@@ -250,6 +250,49 @@ test("run: internal status transitions (verified/failed) never trip the seal", a
   assert.equal(sealViolation(root, loadLock(root, lock.id)!), null);
 });
 
+test("run: mixed pre-existing dirt and run changes counts the run's delta only", async () => {
+  // Field case: ~250 real lines counted as 581 because the file carried
+  // uncommitted work. The baseline tree copy makes the count exact.
+  const { root, lock } = await setup((l) => {
+    l.budget.maxLines = 10;
+  });
+  const dirt = Array.from({ length: 300 }, (_, i) => `// pre-existing dirt ${i}`).join("\n") + "\n";
+  fs.appendFileSync(path.join(root, "src/preview.ts"), dirt);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// one\n// two\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  assert.equal(outcome.record.budget.linesChanged, 2, "the run's delta, not dirt + delta");
+});
+
+test("run: a file clean at baseline is still counted exactly vs HEAD", async () => {
+  const { root, lock } = await setup((l) => {
+    l.budget.maxLines = 10;
+  });
+  // dirt lives in a denied file (untouched → not counted); preview.ts is clean at capture
+  fs.appendFileSync(path.join(root, "src/export.ts"), "// dirt\n");
+  const outcome = await runWithLock(
+    root,
+    lock.id,
+    [NODE, "-e", append("src/preview.ts", "// one\n// two\n// three\n")],
+    { stdio: "pipe" },
+  );
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  assert.equal(outcome.record.budget.linesChanged, 3);
+});
+
+test("run: an untracked file created by the run is fully counted", async () => {
+  const { root, lock } = await setup((l) => {
+    l.budget.files = ["src/preview.ts", "src/new.ts"];
+    l.budget.maxFiles = 2;
+    l.budget.maxLines = 10;
+  });
+  const mk = 'require("fs").writeFileSync("src/new.ts","export const a = 1;\\nexport const b = 2;")';
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", mk], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  assert.equal(outcome.record.budget.linesChanged, 2);
+});
+
 test("run: no-new-dependency KEEP clause diffs manifests against the baseline", async () => {
   const { root, lock } = await setup((l) => {
     l.keep = [{ kind: "no-new-dependency" }];

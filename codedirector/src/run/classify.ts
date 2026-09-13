@@ -10,7 +10,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { VibeCheck } from "../lock/types";
 import { matchPath } from "../lock/glob";
 import { gitPrefix, gitStatusPorcelain, porcelainLinePaths, toRootRelative } from "../checkpoint";
@@ -181,26 +181,60 @@ export function classifyChanges(rootDir: string, lock: VibeCheck, baseline?: Bas
 }
 
 /**
+ * One touched file's line delta. When the baseline holds a tree copy of the
+ * file (it was dirty at capture), the run's delta is the exact diff against
+ * that copy — `git diff --no-index` exits 1 on differences, so stdout is
+ * parsed regardless of exit code. A file the run deleted contributes the
+ * copy's full line count. Without a copy (clean at baseline) the vs-HEAD
+ * numstat is already exact. A copy whose bytes no longer match the
+ * capture-time hash (rewritten mid-run) is distrusted: fall back to the
+ * conservative vs-HEAD count.
+ */
+function lineDelta(
+  rootDir: string,
+  treeDir: string | undefined,
+  gitPath: string,
+  expectedCopyHash: string | undefined,
+  vsHead: number,
+): number {
+  if (!treeDir || !expectedCopyHash) return vsHead;
+  const copyAbs = path.join(rootDir, treeDir, gitPath);
+  let copyBytes: Buffer;
+  try {
+    copyBytes = fs.readFileSync(copyAbs);
+  } catch {
+    return vsHead; // no copy for this path
+  }
+  if (sha256Bytes(copyBytes) !== expectedCopyHash) return vsHead;
+  const curAbs = path.join(rootDir, gitToAbsRel(rootDir, gitPath));
+  if (!fs.existsSync(curAbs)) {
+    // deleted by the run: the run removed the whole baseline-copy content
+    const text = copyBytes.toString("utf8");
+    return text === "" ? 0 : text.split("\n").length;
+  }
+  const res = spawnSync("git", ["diff", "--no-index", "--numstat", "--", copyAbs, curAbs], {
+    cwd: rootDir,
+    encoding: "utf8",
+    timeout: 15000,
+  });
+  const m = /^(\d+)\t(\d+)\t/.exec(res.stdout ?? "");
+  return m ? parseInt(m[1], 10) + parseInt(m[2], 10) : vsHead;
+}
+
+/**
  * Lines changed by the run, plus the full line count of newly untracked
- * files. Tracked files are measured vs the baseline HEAD, but a file the
- * run never touched (current bytes == baseline bytes) is excluded —
- * pre-existing dirt must not count against the budget; classifyChanges
- * already excludes it and line counting follows the same rule. A touched
- * file counts its full delta vs the baseline HEAD, so a file with both
- * pre-existing and run changes can overcount (tripwire, not proof).
+ * files. A file whose bytes are unchanged since baseline is skipped
+ * outright (cheap first gate — pre-existing dirt is not the run's fault).
+ * Touched files are measured exactly: against the baseline tree copy when
+ * the file was dirty at capture (the run's delta only), else against the
+ * baseline HEAD. A committed-during-run file needs no special case: its
+ * current bytes differ from the copy / baseline HEAD, so it is counted.
  */
 export function changedLineCount(rootDir: string, untrackedPaths: string[], baseline?: Baseline | null): number {
   let total = 0;
   const prefix = gitPrefix(rootDir);
   const from = baseline?.head ?? "HEAD";
   const pre = baseline?.workTreeHashes ?? {};
-  const headNow = currentHead(rootDir);
-  const committed = new Set<string>();
-  if (baseline?.head && headNow && headNow !== baseline.head) {
-    for (const row of nameStatusRange(rootDir, baseline.head, headNow)) {
-      for (const p of row.paths) committed.add(displayPath(rootDir, p));
-    }
-  }
   try {
     const numstat = execFileSync("git", ["diff", "--numstat", from], {
       cwd: rootDir,
@@ -213,11 +247,11 @@ export function changedLineCount(rootDir: string, untrackedPaths: string[], base
       if (!m) continue;
       const rel = toRootRelative(prefix, m[3]);
       const preHash = pre[m[3]] ?? (rel !== null ? pre[rel] : undefined);
-      if (preHash !== undefined && (rel === null || !committed.has(rel))) {
+      if (preHash !== undefined) {
         const now = hashGitPath(rootDir, m[3]) ?? (rel !== null ? hashGitPath(rootDir, rel) : null);
         if (now === preHash) continue; // pre-existing dirt, untouched by the run
       }
-      total += parseInt(m[1], 10) + parseInt(m[2], 10);
+      total += lineDelta(rootDir, baseline?.treeDir, m[3], preHash, parseInt(m[1], 10) + parseInt(m[2], 10));
     }
   } catch {
     /* no HEAD or git failure — untracked count still reported */
