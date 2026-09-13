@@ -16,7 +16,7 @@ Every agent on the market is racing to produce more change per minute. The bindi
 Code Director is packaged as an npm CLI tool. You can install it globally directly from the repository:
 
 ```bash
-git clone https://github.com/Yasirdora/codedirector.git
+git clone https://github.com/yasirdora/codedirector.git
 cd codedirector/codedirector
 npm install -g .
 ```
