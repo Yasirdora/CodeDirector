@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="brand/logo.png" width="128" alt="Code Director logo">
+</p>
+
 # Code Director (`cdir`)
 
 **Say what you want done — and what must stay untouched. cdir runs the work, watches what moves, and tells you what it checked — and what it couldn't.**
