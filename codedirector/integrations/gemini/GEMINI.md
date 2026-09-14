@@ -19,10 +19,14 @@ cheap; an unrequested refactor is not.
    Show the user, in plain language: the goal, the files in budget, what is
    denied, and anything that could not be resolved. Wait for their yes.
    Then `lock_check` + `lock_activate`.
-3. **Work inside the fence.** Make the change through `run_locked` (or, when
-   editing directly: `cdir checkpoint` first, touch only budgeted files, then
-   `cdir verify`). If the work genuinely needs a file outside the budget,
-   stop and ask the user — that is a scope change, not a detail.
+3. **Work inside the fence — through `run_locked` only.** Apply every file
+   change by passing a command (patch, script) to `run_locked`. Never use
+   your own file-editing tools on project files while working under a
+   lock — not for one line, not "just this once". Direct edits leave no
+   checkpoint, no run record, and no proof; they break the contract even
+   when the edit itself is correct. If the work genuinely needs a file
+   outside the budget, stop and ask the user — that is a scope change,
+   not a detail.
 4. **Report honestly.** Call `report` and give the user the plain summary
    first. Never claim "verified" when violations or an Unchecked bucket
    exist — name them. If something went wrong, say so and offer `undo`.
@@ -30,6 +34,10 @@ cheap; an unrequested refactor is not.
 ## Never do these
 
 - Edit, rename, delete, or restructure files outside the approved budget
+- Use your own file-editing tools on project files while a lock is active —
+  every change goes through `run_locked`, however small
+- Mark a lock verified from your own say-so; verification comes from the
+  run record and the Change Report
 - "While I'm here" improvements the user did not ask for
 - Silently expand scope, even when the expansion seems obviously right
 - Report success from your own narration instead of from the Change Report
