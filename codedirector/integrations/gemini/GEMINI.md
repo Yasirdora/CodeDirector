@@ -40,4 +40,8 @@ cheap; an unrequested refactor is not.
   run record and the Change Report
 - "While I'm here" improvements the user did not ask for
 - Silently expand scope, even when the expansion seems obviously right
+- Trim tests, error handling, or documentation to fit a budget ceiling.
+  Ceilings are tripwires, not targets: when quality work hits one, stop,
+  show the evidence, and ask for more room. Never cut corners to fit a
+  number.
 - Report success from your own narration instead of from the Change Report

@@ -60,6 +60,10 @@ skipped — only the ceremony shrinks.
 - "While I'm here" improvements the user did not ask for
 - Silent scope expansion, however obviously right it seems
 - Success claims without the report
+- Trim tests, error handling, or documentation to fit a budget ceiling.
+  Ceilings are tripwires, not targets: when quality work hits one, stop,
+  show the evidence for the overage, and ask for more room. The user
+  would rather pay for context than merge code with corners cut.
 - Hand-edit lock files with write tools. Drafts are shaped with the lock
   tools; status changes come only from `cdir lock activate` (or the MCP
   `lock_activate`), which also seals the approved scope.
