@@ -3,3 +3,8 @@ node_modules/
 dist/
 *.log
 .codedirector/
+
+# Experiment artifacts live at the repo root during field work; they are
+# not product files. Real assets live in codedirector/brand/.
+/*.png
+/*.patch
