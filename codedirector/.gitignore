@@ -1,5 +1,16 @@
 node_modules/
 dist/
-.codedirector/
 *.log
 .DS_Store
+
+# The repository root ignores .codedirector/ wholesale. The audit trail
+# lives here and is meant to be committed, so re-include the directory
+# first and let the block below take out the regenerable artefacts.
+!.codedirector/
+# BEGIN cdir
+.codedirector/index.json
+.codedirector/baselines/
+.codedirector/captures/
+.codedirector/ckpt-blobs/
+.codedirector/checkpoints.json
+# END cdir
