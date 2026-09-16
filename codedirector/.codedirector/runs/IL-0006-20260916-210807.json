@@ -1,0 +1,102 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0006-20260916-210807.json",
+  "baselineSha256": "56ad3cfb22a0fb1f36b92fc144d16ef0c3da88eb88b0e211521a5d4fd7b7c3c7",
+  "budget": {
+    "filesChanged": 8,
+    "linesChanged": 395,
+    "maxFiles": 8,
+    "maxLines": 520
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "package-lock.json",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "package.json",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/parser.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/swift.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/walk.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/fixtures/swift-repo/",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/lock.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/parser.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260916T210806984",
+    "createdAt": "2026-09-16T21:08:07.015Z",
+    "dirty": false,
+    "id": "ckpt-20260916T210806984",
+    "ref": "e4f3e626b44d13f592d51e18117ad61c19502ffd",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260916T210806984"
+  },
+  "command": [
+    "python3",
+    "/private/tmp/claude-501/-Users-x-Documents-Film-maker/464ad830-e9d2-471e-b400-1ff65fd0f690/scratchpad/il0006_apply.py"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-16T21:08:09.524Z",
+  "keepResults": [],
+  "lockId": "IL-0006",
+  "startedAt": "2026-09-16T21:08:07.918Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0006-20260916-210807.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 1,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0006",
+    "verifiedAt": "2026-09-16T21:08:32.424Z",
+    "violations": []
+  },
+  "violations": []
+}

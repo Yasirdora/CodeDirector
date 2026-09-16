@@ -1,0 +1,88 @@
+schemaVersion: 1
+id: IL-0005
+status: verified
+utterance: Feature 3 — Verify coverage. A lock whose budget is entirely Swift files must refuse to activate with a verifyCommand that only runs TypeScript checks (and vice versa). Check that the verify command plausibly covers the budget's file types; if not, refuse with a message naming what's missing. Refuse on a confident mismatch, warn when the command is unrecognised, and give the lock a field to declare coverage by hand. Every language in the budget must be covered.
+goal: A lock cannot activate while its verifyCommand demonstrably fails to exercise the languages its budget touches. A budget of Swift files verified only by TypeScript checks is refused, naming the language left unverified; an unrecognised command warns instead of refusing; and a lock may declare its coverage by hand when the command's reach cannot be read from its text.
+interpretation: |
+  The rule goes in checkLock, not in lock_activate. Activation already
+  refuses when validation fails, so putting it in the checker means
+  lock_check surfaces the problem while the lock is still a draft — before
+  the human is asked to approve a scope that cannot be verified.
+
+  Three inputs:
+    - the budget's languages, from each file's extension. Files whose
+      extension names no language — .md, .gitignore, .json — are IGNORED,
+      not counted as an uncoverable language: a documentation lock has
+      nothing for a test command to exercise and must not be refused for it.
+    - the verifyCommand's reach, read from the toolchains named in its text:
+      swift test/build, xcodebuild, tsc, npm/node --test/vitest/jest/mocha,
+      pytest, go test, cargo.
+    - the lock's own declaration, a new optional list the human may write
+      when the command's reach cannot be read from its text — an npm script
+      that shells out to swift, or any bespoke harness.
+
+  The verdict, per the human's answers:
+    - No verifyCommand at all: no check. There is nothing to mismatch, and
+      the verification ladder already reports what it could not run.
+    - No recognised toolchain: a WARNING naming the command. Treating an
+      unreadable command as covering nothing would refuse every bespoke
+      harness in existence.
+    - A recognised toolchain that misses a language the budget touches:
+      an ERROR naming the language and the files, which refuses activation.
+      Every language must be covered, not the majority — a mixed budget is
+      exactly where this hole would otherwise survive.
+
+  Adding verifyCovers is a schema change and touches types.ts and yaml.ts,
+  including its parse validation. That is accepted here, unlike in IL-0001,
+  because the human asked for the field by name and an escape hatch expressed
+  as a comment is not an escape hatch.
+
+  languageOf is imported from lock/draft.ts, where IL-0001 put it. check.ts
+  importing from draft.ts is the wrong direction for a fundamental module and
+  is worth relocating to a shared file later; duplicating the table would be
+  worse, so it is imported and noted.
+keep:
+  - kind: no-new-dependency
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - src/mcp/**
+change: Refuse activation when a lock's verifyCommand cannot exercise a language its budget touches; warn when the command is unreadable; add a verifyCovers field so the human can declare coverage by hand.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/lock/check.ts
+    - src/lock/types.ts
+    - src/lock/yaml.ts
+    - test/lock.test.ts
+  symbols: []
+  maxFiles: 4
+  maxLines: 380
+accept:
+  - A budget of .swift files with verifyCommand "npm test" fails lock_check with an error naming Swift.
+  - A budget of .ts files with verifyCommand "swift test" fails lock_check with an error naming TypeScript.
+  - A mixed Swift and TypeScript budget passes only when the command reaches both.
+  - An unrecognised command produces a warning, never an error.
+  - A lock declaring verifyCovers for the missing language passes.
+  - A budget of only .md or dotfiles is never refused, with or without a verifyCommand.
+  - Every lock already written in this repository and in eDraft still passes lock_check.
+  - npm test green, above the current 147.
+assumptions:
+  - text: Budget replaced by hand. The auto-draft anchored on composeLock, Checkpoint, CheckpointError, checkpointsPath and CheckpointStore — substring hits on "check" and "lock", the two most common words in this repository's vocabulary — and proposed the checkpoint module, the CLI and the runner. A sixth consecutive mis-anchor.
+    source: system
+    confirmed: false
+  - text: Files whose extension names no language are ignored rather than treated as uncovered. Without that, IL-0022 in eDraft — a lock whose entire budget is one Markdown file — would be refused for having no test command, which is the opposite of useful.
+    source: system
+    confirmed: false
+  - text: The new rule is regression-checked against every existing lock in this repository and in eDraft before the feature is called done. A validator that refuses locks already approved is a worse bug than the one it fixes.
+    source: system
+    confirmed: false
+  - text: Ceiling padded to 380 for a change expected around 260 lines, per the human's standing instruction.
+    source: user
+    confirmed: true
+createdAt: 2026-09-16T20:15:03.161Z
+createdBy: Yasirdora

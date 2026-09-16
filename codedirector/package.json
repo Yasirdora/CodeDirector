@@ -1,6 +1,6 @@
 {
   "name": "codedirector",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Contract/verification layer around coding agents: structural index, blast radius, Vibe Check, scope enforcement, evidence-classed change reports.",
   "license": "MIT",
   "type": "commonjs",
@@ -28,6 +28,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "tree-sitter-javascript": "^0.23.1",
     "tree-sitter-typescript": "^0.23.2",
+    "tree-sitter-wasms": "0.1.13",
     "web-tree-sitter": "^0.24.7",
     "yaml": "^2.9.0"
   },

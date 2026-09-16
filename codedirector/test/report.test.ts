@@ -14,6 +14,7 @@ import { loadLock, saveLock } from "../src/lock/store";
 import { sealLock } from "../src/lock/seal";
 import { VibeCheck, KeepClause } from "../src/lock/types";
 import { runWithLock } from "../src/run/run";
+import { scopeViolations } from "../src/run/classify";
 import { buildReport, finalizeLockStatus } from "../src/report/report";
 import { formatReport, formatReportJson, formatReportMarkdown, summarizeReport } from "../src/report/format";
 import { enforceArtifactRule, VerificationItem } from "../src/verify/types";
@@ -49,6 +50,100 @@ async function setup(keep: KeepClause[], customize?: (lock: VibeCheck) => void):
   sealLock(root, lock);
   return { root, lock };
 }
+
+/** Re-approve a Lock after editing it, the way a human would. */
+function reseal(root: string, edit: (lock: VibeCheck) => void): VibeCheck {
+  const lock = loadLock(root, "IL-0001")!;
+  edit(lock);
+  saveLock(root, lock);
+  sealLock(root, lock);
+  return lock;
+}
+
+test("rejudge: raising a ceiling clears a recorded overage, command not re-run", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.budget.maxLines = 1;
+  });
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// a\n// b\n// c\n")], {
+    stdio: "pipe",
+  });
+
+  const before = await buildReport(root, lock.id);
+  assert.equal(before.verdict, "failed");
+  assert.ok(
+    before.violations.some((v) => v.includes("maxLines 1")),
+    before.violations.join("; "),
+  );
+
+  reseal(root, (l) => {
+    l.budget.maxLines = 400;
+  });
+
+  const after = await buildReport(root, lock.id);
+  assert.equal(after.verdict, "verified", after.violations.join("; "));
+  assert.equal(after.budget!.maxLines, 400, "the report shows the ceiling that now applies");
+  assert.equal(
+    after.budget!.linesChanged,
+    before.budget!.linesChanged,
+    "the measurement is carried over, not re-derived",
+  );
+});
+
+test("rejudge: widening the budget clears a recorded out-of-budget", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.budget.files = ["src/math.js"];
+  });
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/untested.js", "// x\n")], {
+    stdio: "pipe",
+  });
+
+  const before = await buildReport(root, lock.id);
+  assert.ok(before.violations.some((v) => v.includes("OUT-OF-BUDGET: src/untested.js")));
+
+  reseal(root, (l) => {
+    l.budget.files = ["src/math.js", "src/untested.js"];
+  });
+
+  const after = await buildReport(root, lock.id);
+  assert.ok(!after.violations.some((v) => v.includes("OUT-OF-BUDGET")), after.violations.join("; "));
+  assert.equal(
+    after.changed.find((c) => c.path === "src/untested.js")!.class,
+    "in-budget",
+    "the classification itself is re-derived, not only the verdict",
+  );
+});
+
+test("rejudge: a deny added after the fact refuses a run that was clean", async () => {
+  const { root, lock } = await setup([]);
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  assert.equal((await buildReport(root, lock.id)).verdict, "verified");
+
+  reseal(root, (l) => {
+    l.deny = ["src/math.js"];
+  });
+
+  const after = await buildReport(root, lock.id);
+  assert.equal(after.verdict, "failed", "the rejudge can convict, not only acquit");
+  assert.ok(after.violations.some((v) => v.startsWith("DENY: src/math.js")));
+});
+
+test("rejudge: the scope wording is produced in one place", () => {
+  assert.deepEqual(
+    scopeViolations(
+      [
+        { path: "a.ts", status: "M", class: "out-of-budget" },
+        { path: "b.ts", status: "M", class: "denied", matchedDeny: "b.*" },
+      ],
+      { filesChanged: 2, maxFiles: 1, linesChanged: 9, maxLines: 5 },
+    ),
+    [
+      "OUT-OF-BUDGET: a.ts is not in budget.files",
+      'DENY: b.ts matches deny pattern "b.*"',
+      "BUDGET: 2 files changed > maxFiles 1",
+      "BUDGET: 9 lines changed > maxLines 5",
+    ],
+  );
+});
 
 test("report: full content contract on a clean run", async () => {
   const { root, lock } = await setup([

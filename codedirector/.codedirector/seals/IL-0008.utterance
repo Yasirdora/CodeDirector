@@ -1,0 +1,1 @@
+Feature 6 — lock_check errors on a budget file that does not exist yet, so a lock which CREATES a file cannot validate with its real path. It has forced basename globs into four locks already, and a glob names no language, which blinds the verify-coverage check on those paths.

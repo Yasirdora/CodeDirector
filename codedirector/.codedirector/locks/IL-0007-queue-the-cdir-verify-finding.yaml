@@ -1,0 +1,92 @@
+schemaVersion: 1
+id: IL-0007
+status: verified
+utterance: Queue the cdir verify finding as Feature 5 — verify must genuinely re-classify against the current lock, not replay the stored run record (this was already on the roadmap as the "rejudge path"; you just proved its need in the wild).
+goal: cdir verify and cdir report judge the recorded change against the lock as it stands now — re-classifying every changed path and re-testing the budget ceilings — instead of reprinting the verdict stored at run time. Raising a ceiling and re-verifying produces a truthful new verdict rather than the old refusal.
+interpretation: |
+  The defect is three lines of buildReport. The verification ladder is
+  genuinely re-run, but the SCOPE half of the verdict is copied out of the
+  stored run record:
+
+      const violations = run ? run.violations : verification.violations;
+      changed: run?.changed ?? [],
+      ...(run ? { budget: run.budget } : {}),
+
+  So a lock whose ceiling has been raised still reports the ceiling it had
+  when the command ran. Observed in the wild on IL-0002: maxLines raised from
+  70 to 100, every check re-run green, and the report still said 86/70. The
+  only way to clear it was to revert the work and re-apply it, which is a
+  heavy remedy for a number that had already been changed by hand.
+
+  The rejudge. A stored run holds everything needed to judge it again without
+  re-running anything: the paths it touched, their statuses, and the measured
+  file and line counts. classifyPath is already a pure function of (lock,
+  path). So on a standalone verify or report — never on the live run, which
+  has just classified against the same lock — every recorded path is
+  re-classified against the CURRENT lock, the ceilings are re-read from it,
+  and the scope violations are rebuilt.
+
+  linesChanged is NOT recomputed. It is a measurement against a baseline, and
+  the baseline belongs to the run that made it; re-deriving it would mean
+  re-diffing a tree that has since moved on. The measured number stands and
+  is compared against the current ceiling, which is exactly the question
+  being asked.
+
+  ONE WORDING, ONE PLACE. The violation strings are built inline in run.ts
+  today. Rebuilding them in report.ts would be two spellings of the same
+  verdict, free to drift. The builder moves to classify.ts, beside the
+  classification it reports on, and both callers use it — which is also why
+  run.ts is in this budget despite the bug living in report.ts.
+
+  allowExpand is preserved: a run that used the logged override for scope
+  growth is rejudged without scope violations, the same as it was recorded.
+keep:
+  - kind: no-new-dependency
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - src/core/**
+  - src/lock/**
+  - src/mcp/**
+change: Re-classify a stored run against the current lock in buildReport instead of replaying its recorded verdict, and move the scope-violation wording into classify.ts so run.ts and report.ts cannot drift.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/report/report.ts
+    - src/run/classify.ts
+    - src/run/run.ts
+    - test/report.test.ts
+  symbols: []
+  maxFiles: 4
+  maxLines: 340
+accept:
+  - Raising maxLines above a recorded overage and re-running verify yields verdict "verified" without re-running the change command.
+  - Lowering maxLines below a recorded change and re-running verify yields a fresh BUDGET violation naming the new ceiling.
+  - Adding a path to budget.files clears a recorded OUT-OF-BUDGET for it; removing one raises it.
+  - Adding a deny pattern that matches a recorded path raises a fresh DENY violation.
+  - A live run_locked verdict is unchanged — it already classified against the same lock.
+  - A run recorded with allowExpand is still rejudged without scope violations.
+  - The violation wording is produced in exactly one place.
+  - npm test green, above the current 162.
+assumptions:
+  - text: Budget replaced by hand for the eighth consecutive time. The auto-draft anchored on composeLock, PreviewView.currentFrame, SliderBinding.current, checkpointsPath and deleteGitPaths, and proposed three demo-repo FIXTURES plus the checkpoint module and an eval script. Swift indexing landed one commit ago and fixes eDraft's territory, not this repository's — cdir is TypeScript, so its mis-anchors are the substring problem alone, which Feature 7 addresses.
+    source: system
+    confirmed: false
+  - text: run.ts is in the budget although the bug is in report.ts. The scope-violation strings are built inline in run.ts; rebuilding them in report.ts would create two spellings of one verdict, free to drift apart. The builder moves to classify.ts and both callers use it.
+    source: system
+    confirmed: false
+  - text: linesChanged is deliberately not recomputed on a rejudge. It is a measurement against the run's own baseline; re-deriving it would mean re-diffing a tree that has since moved on. The measured number is compared against the current ceiling, which is the question actually being asked.
+    source: system
+    confirmed: false
+  - text: "src/core/** is denied: Swift indexing landed in the previous commit and this lock must not touch it. src/lock/** is denied so the verify-coverage rule from IL-0005 stays out of scope."
+    source: system
+    confirmed: false
+  - text: Ceiling padded to 340 for a change expected around 230 lines, per the human's standing instruction.
+    source: user
+    confirmed: true
+createdAt: 2026-09-16T21:13:24.308Z
+createdBy: Yasirdora

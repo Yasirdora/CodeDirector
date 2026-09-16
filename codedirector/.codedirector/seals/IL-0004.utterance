@@ -1,0 +1,1 @@
+Feature 2 — Flight recorder. Append-only log at .codedirector/mcp.log: every tool call with timestamp, tool name, root, duration, and outcome. Tonight an MCP call appeared to hang for 3 minutes and we could not reconstruct why — never again. Rotate at ~5 MB, keep one previous file.

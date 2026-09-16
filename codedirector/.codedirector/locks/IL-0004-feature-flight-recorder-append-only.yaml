@@ -1,0 +1,85 @@
+schemaVersion: 1
+id: IL-0004
+status: verified
+utterance: "Feature 2 — Flight recorder. Append-only log at .codedirector/mcp.log: every tool call with timestamp, tool name, root, duration, and outcome. Tonight an MCP call appeared to hang for 3 minutes and we could not reconstruct why — never again. Rotate at ~5 MB, keep one previous file."
+goal: Every MCP tool call leaves a durable record at .codedirector/mcp.log — when it started, which tool, which root, how long it took and whether it succeeded — so a call that appears to hang can be reconstructed afterwards instead of guessed at. The log rotates at 5 MB keeping one previous file, and a logging failure can never break the tool call it is recording.
+interpretation: |
+  One choke point already exists: the single CallToolRequestSchema handler in
+  startMcpServer. Every tool call in the process passes through it, so the
+  recorder needs no per-tool wiring and cannot be forgotten when a tool is
+  added.
+
+  A new module, src/mcp/log.ts, owns the format and the rotation; the server
+  only calls it. JSON Lines, one object per call — a hang is reconstructed by
+  reading a file, and a format a person can grep is worth more here than a
+  compact one.
+
+  Recorded per call, and no more than this: the ISO timestamp the call
+  STARTED (a hang is a gap between a start and its absent end, so the start is
+  the load-bearing field), the tool name, the resolved root, the duration in
+  milliseconds, and the outcome — "ok", "error" for a tool that returned
+  isError, or "threw" for one that raised. Arguments are NOT recorded: they
+  carry the human's utterances and file paths, and the stated need is
+  reconstructing timing, not content.
+
+  Three rules the implementation must not break:
+    1. Logging never breaks the call. Every write is wrapped; a full disk, a
+       read-only directory or a missing parent costs a log line, never a
+       tool result.
+    2. The record is written AFTER the call completes, because duration and
+       outcome are not known before it. A process killed mid-call therefore
+       leaves no line — which is itself the signature of the hang being
+       hunted, and is documented in the module rather than pretended away.
+    3. Root resolution can throw before any root is known (the home-directory
+       guard). Those calls are logged against the server's own root when it
+       has one, and dropped rather than guessed at when it does not.
+
+  Rotation: at 5 MB the file becomes mcp.log.1, replacing any previous .1, and
+  a fresh mcp.log starts. One previous file, per the human's choice —
+  append-only in spirit, bounded on disk.
+
+  No new ignore line is needed: "*.log" in .gitignore already matches
+  mcp.log, verified with git check-ignore during IL-0003.
+keep:
+  - kind: no-new-dependency
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - examples/**
+change: Add src/mcp/log.ts and record every MCP tool call from the server's single dispatch point, with rotation at 5 MB and failure-tolerance throughout. No change to any tool's behaviour or result.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/mcp/log.*
+    - src/mcp/server.ts
+    - test/mcp.test.ts
+  symbols: []
+  maxFiles: 3
+  maxLines: 340
+accept:
+  - A real MCP session over stdio leaves one JSON line per tool call in .codedirector/mcp.log, each carrying timestamp, tool, root, durationMs and outcome.
+  - A tool returning isError is recorded with outcome "error"; a tool that throws is recorded as "threw"; neither changes what the caller receives.
+  - Writing past 5 MB rotates to mcp.log.1 and starts a fresh mcp.log, keeping exactly one previous file.
+  - A log destination that cannot be written costs a line and not a tool result.
+  - npm test green, above the current 143.
+assumptions:
+  - text: Budget replaced by hand. The auto-draft anchored on SliderBinding.onChange, blobRoot, timestampId, toRootRelative and rootFrom — substring hits on "root", "time" and "on" — and proposed two demo-repo fixtures plus the checkpoint and tree modules. examples/** is denied so the fixtures cannot be touched at all.
+    source: system
+    confirmed: false
+  - text: Budget path src/mcp/log.* is a basename glob because lock_check errors on a budget file that does not exist yet; a lock that CREATES a file cannot validate with its real name. Queued as a cdir gap of its own.
+    source: system
+    confirmed: false
+  - text: Arguments are deliberately not recorded. The stated need is reconstructing a hang — timing and outcome — and tool arguments carry the human's verbatim utterances and file paths. Say the word if the reconstruction ever needs them.
+    source: system
+    confirmed: false
+  - text: A call killed mid-flight leaves NO line, because duration and outcome are only known at completion. That is a real limitation of a one-line-per-call format and is documented in the module; the alternative, writing a start line and an end line, doubles the file and complicates rotation. The gap between the last line and the process's death is itself the evidence.
+    source: system
+    confirmed: false
+  - text: Ceiling padded to 340 for a change expected around 230 lines, per the human's instruction after IL-0001 and IL-0002 were both blocked by low estimates.
+    source: user
+    confirmed: true
+createdAt: 2026-09-16T20:02:16.668Z
+createdBy: Yasirdora

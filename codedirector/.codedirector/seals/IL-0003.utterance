@@ -1,0 +1,1 @@
+Track the audit trail here like eDraft does — locks, runs, seals committed; heavy artifacts (ckpt-blobs, baselines, captures, index.json) stay ignored. Do it as a small separate chore commit after Feature 1, not inside this lock. And add mcp.log to the ignore list when you build Feature 2.

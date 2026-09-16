@@ -1,0 +1,103 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0002-20260916-185058.json",
+  "baselineSha256": "dcd2c26f7dbbb4f3e6aef87fb445e3b41ab4ccd5a5acf394a3ec9b4371c57c66",
+  "budget": {
+    "filesChanged": 2,
+    "linesChanged": 86,
+    "maxFiles": 2,
+    "maxLines": 70
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/lock/draft.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/lock.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260916T185057550",
+    "createdAt": "2026-09-16T18:50:57.704Z",
+    "dirty": true,
+    "id": "ckpt-20260916T185057550",
+    "ref": "fb5cfa5628a5600efdc1de96ee2db92fc1d00b17",
+    "statusHash": "69ec2f8d35d0e8d425df3de31085e6786e576e4d61a00768a4847fa649af0734",
+    "tag": "cdir/ckpt-20260916T185057550"
+  },
+  "command": [
+    "python3",
+    "/private/tmp/claude-501/-Users-x-Documents-Film-maker/464ad830-e9d2-471e-b400-1ff65fd0f690/scratchpad/il0002_apply.py"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-16T18:50:58.557Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0002",
+  "startedAt": "2026-09-16T18:50:58.519Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0002-20260916-185058.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0002-20260916-185058.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0002-20260916-185058.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0002",
+    "verifiedAt": "2026-09-16T18:51:20.700Z",
+    "violations": []
+  },
+  "violations": [
+    "BUDGET: 86 lines changed > maxLines 70"
+  ]
+}

@@ -28,7 +28,13 @@ import { loadLock, saveLock } from "../lock/store";
 import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { Baseline, baselineFileHash, captureBaseline, saveBaseline } from "./baseline";
-import { changedFiles, changedLineCount, ClassifiedChange, classifyChanges } from "./classify";
+import {
+  changedFiles,
+  changedLineCount,
+  ClassifiedChange,
+  classifyChanges,
+  scopeViolations,
+} from "./classify";
 import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
 import { VerificationReport } from "../verify/types";
 
@@ -257,20 +263,9 @@ export async function runWithLock(
     ? keepResultsFromVerification(verification)
     : checkKeepClauses(rootDir, lock, baseline, indexAfter);
 
-  const scopeViolations: string[] = [];
-  for (const c of changed) {
-    if (c.class === "denied") {
-      scopeViolations.push(`DENY: ${c.path} matches deny pattern "${c.matchedDeny}"`);
-    } else if (c.class === "out-of-budget") {
-      scopeViolations.push(`OUT-OF-BUDGET: ${c.path} is not in budget.files`);
-    }
-  }
-  if (budget.filesChanged > budget.maxFiles) {
-    scopeViolations.push(`BUDGET: ${budget.filesChanged} files changed > maxFiles ${budget.maxFiles}`);
-  }
-  if (budget.linesChanged > budget.maxLines) {
-    scopeViolations.push(`BUDGET: ${budget.linesChanged} lines changed > maxLines ${budget.maxLines}`);
-  }
+  // One wording, one place: a standalone verify rebuilds these from the same
+  // function when it judges this run against a Lock that has since changed.
+  const scope = scopeViolations(changed, budget);
   const keepViolations = verification
     ? verification.violations
     : keepResults
@@ -280,7 +275,7 @@ export async function runWithLock(
   const allowExpand = opts.allowExpand === true;
   // --allow-expand is the logged override for SCOPE growth only; a broken
   // KEEP clause is never overridden (the rule that gives the Lock teeth).
-  const violations = allowExpand ? keepViolations : [...scopeViolations, ...keepViolations];
+  const violations = allowExpand ? keepViolations : [...scope, ...keepViolations];
 
   const record: RunRecord = {
     lockId: lock.id,

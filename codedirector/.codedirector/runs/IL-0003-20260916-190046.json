@@ -1,0 +1,53 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0003-20260916-190046.json",
+  "baselineSha256": "2c568bb37d21da13cdeff4e6ef89799347a3568b6e37baa2b6c851ade8909ff9",
+  "budget": {
+    "filesChanged": 0,
+    "linesChanged": 3,
+    "maxFiles": 1,
+    "maxLines": 40
+  },
+  "changed": [],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260916T190045268",
+    "createdAt": "2026-09-16T19:00:45.352Z",
+    "dirty": true,
+    "id": "ckpt-20260916T190045268",
+    "ref": "fb5cfa5628a5600efdc1de96ee2db92fc1d00b17",
+    "statusHash": "69ec2f8d35d0e8d425df3de31085e6786e576e4d61a00768a4847fa649af0734",
+    "tag": "cdir/ckpt-20260916T190045268"
+  },
+  "command": [
+    "python3",
+    "/private/tmp/claude-501/-Users-x-Documents-Film-maker/464ad830-e9d2-471e-b400-1ff65fd0f690/scratchpad/il0003_apply.py"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-16T19:00:46.208Z",
+  "keepResults": [],
+  "lockId": "IL-0003",
+  "startedAt": "2026-09-16T19:00:46.172Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0003-20260916-190046.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 0,
+      "proven": 1,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0003",
+    "verifiedAt": "2026-09-16T19:00:48.250Z",
+    "violations": []
+  },
+  "violations": []
+}

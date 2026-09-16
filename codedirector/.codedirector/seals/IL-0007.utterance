@@ -1,0 +1,1 @@
+Queue the cdir verify finding as Feature 5 — verify must genuinely re-classify against the current lock, not replay the stored run record (this was already on the roadmap as the "rejudge path"; you just proved its need in the wild).

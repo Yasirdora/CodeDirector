@@ -1,0 +1,107 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0008-20260916-212354.json",
+  "baselineSha256": "224fa73e6bb1173c455b8c0300e2045add4a600b2c191c69c140aa4fba57593e",
+  "budget": {
+    "filesChanged": 2,
+    "linesChanged": 96,
+    "maxFiles": 2,
+    "maxLines": 220
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/lock/check.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/lock.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260916T212353726",
+    "createdAt": "2026-09-16T21:23:53.761Z",
+    "dirty": false,
+    "id": "ckpt-20260916T212353726",
+    "ref": "ec6c100d8955c528e2f1c72588755188a3c32af2",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260916T212353726"
+  },
+  "command": [
+    "python3",
+    "/private/tmp/claude-501/-Users-x-Documents-Film-maker/464ad830-e9d2-471e-b400-1ff65fd0f690/scratchpad/il0008_apply.py"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-16T21:23:54.753Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0008",
+  "startedAt": "2026-09-16T21:23:54.717Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0008-20260916-212354.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 2,
+      "proven": 2,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0008-20260916-212354.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0008-20260916-212354.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 2",
+        "detail": "tsc --noEmit failed (exit 2): test/lock.test.ts(64,48): error TS2304: Cannot find name 'path'. · test/lock.test.ts(64,58): error TS2304: Cannot find name 'path'.",
+        "evidenceClass": "measured",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "violated"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 2",
+        "detail": "verifyCommand failed (exit 2): npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "violated"
+      }
+    ],
+    "lockId": "IL-0008",
+    "verifiedAt": "2026-09-16T21:23:59.081Z",
+    "violations": [
+      "VERIFY typecheck: tsc --noEmit failed (exit 2): test/lock.test.ts(64,48): error TS2304: Cannot find name 'path'. · test/lock.test.ts(64,58): error TS2304: Cannot find name 'path'.",
+      "VERIFY verify-command: verifyCommand failed (exit 2): npm test"
+    ]
+  },
+  "violations": [
+    "VERIFY typecheck: tsc --noEmit failed (exit 2): test/lock.test.ts(64,48): error TS2304: Cannot find name 'path'. · test/lock.test.ts(64,58): error TS2304: Cannot find name 'path'.",
+    "VERIFY verify-command: verifyCommand failed (exit 2): npm test"
+  ]
+}

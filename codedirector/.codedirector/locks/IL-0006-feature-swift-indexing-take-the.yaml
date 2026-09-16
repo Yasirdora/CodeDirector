@@ -1,0 +1,111 @@
+schemaVersion: 1
+id: IL-0006
+status: verified
+utterance: Feature 4 — Swift indexing. Take the tree-sitter-wasms package. No Objective-C — eDraft has zero hand-written .m/.mm. Qualify extensions (B+extension or similar); skipping them loses real symbols since half of Swift code lives in extensions, and folding them into the extended type creates the duplicate-id collision. Split the extractor — a shared function switching on language in four places is where this rots. The new dependency is a deliberate, human-approved exception to no-new-dependency for this lock only.
+goal: cdir indexes Swift. A .swift file is walked, parsed through the prebuilt tree-sitter-wasms grammar under the existing web-tree-sitter runtime, and yields symbols — functions, methods, types, protocols, typealiases, properties — so that anchors, the repo map and blast radius finally see an Apple project's actual subject instead of whatever TypeScript happens to share the tree.
+interpretation: |
+  The grammar arrives as a prebuilt .wasm from tree-sitter-wasms and is
+  loaded exactly as the TypeScript and JavaScript grammars already are:
+  require.resolve to the file, Parser.Language.load, one entry in WASM_PATHS.
+  Measured during the design pass — it loads under the installed
+  web-tree-sitter 0.24.7, parses eDraft-shaped Swift with hasError false, and
+  answers childForFieldName("name"), which is the API the extractor uses.
+
+  THE SPLIT. parser.ts keeps the runtime — init, WASM_PATHS, langForFile —
+  and gains ONE dispatch: a Swift file goes to a Swift extractor in its own
+  module, everything else to the extractor that exists. TypeScript extraction
+  is NOT relocated in this lock: moving working code for tidiness is a large
+  diff with real regression risk and no behaviour change, and the rot the
+  human named — one function switching on language in four places — is
+  prevented by the dispatch, not by the move.
+
+  THE MAPPING, measured against the live grammar:
+    function_declaration   → function at top level, method inside a body
+    class_declaration      → class, or enum when its keyword is 'enum'
+    protocol_declaration   → interface
+    typealias_declaration  → type
+    property_declaration   → const
+    import_declaration     → an import
+  class_declaration is the grammar's node for struct, class, enum, actor AND
+  extension; the keyword is an UNNAMED child and is what tells them apart.
+
+  EXTENSIONS.  reports name=B, which collides with the type it
+  extends because SymbolInfo.id is "<relpath>#<qualifiedName>". Qualified as
+  the human asked: "B+Conformance" when the extension declares conformances,
+  which is the common case and stable; "B+extension" when it declares none;
+  and a source-ordered ordinal ("B+extension2") only when a file holds two
+  otherwise identical extensions. The ordinal shifts if extensions are
+  reordered within a file — stated here rather than discovered later, since
+  an api-unchanged clause can name one of these ids.
+
+  WHAT THIS DOES NOT BUY. resolveModule returns null for any specifier not
+  beginning with "." — bare imports are not indexed — and every Swift import
+  is a bare module name. Rule 2 of the resolution policy therefore never
+  fires for Swift. Cross-file edges come from rule 1 (same-file) and rule 3
+  (unique-name) alone, so Swift blast radius is weaker than TypeScript's.
+  The anchors, which is what six consecutive mis-anchors were about, are
+  fixed regardless.
+
+  PARSER_VERSION goes 4 → 5, which reparses every cached entry in every repo
+  the next time it is indexed. Intended: the extraction contract changed.
+keep: []
+deny:
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - src/lock/**
+  - src/mcp/**
+  - src/run/**
+  - src/report/**
+  - src/verify/**
+  - src/checkpoint/**
+change: Index Swift — add the grammar dependency, walk .swift, and extract its symbols through a Swift extractor of its own, dispatched from parser.ts. No Objective-C. No relocation of the TypeScript extractor.
+verifyCommand: npm test
+verifyTimeoutMs: 600000
+budget:
+  files:
+    - package.json
+    - package-lock.json
+    - src/core/parser.ts
+    - src/core/swift.*
+    - src/core/walk.ts
+    - test/parser.test.ts
+    - test/fixtures/swift-repo/**
+    - test/lock.test.ts
+  symbols: []
+  maxFiles: 8
+  maxLines: 520
+accept:
+  - A .swift file is walked and indexed; INDEXABLE_EXTENSIONS contains ".swift".
+  - A struct, a class, an actor, an enum, a protocol, a typealias, a top-level func, a top-level property and a method inside a type each produce a symbol of the documented kind.
+  - An extension produces symbols qualified away from the type it extends, and two extensions of one type in one file produce two distinct ids.
+  - A Swift symbol resolves as an anchor, so lock_draft on an Apple utterance proposes Swift files.
+  - The TypeScript and JavaScript extraction is unchanged — every existing parser test still passes.
+  - npm test green, above the current 156.
+assumptions:
+  - text: "Budget extended after the first run was blocked, with the human's approval. Two additions. test/lock.test.ts: Feature 4 invalidates two assertions IL-0002 wrote while Swift was invisible — isIndexableLanguage(\"Swift\") is now true, and the sharper \"cdir indexes no Swift\" message correctly stops firing for a language the walker can read. Not regressions; the behaviour is re-pinned against Python, which still cannot be read. The design pass predicted this consequence and then failed to put the file in the budget. And the fixture path became a directory glob because git reports a wholly untracked directory as the directory, which a basename glob cannot match."
+    source: user
+    confirmed: true
+  - text: Two budget paths are basename globs (src/core/swift.*, test/fixtures/swift-repo/Surface.*) because lock_check errors on a file that does not exist yet — a lock which CREATES files cannot validate with their real names. Queued as Feature 6. It also means Feature 3 cannot read those two paths' languages, which is why verifyCovers is doing the work here rather than the .swift extension being seen.
+    source: system
+    confirmed: false
+  - text: no-new-dependency is deliberately ABSENT from keep. tree-sitter-wasms is a human-approved exception for this lock only, and package.json and package-lock.json are in the budget rather than the deny list for the same reason. Every other lock in this repository keeps the clause; this one cannot and says so.
+    source: user
+    confirmed: true
+  - text: verifyCovers declares Swift because the budget contains a .swift FIXTURE and Feature 3 would otherwise refuse this lock — npm test reaches TypeScript and JavaScript, not Swift. The fixture is input to TypeScript tests, not Swift code needing a Swift toolchain, which is exactly the case the escape hatch was added for. Feature 3 catching Feature 4's own lock is the mechanism working.
+    source: system
+    confirmed: false
+  - text: Budget replaced by hand for the seventh consecutive time. The auto-draft anchored on composeLock, workTreeStatusPorcelain, lockCommand, rankSymbols and ensureCodedirectorIgnore — substring hits on "lock", "work" and "rank" — and proposed the CLI, the runner, the checkpoint module and an eval script. This lock is the reason that keeps happening.
+    source: system
+    confirmed: false
+  - text: Swift cross-file blast radius will be weaker than TypeScript's because bare module imports never resolve. Measured from graph.ts's documented resolution policy, not assumed. The human accepted this in the design pass.
+    source: system
+    confirmed: false
+  - text: Objective-C is excluded on the human's evidence that eDraft has no hand-written .m/.mm. The grammar for it ships in the same package, so adding it later is a one-line lock.
+    source: user
+    confirmed: true
+  - text: "Ceiling padded to 520 for a change expected around 380 lines. Seven files is large for one lock, but the feature does not decompose: a grammar without an extractor indexes nothing, and an extractor without the walker is never called."
+    source: system
+    confirmed: false
+createdAt: 2026-09-16T20:56:54.843Z
+createdBy: Yasirdora

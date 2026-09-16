@@ -1,0 +1,83 @@
+schemaVersion: 1
+id: IL-0009
+status: verified
+utterance: Feature 7 — whole-name over fragment ranking. The name tier treats a token that IS a symbol's name and a token that merely occurs inside one as equals, so three fragment hits on an incidental word crowd out the symbol the utterance named explicitly. Nine consecutive lock drafts mis-anchored this way, including the draft of the lock that fixed it.
+goal: When an utterance names a symbol outright, that symbol is what the draft anchors on. Whole-name matches win the name tier; fragment matches are used only when nothing matched wholly, so a budget proposal follows the words the human actually wrote rather than an incidental one that happens to sit inside an unrelated identifier.
+interpretation: |
+  Tier 3 of resolveAnchorsDetailed collects every symbol whose name is a
+  query token OR contains one, then sorts the lot by symbol id and keeps the
+  first five. Identity and coincidence are sorted together, so five
+  coincidences can fill the list before the identity is reached.
+
+  Measured, after Swift indexing landed: an utterance that says
+  "ScriptSurface paints the mark in the wrong coordinate space" anchored on
+  isLetterSpaced, addPages and three ElementModeButton members — "space",
+  "page" and "mode" — and not on ScriptSurface, which the sentence names.
+
+  The fix is one rule: if any symbol matched a token WHOLLY, only those are
+  anchors. Not a sort — an exclusion. A whole-name match is evidence of a
+  different kind from a fragment, and mixing them lets a coincidence share
+  the authority of an identity. When nothing matched wholly, fragments are
+  used exactly as they are today, and the low-confidence flag from IL-0001
+  fires on them exactly as it does today.
+
+  A consequence worth stating: with this rule the flag becomes clean rather
+  than approximate. Anchors are now either all-whole or all-fragment, so
+  "every anchor matched only as a fragment" is a property of the resolution
+  rather than an accident of which five sorted first.
+
+  Determinism is unchanged: the surviving set is still sorted by symbol id
+  and capped at five.
+
+  This changes which anchors EVERY draft picks, in every repository. That is
+  the intent, and it is the reason this was not folded into IL-0001, where
+  it would have silently altered budget proposals while the subject was
+  reporting.
+keep:
+  - kind: no-new-dependency
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - src/lock/**
+  - src/run/**
+  - src/report/**
+  - src/mcp/**
+  - src/checkpoint/**
+change: In the name tier of anchor resolution, exclude fragment matches when any token matched a symbol's whole name. No change when nothing matched wholly.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/core/map.ts
+    - test/lock.test.ts
+  symbols: []
+  maxFiles: 2
+  maxLines: 200
+accept:
+  - An utterance naming a symbol exactly anchors on that symbol, even when other words produce fragment matches.
+  - An utterance with no whole-name match still anchors on fragments, as before.
+  - Anchors from the name tier are never a mixture of whole and fragment matches.
+  - Resolution stays deterministic and capped at five.
+  - The eDraft utterance that anchored on isLetterSpaced and ElementModeButton now anchors on ScriptSurface.
+  - npm test green, above the current 172.
+assumptions:
+  - text: Exclusion, not ranking. Sorting whole matches first would still let fragments fill the remaining slots and share the budget proposal; the two are different kinds of evidence, and a coincidence should not inherit the authority of an identity because there was room for it.
+    source: system
+    confirmed: false
+  - text: "This alters which anchors every draft picks in every repository. Intended, and the reason it was kept out of IL-0001: changing the subject while building the report on it would have hidden the change."
+    source: system
+    confirmed: false
+  - text: Budget replaced by hand for the tenth consecutive time — the last time this should be necessary. The auto-draft anchored on composeLock, lockCommand, parseImportName, SymbolGraph and estimateTokens. src/core/map.ts did reach the proposal this time, in fourth place, carried by SymbolGraph and estimateTokens rather than by anything the utterance is about.
+    source: system
+    confirmed: false
+  - text: Budget paths are written as real names rather than basename globs, which IL-0008 made possible one commit ago.
+    source: system
+    confirmed: false
+  - text: Ceiling padded to 200 for a change expected around 120 lines.
+    source: user
+    confirmed: true
+createdAt: 2026-09-16T21:37:18.135Z
+createdBy: Yasirdora

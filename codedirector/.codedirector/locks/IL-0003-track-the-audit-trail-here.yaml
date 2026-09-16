@@ -1,0 +1,54 @@
+schemaVersion: 1
+id: IL-0003
+status: verified
+utterance: Track the audit trail here like eDraft does — locks, runs, seals committed; heavy artifacts (ckpt-blobs, baselines, captures, index.json) stay ignored. Do it as a small separate chore commit after Feature 1, not inside this lock. And add mcp.log to the ignore list when you build Feature 2.
+goal: cdir's own repository commits its audit trail — the locks, the run records and the seals — while the heavy regenerable artifacts stay out of git. The blanket .codedirector/ ignore that currently hides all of it is gone.
+interpretation: |
+  One file. The blanket ".codedirector/" on line 3 is what actually hides the
+  audit trail; cdir's managed block below it is moot while that line stands.
+  Remove it, then adjust the managed block to the human's enumerated list:
+  drop ".codedirector/runs/" so run records are committed, add
+  ".codedirector/captures/" so captures are not.
+
+  Editing inside the "# BEGIN cdir" block is safe and permanent:
+  ensureCodedirectorIgnore returns early the moment the marker exists
+  (src/core/store.ts), so cdir will never rewrite what is there.
+
+  Two deliberate departures from "like eDraft does", because the analogy and
+  the enumerated list disagree and the list is the specific instruction:
+  eDraft TRACKS captures/ (here it is ignored) and IGNORES runs/ (here it is
+  tracked).
+
+  mcp.log needs no new line — "*.log" on line 4 already matches it. Confirmed
+  when Feature 2 lands rather than pre-emptively added.
+keep: []
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - src/**
+  - test/**
+change: .gitignore only — stop ignoring the whole .codedirector directory, commit locks/runs/seals, keep the regenerable artifacts out.
+budget:
+  files:
+    - .gitignore
+  symbols: []
+  maxFiles: 1
+  maxLines: 40
+accept:
+  - git check-ignore says .codedirector/locks, .codedirector/runs and .codedirector/seals are NOT ignored.
+  - git check-ignore says .codedirector/index.json, baselines/, captures/, ckpt-blobs/ and checkpoints.json ARE ignored.
+  - No source file changes.
+assumptions:
+  - text: Budget replaced by hand — the auto-draft anchored on composeLock, SliderListener and the checkpoint blob writers, and proposed src/checkpoint/index.ts, eval/run.ts, src/core/store.ts and a demo-repo fixture. This lock touches one file, .gitignore, and src/** and test/** are DENIED to make that structural.
+    source: system
+    confirmed: false
+  - text: "Following the human's enumerated list over their 'like eDraft does' analogy, which is inaccurate on two counts: eDraft tracks captures/ and ignores runs/. Surfaced to the human before acting; reversible in one line either way."
+    source: system
+    confirmed: false
+  - text: Ceiling padded to 40 for a ~10-line change, per the human's instruction to stop drip-feeding small ceiling approvals after IL-0001 (368/300) and IL-0002 (86/70) were both blocked by low estimates.
+    source: user
+    confirmed: true
+createdAt: 2026-09-16T18:57:10.674Z
+createdBy: Yasirdora

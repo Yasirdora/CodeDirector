@@ -28,9 +28,26 @@ export function estimateTokens(text: string): number {
 /** How strongly the query matched: exact > name-token > lexical-only > none. */
 export type AnchorStrength = "exact" | "name" | "lexical" | "none";
 
+/**
+ * How one anchor came to be chosen — the evidence a draft owes the human.
+ *
+ * `how` is the load-bearing field. "part" means the utterance token merely
+ * OCCURS INSIDE the symbol's name ("tabs" inside `tabSetFor`), which is how
+ * every mis-anchor reported from the field has happened: an incidental
+ * English word lands in an unrelated territory and the budget follows it.
+ */
+export interface AnchorMatch {
+  symbol: SymbolInfo;
+  /** The utterance token that matched — the whole query for an exact hit. */
+  token: string;
+  how: "exact" | "whole" | "part" | "lexical";
+}
+
 export interface AnchorResolution {
   anchors: SymbolInfo[];
   strength: AnchorStrength;
+  /** Parallel to `anchors`, same order: why each one is here. */
+  matches: AnchorMatch[];
 }
 
 /**
@@ -44,7 +61,10 @@ export interface AnchorResolution {
 export function resolveAnchorsDetailed(graph: SymbolGraph, query: string): AnchorResolution {
   // 1. exact name match
   const exact = graph.byName.get(query);
-  if (exact && exact.length > 0) return { anchors: exact.map((id) => graph.symbols.get(id)!), strength: "exact" };
+  if (exact && exact.length > 0) {
+    const anchors = exact.map((id) => graph.symbols.get(id)!);
+    return { anchors, strength: "exact", matches: anchors.map((s) => named(s, query, "exact")) };
+  }
 
   const q = query.toLowerCase();
   const tokens = q.split(/[^a-zA-Z0-9_$]+/).filter((t) => t.length >= 3);
@@ -54,25 +74,51 @@ export function resolveAnchorsDetailed(graph: SymbolGraph, query: string): Ancho
   for (const sym of graph.symbols.values()) {
     if (sym.name.toLowerCase() === q || sym.qualifiedName.toLowerCase() === q) ci.push(sym);
   }
-  if (ci.length > 0) return { anchors: ci, strength: "exact" };
+  if (ci.length > 0) {
+    return { anchors: ci, strength: "exact", matches: ci.map((s) => named(s, query, "exact")) };
+  }
 
   // 3. name-token match: a query token that IS a symbol name (len ≥ 3) or
   //    appears inside one (len ≥ 4, so "the" can't match "other"). These are
   //    real anchors; lexical fuzz below is not.
-  const nameHits = new Map<string, SymbolInfo>();
+  const nameHits = new Map<string, AnchorMatch>();
   for (const sym of graph.symbols.values()) {
     const nm = sym.name.toLowerCase();
     const qn = sym.qualifiedName.toLowerCase();
+    let best: AnchorMatch | undefined;
     for (const t of tokens) {
-      if (t === nm || t === qn || (t.length >= 4 && (nm.includes(t) || qn.includes(t)))) {
-        nameHits.set(sym.id, sym);
+      const whole = t === nm || t === qn;
+      const part = !whole && t.length >= 4 && (nm.includes(t) || qn.includes(t));
+      if (!whole && !part) continue;
+      // A whole-name hit is the strongest evidence this symbol can offer;
+      // a substring hit is kept only until a whole one turns up.
+      if (whole) {
+        best = named(sym, t, "whole");
         break;
       }
+      if (!best) best = named(sym, t, "part");
     }
+    if (best) nameHits.set(sym.id, best);
   }
   if (nameHits.size > 0) {
-    const anchors = [...nameHits.values()].sort((a, b) => a.id.localeCompare(b.id)).slice(0, 5);
-    return { anchors, strength: "name" };
+    // Identity beats coincidence, and beats it by exclusion rather than by
+    // sort order. A token that IS a symbol's name and a token that merely
+    // occurs inside one are evidence of different kinds; ranked together,
+    // five coincidences could fill the list before the identity was
+    // reached. Measured on a sentence that said "ScriptSurface paints the
+    // mark in the wrong coordinate space" and anchored on isLetterSpaced,
+    // addPages and three ElementModeButton members — "space", "page",
+    // "mode" — while ScriptSurface, which the sentence names, was absent.
+    //
+    // Sorting whole matches first would not have been enough: fragments
+    // would still have filled the remaining slots and shared the budget
+    // proposal. When anything matched wholly, fragments are not anchors.
+    const found = [...nameHits.values()];
+    const whole = found.filter((m) => m.how === "whole");
+    const picked = (whole.length > 0 ? whole : found)
+      .sort((a, b) => a.symbol.id.localeCompare(b.symbol.id))
+      .slice(0, 5);
+    return { anchors: picked.map((m) => m.symbol), strength: "name", matches: picked };
   }
 
   // 4. lexical: symbols whose name or file path contains any query token.
@@ -86,7 +132,15 @@ export function resolveAnchorsDetailed(graph: SymbolGraph, query: string): Ancho
   }
   scored.sort((a, b) => b.hits - a.hits || a.sym.id.localeCompare(b.sym.id));
   const anchors = scored.slice(0, 5).map((s) => s.sym);
-  return { anchors, strength: anchors.length > 0 ? "lexical" : "none" };
+  const matches = anchors.map((sym) => {
+    const hay = `${sym.name} ${sym.qualifiedName} ${sym.file}`.toLowerCase();
+    return named(sym, tokens.find((t) => hay.includes(t)) ?? q, "lexical");
+  });
+  return { anchors, strength: anchors.length > 0 ? "lexical" : "none", matches };
+}
+
+function named(symbol: SymbolInfo, token: string, how: AnchorMatch["how"]): AnchorMatch {
+  return { symbol, token, how };
 }
 
 /** Resolve a free-text query to anchor symbols. */

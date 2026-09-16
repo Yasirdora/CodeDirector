@@ -105,7 +105,11 @@ best):
 
 **1. MCP — the toolbox.** Run `cdir mcp` as an MCP server in your agent's
 config. The agent gains eight tools (`repo_map`, `blast_radius`, `lock_draft`,
-`lock_check`, `lock_activate`, `run_locked`, `report`, `undo`). Example for a
+`lock_check`, `lock_activate`, `run_locked`, `report`, `undo`). Every call
+leaves a line in `.codedirector/mcp.log` — when it started, which tool, which
+root, how long it took, and how it ended — so a call that appears to hang can
+be read about afterwards instead of guessed at. Arguments are not recorded.
+The log rotates at 5 MB, keeping one previous file. Example for a
 Agent CLI CLI setup — add to `~/.agents/mcp.json`:
 
 ```json
@@ -144,7 +148,15 @@ Change Report afterwards.
 
 ### Apple projects
 
-Swift / SwiftUI repos get a draft preset:
+Swift is indexed, not merely fenced off: `.swift` files are walked and
+parsed like any other source, so anchors, the repo map and blast radius see
+an Apple project's own symbols. A 56k-line macOS app reads as 294 files, 213
+of them Swift, in about a second and a half. Cross-file call edges are
+weaker there than in TypeScript — every Swift `import` names a module rather
+than a path, so import-based resolution cannot fire and same-file and
+unique-name resolution carry it.
+
+Swift / SwiftUI repos also get a draft preset:
 `cdir lock new "<words>" --profile apple`. The profile denies vendor dirs and
 dependency lockfiles (Pods, Carthage, SPM, Bundler), signing assets, and
 DerivedData; under XcodeGen or Tuist it also denies the generated
@@ -209,7 +221,20 @@ The Lock schema (v1): `utterance` (your exact words, immutable), `goal`,
 `deny[]`, `change`, `verifyCommand` (optional user test harness, e.g.
 `npm test` — run as measured evidence), `verifyTimeoutMs` (optional timeout
 for it and `tests-pass` runs — the CLI's `--test-timeout` overrides it),
-`budget {files, symbols, maxFiles, maxLines}`, `accept[]`, `assumptions[]`.
+`verifyCovers[]` (optional; languages you assert `verifyCommand` exercises —
+see below), `budget {files, symbols, maxFiles, maxLines}`, `accept[]`,
+`assumptions[]`.
+
+`cdir lock check` refuses a Lock whose `verifyCommand` demonstrably cannot
+reach the languages its budget touches — a budget of Swift files behind a
+TypeScript-only check is not verified, it is unexamined. The command's reach
+is read from the toolchains it names (`swift`, `xcodebuild`, `tsc`,
+`node --test`, npm/yarn/pnpm, vitest/jest/mocha, `pytest`, `go`, `cargo`,
+gradle/maven). A command naming none of them warns rather than refusing,
+since refusing every bespoke harness would be worse than the hole; and
+`verifyCovers` is how you say what a harness of your own actually runs. Files
+whose extension names no language — `.md`, `.gitignore` — are not counted
+against a Lock.
 KEEP clause kinds:
 
 | Kind | Payload | Checked how |
@@ -314,6 +339,15 @@ Re-runs the ladder without re-running the change command: latest baseline for
 the lock, fresh index, all rungs. Without any baseline, structural and output
 checks report Unchecked ("no pre-change baseline") while tests and typecheck
 still run. Updates the lock status; exit 0 only when verified.
+
+It also re-**judges**. Every path the run recorded is re-classified against
+the Lock as it stands now, and both ceilings are re-read from it — so raising
+`maxLines` after a refusal and re-verifying gives a truthful new verdict
+instead of reprinting the old one. It convicts as readily as it acquits: a
+`deny` added after a clean run turns the verdict to failed. The measured line
+count is carried over rather than re-derived, since it belongs to the
+baseline the run made. Editing a Lock breaks its seal, so re-approval
+(`cdir lock check` then `cdir lock activate`) is still a human act.
 
 `--test-timeout MS` (on both `run` and `verify`) sets the timeout for
 `tests-pass` runs and the lock's `verifyCommand`, overriding the lock's
@@ -488,7 +522,18 @@ eval/
 Parsing uses **web-tree-sitter** (pure WASM, no native compilation) with the
 official `tree-sitter-typescript` / `tree-sitter-javascript` npm packages,
 which ship prebuilt `.wasm` grammars. This was the first-choice option and
-installed cleanly; no fallback was needed. Extraction is syntax-level and
+installed cleanly; no fallback was needed.
+
+Swift arrives the same way, from `tree-sitter-wasms`, which publishes
+prebuilt grammars for 36 languages. The obvious package, `tree-sitter-swift`,
+was rejected on inspection: it ships native bindings (`node-gyp-build` plus
+per-platform prebuilds) and no `.wasm` at all, which would have cost this
+project the promise the paragraph above opens with. Swift extraction lives in
+its own module rather than branching inside the TypeScript one — the node
+types share almost no names, and one function switching on language in four
+places is where that code rots.
+
+Extraction is syntax-level and
 heuristic — call edges are resolved by name (same-file → import → unique
 name), not by types. Method calls (`obj.m()`) are best-effort. This is
 documented behavior, not a bug: compiler-grade precision is a later phase

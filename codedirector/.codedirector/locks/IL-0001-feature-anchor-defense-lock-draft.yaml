@@ -1,0 +1,91 @@
+schemaVersion: 1
+id: IL-0001
+status: verified
+utterance: "Feature 1 — Anchor defense. lock_draft picks anchors by matching words in the utterance against symbols. It has now failed three times on real work: \"tabs\" matched tab characters in a parser, \"fold/mark\" matched the TypeScript engine for a SwiftUI task, \"element\" matched parser symbols instead of a UI control. Every time, a careful agent had to fix the budget by hand. Fix: before proposing a budget, the draft must defend each anchor — for every anchor, report which file it came from and why that territory matches the utterance — and when all anchors land in a different language/directory than the user's words suggest (e.g. UI words but parser files), flag \"low confidence — confirm territory with the human\" at the top of the draft."
+goal: lock_draft defends every anchor it picks — naming the file each came from, the utterance token that matched it, and how it matched — and raises "low confidence — confirm territory with the human" at the top of the draft when the anchors were matched only as substrings of symbol names, or when they all land in a language that is not the repo's own. A human reading a draft can tell, without opening the files, whether the proposed territory is the one they meant.
+interpretation: |
+  Anchor resolution already grades itself (exact / name / lexical / none) and
+  already abstains on the bottom two tiers. Every reported failure — and the
+  draft of THIS lock, which anchored on clearSkipFlags/timestampId/flagList
+  via the incidental words "flag", "time" and "work" — sits in the "name"
+  tier, which the code trusts completely. That tier is the hole.
+
+  Two signals, either of which raises the flag (the human chose both):
+
+  1. SUBSTRING DEMOTION. The name tier accepts a token that merely occurs
+     inside a symbol name ("tabs" in tabSetFor). Record, per anchor, which
+     utterance token matched and whether it matched the WHOLE name or only
+     part of one. When every anchor is substring-only, confidence is low.
+  2. TERRITORY DRIFT. Find the repo's plurality language from `git ls-files`,
+     NOT from the index: INDEXABLE_EXTENSIONS is TS/JS only, so the index of
+     a majority-Swift repo holds nothing but TypeScript and a histogram over
+     it could never fire. That invisibility is the eDraft bug's root — cdir
+     proposed TypeScript because the Swift was never in front of it. When
+     every anchor's file is in a language that is not the repo's plurality,
+     confidence is low. Outside a git repo the signal is skipped with a
+     named reason, the way co-change already degrades.
+
+  The defense itself is reported for every anchor regardless of confidence:
+  symbol, defining file, the token that matched, and how it matched.
+
+  Surfaces, in order of who reads them:
+  - the lock_draft MCP response — where all four failures happened, since an
+    agent reads the JSON and proposes a budget from it;
+  - `cdir lock new` terminal output;
+  - the written YAML, as assumptions (source: system, confirmed: false), with
+    the low-confidence line FIRST so it leads the list.
+
+  No schema change. The defense rides in `assumptions`, which already
+  serialises and already displays; adding a field would mean types.ts,
+  yaml.ts, its parse validation and round-trip tests, which is a second
+  feature wearing this one's clothes.
+keep:
+  - kind: no-new-dependency
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+change: Record per-anchor match provenance in resolveAnchorsDetailed, compute the two low-confidence signals in draftLock, and surface the defense through the MCP response, the CLI and the YAML assumptions. No change to how anchors are SELECTED — only to what the draft says about them.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/core/map.ts
+    - src/lock/draft.ts
+    - src/mcp/server.ts
+    - src/cli.ts
+    - test/lock.test.ts
+  symbols: []
+  maxFiles: 5
+  maxLines: 380
+accept:
+  - Every anchor in a draft is reported with its defining file, the utterance token that matched it, and whether that match was a whole name or a substring.
+  - A draft whose anchors are all substring matches carries "low confidence — confirm territory with the human" as its first assumption.
+  - A draft whose anchors all sit in a non-plurality language carries the same flag.
+  - A draft with exact or whole-name anchors in the repo's own language carries no flag.
+  - npm test green, above the current 130.
+assumptions:
+  - text: Budget replaced by hand. The auto-draft anchored on clearSkipFlags, timestampId, workTreeStatusPorcelain, flagList and flagStr — all from src/checkpoint/index.ts, all substring matches on the incidental words "flag", "time" and "work" — and proposed neither src/core/map.ts nor src/lock/draft.ts, the two files this feature lives in. The fourth instance of the bug being fixed here.
+    source: system
+    confirmed: false
+  - text: The auto-suggested deny list included test/**/*.test.*, which would have denied the test file this lock must write. Removed; dist/** and node_modules/** denied instead (both gitignored, so advisory).
+    source: system
+    confirmed: false
+  - text: Both signals raise the flag, per the human's answer to Q1 — substring demotion AND territory histogram, whichever trips first.
+    source: user
+    confirmed: true
+  - text: "Territory drift is defined against the repo's PLURALITY language (most indexed files), not a fixed threshold: a majority-Swift repo proposing only TypeScript anchors trips it. Chosen over a percentage cutoff because a cutoff is an arbitrary number in a refusal message."
+    source: system
+    confirmed: false
+  - text: "Territory drift reads `git ls-files`, not the repo index. Caught before activation: INDEXABLE_EXTENSIONS (src/core/walk.ts) is TS/JS only, so an index-based histogram is always 100% TypeScript and the signal could never fire. The same blindness is why the eDraft draft proposed TypeScript for a Swift task."
+    source: system
+    confirmed: false
+  - text: "No schema bump: the defense is carried in assumptions rather than a new VibeCheck field, to keep this to one feature. If you want it as first-class YAML data it is a clean follow-up."
+    source: system
+    confirmed: false
+  - text: "maxLines raised 300 → 380 by the human after the first run was blocked at 368. The estimate was low, not the work: 123 of those lines are the nine new tests. Ceilings are tripwires, not targets (v0.4.4) — the run was re-done from the checkpoint rather than the ceiling being raised over a failed verdict."
+    source: user
+    confirmed: true
+createdAt: 2026-09-16T17:44:26.782Z
+createdBy: Yasirdora
