@@ -158,13 +158,15 @@ test("anchor defense: whole-name anchors in the repo's own language are trusted"
 });
 
 test("anchor defense: a repo cdir cannot parse is told so plainly", () => {
+  // Python, not Swift: since IL-0006 the walker reads Swift, so Swift is no
+  // longer an example of the blindness this message exists to announce.
   const verdict = judgeConfidence(
     [defense({ symbol: "parseFountain", how: "whole", language: "TypeScript", file: "packages/x.ts" })],
-    { language: "Swift" },
+    { language: "Python" },
   );
   assert.equal(verdict.low, true);
   const reason = verdict.reasons.join(" ");
-  assert.ok(reason.includes("cdir indexes no Swift"), "it names the blindness");
+  assert.ok(reason.includes("cdir indexes no Python"), "it names the blindness");
   assert.ok(reason.includes("name the files"), "it says what the human must do instead");
   assert.ok(!reason.includes("may not be indexed"), "no false modesty when the answer is none of it");
 });
@@ -181,7 +183,7 @@ test("anchor defense: a language cdir CAN parse keeps the softer wording", () =>
 test("isIndexableLanguage knows what the walker can actually read", () => {
   assert.equal(isIndexableLanguage("TypeScript"), true);
   assert.equal(isIndexableLanguage("JavaScript"), true);
-  assert.equal(isIndexableLanguage("Swift"), false);
+  assert.equal(isIndexableLanguage("Swift"), true, "since IL-0006 the walker reads Swift");
   assert.equal(isIndexableLanguage("Python"), false);
 });
 

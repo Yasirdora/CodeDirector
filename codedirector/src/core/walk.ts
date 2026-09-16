@@ -24,6 +24,7 @@ export const INDEXABLE_EXTENSIONS = new Set([
   ".jsx",
   ".mjs",
   ".cjs",
+  ".swift",
 ]);
 
 const ALWAYS_SKIP_DIRS = new Set([

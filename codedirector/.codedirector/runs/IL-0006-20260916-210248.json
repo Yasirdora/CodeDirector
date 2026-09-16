@@ -1,0 +1,102 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0006-20260916-210248.json",
+  "baselineSha256": "6d4469848c43bf2ee3a3a43585e563036bf30a55c4836306f0b4254ad5090c64",
+  "budget": {
+    "filesChanged": 7,
+    "linesChanged": 387,
+    "maxFiles": 7,
+    "maxLines": 520
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "package-lock.json",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "package.json",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/parser.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/swift.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/walk.ts",
+      "status": "M"
+    },
+    {
+      "class": "out-of-budget",
+      "path": "test/fixtures/swift-repo/",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/parser.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260916T210247951",
+    "createdAt": "2026-09-16T21:02:47.981Z",
+    "dirty": false,
+    "id": "ckpt-20260916T210247951",
+    "ref": "e4f3e626b44d13f592d51e18117ad61c19502ffd",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260916T210247951"
+  },
+  "command": [
+    "python3",
+    "/private/tmp/claude-501/-Users-x-Documents-Film-maker/464ad830-e9d2-471e-b400-1ff65fd0f690/scratchpad/il0006_apply.py"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-16T21:02:50.287Z",
+  "keepResults": [],
+  "lockId": "IL-0006",
+  "startedAt": "2026-09-16T21:02:48.833Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0006-20260916-210248.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 1,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 1",
+        "detail": "verifyCommand failed (exit 1): npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "violated"
+      }
+    ],
+    "lockId": "IL-0006",
+    "verifiedAt": "2026-09-16T21:03:12.369Z",
+    "violations": [
+      "VERIFY verify-command: verifyCommand failed (exit 1): npm test"
+    ]
+  },
+  "violations": [
+    "OUT-OF-BUDGET: test/fixtures/swift-repo/ is not in budget.files",
+    "VERIFY verify-command: verifyCommand failed (exit 1): npm test"
+  ]
+}

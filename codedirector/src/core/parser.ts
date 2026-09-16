@@ -14,18 +14,21 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import Parser from "web-tree-sitter";
 import { CallSite, FileIndex, ImportInfo, SymbolInfo, SymbolKind } from "./types";
+import { extractSwift } from "./swift";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SyntaxNode = any;
 
 /** Bump whenever extraction logic changes; stale entries are reparsed. */
-export const PARSER_VERSION = 4;
+export const PARSER_VERSION = 5;
 
-export type LangKey = "typescript" | "tsx" | "javascript";
+export type LangKey = "typescript" | "tsx" | "javascript" | "swift";
 
 export function langForFile(relPath: string): LangKey {
   const ext = path.extname(relPath).toLowerCase();
   switch (ext) {
+    case ".swift":
+      return "swift";
     case ".ts":
     case ".mts":
     case ".cts":
@@ -41,6 +44,11 @@ const WASM_PATHS: Record<LangKey, string> = {
   typescript: "tree-sitter-typescript/tree-sitter-typescript.wasm",
   tsx: "tree-sitter-typescript/tree-sitter-tsx.wasm",
   javascript: "tree-sitter-javascript/tree-sitter-javascript.wasm",
+  // Prebuilt by tree-sitter-wasms. The Swift grammar publishes only native
+  // bindings of its own (node-gyp-build + prebuilds), which would cost this
+  // package its "pure WASM, no native builds" property; this one ships the
+  // .wasm the same way the grammars above do.
+  swift: "tree-sitter-wasms/out/tree-sitter-swift.wasm",
 };
 
 export class StructuralParser {
@@ -62,9 +70,16 @@ export class StructuralParser {
 
   /** Parse one file and extract its structural facts. hash computed by caller. */
   parseFile(relPath: string, source: string, hash: string): FileIndex {
-    const parser = this.parsers.get(langForFile(relPath));
+    const lang = langForFile(relPath);
+    const parser = this.parsers.get(lang);
     if (!parser) throw new Error("parser not initialized");
     const tree = parser.parse(source);
+    // The one dispatch. Swift's node types share almost no names with
+    // TypeScript's, so branching inside the extraction below would mean four
+    // separate language switches that have to agree with each other.
+    if (lang === "swift") {
+      return extractSwift(relPath, tree.rootNode, source, hash, PARSER_VERSION);
+    }
     const symbols: SymbolInfo[] = [];
     const imports: ImportInfo[] = [];
     const calls: CallSite[] = [];

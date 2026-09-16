@@ -2,8 +2,85 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { StructuralParser } from "../src/core/parser";
 import { hashContent } from "../src/core/builder";
+
+const SWIFT_FIXTURE = path.join(
+  __dirname, "..", "..", "test", "fixtures", "swift-repo", "Surface.swift",
+);
+
+async function swiftSymbols() {
+  const source = fs.readFileSync(SWIFT_FIXTURE, "utf8");
+  const parser = new StructuralParser();
+  await parser.init();
+  return parser.parseFile("Surface.swift", source, hashContent(source));
+}
+
+test("swift: the grammar loads and the file parses into symbols", async () => {
+  const index = await swiftSymbols();
+  assert.ok(index.symbols.length > 0, "a Swift file yields symbols at all");
+});
+
+test("swift: each construct maps to its documented kind", async () => {
+  const { symbols } = await swiftSymbols();
+  const by = new Map(symbols.map((s) => [s.qualifiedName, s]));
+  const expected: Array<[string, string]> = [
+    ["SpreadFold", "class"],
+    ["ScriptSurface", "class"],
+    ["Indexer", "class"],
+    ["PageArrangement", "enum"],
+    ["Paginating", "interface"],
+    ["PageStarts", "type"],
+    ["defaultMeasure", "const"],
+    ["freeFunction", "function"],
+    ["ScriptSurface.reveal", "method"],
+    ["SpreadFold.spreadPoint", "method"],
+  ];
+  for (const [name, kind] of expected) {
+    const found = by.get(name);
+    assert.ok(found, `${name} was not extracted`);
+    assert.equal(found!.kind, kind, `${name} should be a ${kind}`);
+  }
+});
+
+test("swift: only public declarations are marked exported", async () => {
+  const { symbols } = await swiftSymbols();
+  const by = new Map(symbols.map((s) => [s.qualifiedName, s]));
+  assert.equal(by.get("defaultMeasure")!.exported, true);
+  assert.equal(by.get("Indexer")!.exported, false, "internal is not an API surface");
+  // `internalOnly` is a non-public top-level property: noise, like an
+  // unexported const in the TypeScript extractor.
+  assert.equal(by.has("internalOnly"), false);
+});
+
+test("swift: an extension never claims the id of the type it extends", async () => {
+  const { symbols } = await swiftSymbols();
+  const names = symbols.map((s) => s.qualifiedName);
+  assert.ok(names.includes("ScriptSurface"), "the class itself is still there");
+  assert.ok(names.includes("ScriptSurface+Paginating"), "a conforming extension is named for it");
+  assert.ok(names.includes("ScriptSurface+extension"), "a bare extension gets the plain suffix");
+  assert.ok(names.includes("ScriptSurface+extension2"), "a second bare extension is distinguished");
+  assert.equal(new Set(symbols.map((s) => s.id)).size, symbols.length, "every id is unique");
+  assert.ok(
+    names.includes("ScriptSurface+Paginating.paginate"),
+    "an extension's methods hang off the qualified name, not the bare type",
+  );
+});
+
+test("swift: imports are recorded as the module names they are", async () => {
+  const { imports } = await swiftSymbols();
+  assert.deepEqual(imports.map((i) => i.module).sort(), ["EDraftCore", "Foundation"]);
+});
+
+test("swift: calls are attributed to the function that makes them", async () => {
+  const { calls } = await swiftSymbols();
+  const helper = calls.find((c) => c.calleeName === "helper");
+  assert.ok(helper, "a free call inside a method was seen");
+  assert.equal(helper!.callerId, "Surface.swift#ScriptSurface.reveal");
+});
+
 
 const SAMPLE = `import { helper } from "./helper";
 import * as fs from "node:fs";
