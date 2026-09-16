@@ -29,7 +29,7 @@ import { loadIndex } from "./core/store";
 import { blastRadius, formatBlastRadius } from "./core/why";
 import { RepoIndex } from "./core/types";
 import { stableStringify } from "./core/store";
-import { draftLock, parseKeepClause, type DraftOptions } from "./lock/draft";
+import { draftLock, parseKeepClause, LOW_CONFIDENCE_FLAG, type DraftOptions } from "./lock/draft";
 import { getProfile, mergeDraftOptions, PROFILE_NAMES } from "./lock/profiles";
 import { listLocks, loadLock, saveLock } from "./lock/store";
 import { sealLock } from "./lock/seal";
@@ -259,9 +259,16 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
         verifyCommand: flagStr(flags, "verify-command"),
       }));
       const lines: string[] = [];
+      // Before anything else it says: the territory below may be wrong.
+      if (result.confidence.low) {
+        lines.push(`⚠ ${LOW_CONFIDENCE_FLAG}`);
+        for (const reason of result.confidence.reasons) lines.push(`  · ${reason}`);
+        lines.push(``);
+      }
       lines.push(`drafted ${result.lock.id} → ${path.relative(root, result.path)}`);
       if (result.anchors.length > 0) {
         lines.push(`anchors: ${result.anchors.map((a) => a.qualifiedName).join(", ")}`);
+        for (const d of result.anchorDefense) lines.push(`  · ${d.line}`);
         if (result.anchorStrength === "lexical") {
           lines.push(`proposed budget: (none — weak lexical anchors only; name files with --budget-files)`);
         } else {

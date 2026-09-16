@@ -157,7 +157,10 @@ const TOOLS: ToolDef[] = [
     name: "lock_draft",
     description:
       "Draft an Intent Lock from the human's request (their words, verbatim). Returns the lock id, the YAML path, " +
-      "and the proposed budget/deny scope. ALWAYS show the proposal to the human before activating. " +
+      "and the proposed budget/deny scope. Every anchor comes back defended — the file it came from and the " +
+      "word that put it there — and a draft whose anchors are only name fragments, or which all land outside " +
+      "the repo's own language, comes back with confidence \"low\": confirm the territory with the human before " +
+      "you trust the budget. ALWAYS show the proposal to the human before activating. " +
       WORKFLOW,
     inputSchema: {
       type: "object",
@@ -186,10 +189,14 @@ const TOOLS: ToolDef[] = [
       }
       const result = draftLock(root, index, str(a, "utterance"), mergeDraftOptions(base, goal ? { goal } : {}));
       return json({
+        ...(result.confidence.low
+          ? { confidence: "low", confirmTerritory: result.confidence.reasons }
+          : {}),
         lockId: result.lock.id,
         path: path.relative(root, result.path),
         status: result.lock.status,
         anchors: result.anchors.map((x) => x.qualifiedName),
+        anchorDefense: result.anchorDefense.map((d) => d.line),
         anchorStrength: result.anchorStrength,
         proposedBudget: result.proposedFiles,
         suggestedDeny: result.suggestedDeny,
