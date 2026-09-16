@@ -11,7 +11,9 @@ import * as path from "node:path";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import * as fs from "node:fs";
 import { makeGitRepo } from "./helpers";
+import { logPath, recordCall, ROTATE_BYTES, type CallRecord } from "../src/mcp/log";
 
 const CLI = path.join(__dirname, "..", "src", "cli.js");
 const NODE = process.execPath;
@@ -242,6 +244,82 @@ test("mcp: home-directory root is refused with instructions; per-call root rescu
   } finally {
     await close();
   }
+});
+
+function readLog(root: string): CallRecord[] {
+  return fs
+    .readFileSync(logPath(root), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as CallRecord);
+}
+
+test("mcp: the flight recorder writes one line per call, with timing and outcome", async () => {
+  const root = makeGitRepo(FILES);
+  const { client, close } = await connect(root);
+  try {
+    await client.callTool({ name: "repo_map", arguments: { query: "add" } });
+    // Missing a required argument: the handler raises and the server turns
+    // it into an error result. Recorded as "threw", not "ok".
+    await client.callTool({ name: "repo_map", arguments: {} });
+  } finally {
+    await close();
+  }
+
+  const lines = readLog(root);
+  assert.equal(lines.length, 2, "one line per call");
+  for (const line of lines) {
+    assert.equal(line.tool, "repo_map");
+    assert.equal(line.root, root);
+    assert.ok(Number.isFinite(line.durationMs) && line.durationMs >= 0, "a duration was measured");
+    assert.ok(!Number.isNaN(Date.parse(line.at)), "the start time parses");
+  }
+  assert.equal(lines[0].outcome, "ok");
+  assert.equal(lines[1].outcome, "threw", "a raising handler is not recorded as success");
+});
+
+test("mcp: the recorder never records the arguments a call was made with", async () => {
+  const root = makeGitRepo(FILES);
+  const { client, close } = await connect(root);
+  try {
+    await client.callTool({ name: "repo_map", arguments: { query: "a-very-private-phrase" } });
+  } finally {
+    await close();
+  }
+  const raw = fs.readFileSync(logPath(root), "utf8");
+  assert.ok(!raw.includes("a-very-private-phrase"), "utterances stay out of the log");
+});
+
+test("flight recorder: rotates at the cap, keeping one previous file", () => {
+  const root = makeGitRepo();
+  const file = logPath(root);
+  recordCall(root, { at: "2026-01-01T00:00:00.000Z", tool: "t", root, durationMs: 1, outcome: "ok" });
+  fs.appendFileSync(file, "x".repeat(ROTATE_BYTES));
+
+  recordCall(root, { at: "2026-01-01T00:00:01.000Z", tool: "t", root, durationMs: 2, outcome: "ok" });
+
+  assert.ok(fs.existsSync(`${file}.1`), "the full log was rolled aside");
+  const fresh = readLog(root);
+  assert.equal(fresh.length, 1, "the new log holds only what came after the roll");
+  assert.equal(fresh[0].durationMs, 2);
+
+  // A second roll replaces the previous .1 rather than accumulating files.
+  fs.appendFileSync(file, "x".repeat(ROTATE_BYTES));
+  recordCall(root, { at: "2026-01-01T00:00:02.000Z", tool: "t", root, durationMs: 3, outcome: "ok" });
+  const siblings = fs.readdirSync(path.dirname(file)).filter((f) => f.startsWith("mcp.log"));
+  assert.deepEqual(siblings.sort(), ["mcp.log", "mcp.log.1"], "exactly one previous file is kept");
+});
+
+test("flight recorder: an unwritable destination costs a line, never a throw", () => {
+  // A path whose parent is a file, so mkdir cannot succeed.
+  const root = makeGitRepo();
+  const blocked = path.join(root, "README.md", "nested");
+  assert.doesNotThrow(() =>
+    recordCall(blocked, {
+      at: "2026-01-01T00:00:00.000Z", tool: "t", root: blocked, durationMs: 1, outcome: "ok",
+    }),
+  );
 });
 
 test("mcp: tool schemas advertise the optional root override", async () => {
