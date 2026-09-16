@@ -101,7 +101,21 @@ export function resolveAnchorsDetailed(graph: SymbolGraph, query: string): Ancho
     if (best) nameHits.set(sym.id, best);
   }
   if (nameHits.size > 0) {
-    const picked = [...nameHits.values()]
+    // Identity beats coincidence, and beats it by exclusion rather than by
+    // sort order. A token that IS a symbol's name and a token that merely
+    // occurs inside one are evidence of different kinds; ranked together,
+    // five coincidences could fill the list before the identity was
+    // reached. Measured on a sentence that said "ScriptSurface paints the
+    // mark in the wrong coordinate space" and anchored on isLetterSpaced,
+    // addPages and three ElementModeButton members — "space", "page",
+    // "mode" — while ScriptSurface, which the sentence names, was absent.
+    //
+    // Sorting whole matches first would not have been enough: fragments
+    // would still have filled the remaining slots and shared the budget
+    // proposal. When anything matched wholly, fragments are not anchors.
+    const found = [...nameHits.values()];
+    const whole = found.filter((m) => m.how === "whole");
+    const picked = (whole.length > 0 ? whole : found)
       .sort((a, b) => a.symbol.id.localeCompare(b.symbol.id))
       .slice(0, 5);
     return { anchors: picked.map((m) => m.symbol), strength: "name", matches: picked };

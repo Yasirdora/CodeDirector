@@ -169,6 +169,50 @@ test("yaml: verifyCovers round-trips", () => {
   assert.equal(lockFromYaml(lockToYaml(coverageLock(["a.ts"]))).verifyCovers, undefined);
 });
 
+test("anchors: a whole name wins the tier outright, not merely first place", async () => {
+  const repo = makeGitRepo({
+    "src/a.ts":
+      "export function highlight() {}\n" +
+      "export function highlightCovered() {}\n" +
+      "export function toggleHighlight() {}\n",
+  });
+  const { index } = await buildIndex(repo);
+  const res = resolveAnchorsDetailed(buildGraph(index), "fix the highlight");
+  assert.deepEqual(
+    res.matches.map((m) => m.symbol.name),
+    ["highlight"],
+    "the symbol the utterance names is the only anchor",
+  );
+  assert.ok(res.matches.every((m) => m.how === "whole"));
+});
+
+test("anchors: fragments still resolve when nothing matched wholly", async () => {
+  const repo = makeGitRepo({
+    "src/a.ts": "export function highlightCovered() {}\nexport function toggleHighlight() {}\n",
+  });
+  const { index } = await buildIndex(repo);
+  const res = resolveAnchorsDetailed(buildGraph(index), "fix the highlight");
+  assert.equal(res.strength, "name");
+  assert.ok(res.matches.length > 0, "a fragment-only utterance still anchors, as before");
+  assert.ok(res.matches.every((m) => m.how === "part"));
+});
+
+test("anchors: whole and fragment matches are never mixed", async () => {
+  const repo = copyDemoRepo();
+  const { index } = await buildIndex(repo);
+  const graph = buildGraph(index);
+  for (const utterance of [
+    "make renderExport faster in the preview pipeline",
+    "make the preview feel instant",
+    "flag the flagged flags",
+  ]) {
+    const { matches, strength } = resolveAnchorsDetailed(graph, utterance);
+    if (strength !== "name" || matches.length === 0) continue;
+    const kinds = new Set(matches.map((m) => m.how));
+    assert.equal(kinds.size, 1, `"${utterance}" mixed ${[...kinds].join(" and ")}`);
+  }
+});
+
 test("anchor defense: every anchor names its file and the word that picked it", async () => {
   const repo = copyDemoRepo();
   const { index } = await buildIndex(repo);

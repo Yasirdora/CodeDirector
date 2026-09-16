@@ -1,0 +1,1 @@
+Feature 7 — whole-name over fragment ranking. The name tier treats a token that IS a symbol's name and a token that merely occurs inside one as equals, so three fragment hits on an incidental word crowd out the symbol the utterance named explicitly. Nine consecutive lock drafts mis-anchored this way, including the draft of the lock that fixed it.
