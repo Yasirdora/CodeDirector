@@ -1,0 +1,77 @@
+schemaVersion: 1
+id: IL-0008
+status: verified
+utterance: Feature 6 — lock_check errors on a budget file that does not exist yet, so a lock which CREATES a file cannot validate with its real path. It has forced basename globs into four locks already, and a glob names no language, which blinds the verify-coverage check on those paths.
+goal: A lock may name a file it is about to create and still pass lock_check. A budget path that does not exist yet is reported as a warning that names both readings — a file this lock will create, or a path that is wrong — instead of refusing the lock outright, so budgets can be written with real names and the verify-coverage check can read their languages.
+interpretation: |
+  checkLock refuses a budget path that is not on disk. Most locks change
+  files that exist, so the rule looked free; a lock that CREATES one cannot
+  satisfy it. Four locks tonight had to name a basename glob instead —
+  src/mcp/log.*, src/core/swift.*, docs/RFC-MULTI-CONTAINER-PAGES.*,
+  MultiContainerEquivalenceTests.* — which cost more than readability: a glob
+  has no extension, languageOf answers "other", and IL-0005's verify-coverage
+  check silently declines to judge those paths. One guard rail disabled
+  another.
+
+  The rule becomes a WARNING that states both readings plainly: this lock
+  will create the file, or the path is wrong. Not an error, because the error
+  is not load-bearing — run_locked classifies what the command ACTUALLY
+  touched, so a typo'd budget path does not slip through, it simply fails
+  later, as an out-of-budget file, with the real path named. Check time is
+  the wrong place to be certain about a file that does not exist yet.
+
+  Two things stay errors, because no reading of them is ever right: an
+  absolute path, and a path that climbs out of the root with "..". Those
+  cannot be created by a lock scoped to this repository, so they are
+  mistakes rather than intentions.
+
+  The glob warning is kept as it is. A glob is a deliberate act and says
+  something different from a name.
+keep:
+  - kind: no-new-dependency
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - src/core/**
+  - src/run/**
+  - src/report/**
+  - src/mcp/**
+change: Downgrade a not-yet-created budget path from an error to a warning naming both readings, and keep errors for absolute paths and paths escaping the root.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/lock/check.ts
+    - test/lock.test.ts
+  symbols: []
+  maxFiles: 2
+  maxLines: 220
+accept:
+  - A lock whose budget names a file that does not exist passes lock_check, with a warning naming both readings.
+  - A lock whose budget names an absolute path fails lock_check.
+  - A lock whose budget names a path containing ".." that escapes the root fails lock_check.
+  - An existing budget file produces neither warning nor error.
+  - The glob warning is unchanged.
+  - A budget path that does not exist is still judged for verify coverage by its extension, so a .swift file named but not yet written is covered by the same rule as one that exists.
+  - npm test green, above the current 166.
+assumptions:
+  - text: "The refusal is downgraded rather than replaced with a cleverer test. Heuristics were considered — warn only when the parent directory exists, warn only when the path looks plausible — and each would have refused a real case from tonight: test/fixtures/swift-repo/Surface.swift needed a directory that did not exist either. A warning that states both readings is honest about what check time can actually know."
+    source: system
+    confirmed: false
+  - text: The error was not load-bearing. run_locked classifies the files a command actually touched, so a typo'd budget path fails at run time as an out-of-budget file with the real path named. Removing the check-time error moves the failure later, not away.
+    source: system
+    confirmed: false
+  - text: This un-blinds IL-0005. A glob names no language, so verify coverage declined to judge the four paths that were forced into globs. With real names restorable, a budget that names an unwritten .swift file is judged by the same rule as one that exists.
+    source: system
+    confirmed: false
+  - text: Budget replaced by hand for the ninth consecutive time. The auto-draft anchored on composeLock, validateCase, Checkpoint, CheckpointError and checkpointsPath — substring hits on "lock", "valid" and "check", the three commonest words in this repository — and proposed the checkpoint module, the store, the seal and the CLI. Feature 7 is the fix for this and is queued next.
+    source: system
+    confirmed: false
+  - text: Ceiling padded to 220 for a change expected around 130 lines.
+    source: user
+    confirmed: true
+createdAt: 2026-09-16T21:21:08.779Z
+createdBy: Yasirdora

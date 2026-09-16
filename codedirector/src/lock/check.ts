@@ -149,19 +149,46 @@ function checkClause(clause: KeepClause, index: RepoIndex | null): ClauseCheck {
   return { clause, checkability, errors, note };
 }
 
+/**
+ * Why a budget path can never be right, or null when it might be.
+ *
+ * The distinction this file can actually draw. Whether a missing file is a
+ * typo or a file about to be written is not knowable here — but an absolute
+ * path, or one that climbs out of the repository, is wrong under every
+ * reading: a Lock scoped to this root cannot create it, and run_locked would
+ * never classify it as in-budget.
+ */
+function budgetPathProblem(rootDir: string, relPath: string): string | null {
+  if (path.isAbsolute(relPath)) {
+    return "is an absolute path; budget files are relative to the repository root";
+  }
+  const rel = path.relative(rootDir, path.resolve(rootDir, relPath));
+  if (rel.startsWith("..")) return "escapes the repository root";
+  return null;
+}
+
 export function checkLock(rootDir: string, lock: VibeCheck, index: RepoIndex | null): LockCheckResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // budget files exist
+  // Budget paths. A path outside the root can never be right. A path that
+  // merely does not exist yet usually means the Lock is about to create it,
+  // and check time cannot tell that from a typo — so it says both.
   for (const f of lock.budget.files) {
-    if (!fs.existsSync(path.join(rootDir, f))) {
-      // may be a glob — check whether it matches any indexed/existing file
-      if (/[*?]/.test(f)) {
-        warnings.push(`budget file "${f}" is a glob; existence not checked`);
-      } else {
-        errors.push(`budget file does not exist: ${f}`);
-      }
+    const impossible = budgetPathProblem(rootDir, f);
+    if (impossible) {
+      errors.push(`budget file "${f}" ${impossible}`);
+      continue;
+    }
+    if (fs.existsSync(path.join(rootDir, f))) continue;
+    if (/[*?]/.test(f)) {
+      warnings.push(`budget file "${f}" is a glob; existence not checked`);
+    } else {
+      warnings.push(
+        `budget file does not exist: ${f} — either this lock will create it, or the path is ` +
+          `wrong. run_locked classifies the files the command actually touches, so a wrong ` +
+          `path fails there, naming the real one`,
+      );
     }
   }
 

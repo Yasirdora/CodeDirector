@@ -49,6 +49,56 @@ function coverageLock(files: string[], verifyCommand?: string, verifyCovers?: st
   };
 }
 
+test("check: a budget path that does not exist yet is a warning, not a refusal", () => {
+  const repo = copyFixture();
+  const result = checkLock(repo, coverageLock(["src/math.ts", "src/not-written-yet.ts"]), null);
+  assert.equal(result.ok, true, "a lock may name a file it is about to create");
+  const warning = result.warnings.find((w) => w.includes("src/not-written-yet.ts"));
+  assert.ok(warning, "the path is still reported");
+  assert.ok(warning!.includes("will create it"), "it offers the first reading");
+  assert.ok(warning!.includes("the path is wrong"), "and the second");
+});
+
+test("check: an absolute budget path is refused", () => {
+  const repo = copyFixture();
+  const result = checkLock(repo, coverageLock(["/etc/passwd"]), null);
+  assert.equal(result.ok, false, "no reading of an absolute path is right");
+  assert.ok(result.errors.join(" ").includes("absolute path"));
+});
+
+test("check: a budget path that escapes the root is refused", () => {
+  const repo = copyFixture();
+  const result = checkLock(repo, coverageLock(["../outside.ts"]), null);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.join(" ").includes("escapes the repository root"));
+});
+
+test("check: an existing budget file is reported neither way", () => {
+  const repo = copyFixture();
+  const result = checkLock(repo, coverageLock(["src/math.ts"]), null);
+  assert.equal(result.ok, true);
+  assert.ok(!result.warnings.some((w) => w.includes("src/math.ts")));
+});
+
+test("check: a glob still says that it is a glob", () => {
+  const repo = copyFixture();
+  const result = checkLock(repo, coverageLock(["src/*.ts"]), null);
+  assert.equal(result.ok, true);
+  assert.ok(result.warnings.some((w) => w.includes("is a glob")));
+});
+
+test("check: an unwritten .swift path is judged for coverage like a written one", () => {
+  // The point of this feature, and the reason it is not only ergonomics.
+  // Before IL-0008 this path had to be written as a glob to pass at all, and
+  // a glob has no extension — so languageOf answered "other" and IL-0005's
+  // coverage rule silently declined to judge it. One guard rail had
+  // disabled another.
+  const repo = copyFixture();
+  const result = checkLock(repo, coverageLock(["apple/Sources/NotYet.swift"], "npm test"), null);
+  assert.equal(result.ok, false, "coverage is judged on a path not yet on disk");
+  assert.ok(result.errors.join(" ").includes("Swift"), result.errors.join(" "));
+});
+
 test("verify coverage: Swift behind a TypeScript-only check is not covered", () => {
   const coverage = verifyCoverage(coverageLock(["apple/Sources/Surface.swift"], "npm test"));
   assert.deepEqual(coverage.budgetLanguages, ["Swift"]);
@@ -422,8 +472,12 @@ test("checkLock catches a bad api-unchanged symbol, a missing file, and a bad de
   const result = checkLock(root, lock, index);
   assert.equal(result.ok, false);
   assert.ok(result.errors.some((e) => e.includes("noSuchMethod")));
-  assert.ok(result.errors.some((e) => e.includes("src/missing.ts")));
   assert.ok(result.errors.some((e) => e.includes("escape")));
+  // Since IL-0008 a budget path that is not on disk is a warning, not a
+  // refusal: check time cannot tell a file about to be written from a typo,
+  // and run_locked catches the typo with the real path in hand.
+  assert.ok(result.warnings.some((w) => w.includes("src/missing.ts")));
+  assert.ok(!result.errors.some((e) => e.includes("src/missing.ts")));
 });
 
 test("checkLock passes a well-formed lock and flags custom clauses as human-judged", async () => {
