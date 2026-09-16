@@ -26,7 +26,7 @@ import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
 import { VibeCheck } from "../lock/types";
 import { loadLock, saveLock } from "../lock/store";
 import { BudgetStats, RunRecord, runsDir } from "../run/run";
-import { ClassifiedChange } from "../run/classify";
+import { ClassifiedChange, rejudgeRun } from "../run/classify";
 import { verifyLock, VerifyOptions } from "../verify/verify";
 import {
   countByClass,
@@ -144,6 +144,16 @@ export async function buildReport(
       : latest.recordPath
     : undefined;
 
+  // THE REJUDGE. A standalone verify or report judges the recorded change
+  // against the Lock as it stands now, rather than reprinting the verdict
+  // stored when the command ran. Without this, raising a ceiling and
+  // re-verifying still reported the ceiling the run was refused by, and the
+  // only remedy was reverting the work and applying it again.
+  //
+  // Never on a live run (`opts.run`): that classified against this same Lock
+  // moments ago, and re-deriving it would say the same thing more slowly.
+  const rejudged = !opts.run && run ? rejudgeRun(run, lock) : undefined;
+
   const items = enforceArtifactRule(verification.items);
 
   let findings: Finding[] = [];
@@ -152,7 +162,11 @@ export async function buildReport(
     findings = computeFindings(index, run.changed);
   }
 
-  const violations = run ? run.violations : verification.violations;
+  const violations = rejudged
+    ? [...rejudged.violations, ...verification.violations]
+    : run
+      ? run.violations
+      : verification.violations;
   const verdict: ChangeReport["verdict"] =
     violations.length > 0 || (run !== undefined && run.exitCode !== 0) ? "failed" : "verified";
 
@@ -169,8 +183,8 @@ export async function buildReport(
     ...(run ? { command: run.command } : {}),
     ...(runRecordPath !== undefined ? { runRecordPath } : {}),
     ...(verification.baselinePath !== undefined ? { baselinePath: verification.baselinePath } : {}),
-    changed: run?.changed ?? [],
-    ...(run ? { budget: run.budget } : {}),
+    changed: rejudged?.changed ?? run?.changed ?? [],
+    ...(rejudged ? { budget: rejudged.budget } : run ? { budget: run.budget } : {}),
     items,
     findings,
     violations,

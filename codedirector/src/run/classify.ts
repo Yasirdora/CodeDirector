@@ -15,6 +15,9 @@ import { VibeCheck } from "../lock/types";
 import { matchPath } from "../lock/glob";
 import { gitPrefix, gitStatusPorcelain, porcelainLinePaths, toRootRelative } from "../checkpoint";
 import { Baseline } from "./baseline";
+// Type-only, so nothing is imported at runtime and run.ts -> classify.ts
+// stays a one-way edge.
+import type { BudgetStats, RunRecord } from "./run";
 import {
   currentHead,
   gitToAbsRel,
@@ -173,6 +176,72 @@ export function classifyPath(lock: VibeCheck, relPath: string): ClassifiedChange
   }
   const inBudget = lock.budget.files.some((f) => matchPath(f, normalized));
   return { path: relPath, status: "", class: inBudget ? "in-budget" : "out-of-budget" };
+}
+
+/**
+ * The scope half of a verdict, in words.
+ *
+ * Lives here rather than at the call site because two callers need it — the
+ * live run, and a standalone verify judging a recorded run again — and two
+ * spellings of one verdict would be free to drift apart.
+ */
+export function scopeViolations(changed: ClassifiedChange[], budget: BudgetStats): string[] {
+  const out: string[] = [];
+  for (const c of changed) {
+    if (c.class === "denied") {
+      out.push(`DENY: ${c.path} matches deny pattern "${c.matchedDeny}"`);
+    } else if (c.class === "out-of-budget") {
+      out.push(`OUT-OF-BUDGET: ${c.path} is not in budget.files`);
+    }
+  }
+  if (budget.filesChanged > budget.maxFiles) {
+    out.push(`BUDGET: ${budget.filesChanged} files changed > maxFiles ${budget.maxFiles}`);
+  }
+  if (budget.linesChanged > budget.maxLines) {
+    out.push(`BUDGET: ${budget.linesChanged} lines changed > maxLines ${budget.maxLines}`);
+  }
+  return out;
+}
+
+/** A recorded run, judged again against a Lock that may have moved on. */
+export interface Rejudged {
+  changed: ClassifiedChange[];
+  budget: BudgetStats;
+  violations: string[];
+}
+
+/**
+ * Judge a recorded run against the Lock as it stands NOW.
+ *
+ * A stored run holds everything this needs — the paths it touched, their
+ * statuses, and the measured file and line counts — so nothing is re-run and
+ * no tree is re-read. `classifyPath` is already a pure function of the Lock
+ * and a path.
+ *
+ * `linesChanged` is carried over rather than recomputed. It is a measurement
+ * against the run's own baseline, and re-deriving it would mean re-diffing a
+ * tree that has since moved on; the measured number compared against the
+ * current ceiling is the question actually being asked.
+ *
+ * A run made under `--allow-expand` is rejudged without scope violations,
+ * because that is what the override recorded at the time.
+ */
+export function rejudgeRun(
+  run: Pick<RunRecord, "changed" | "budget" | "allowExpand">,
+  lock: VibeCheck,
+): Rejudged {
+  const changed = run.changed.map((c) => ({ ...classifyPath(lock, c.path), status: c.status }));
+  const budget: BudgetStats = {
+    filesChanged: run.budget.filesChanged,
+    linesChanged: run.budget.linesChanged,
+    maxFiles: lock.budget.maxFiles,
+    maxLines: lock.budget.maxLines,
+  };
+  return {
+    changed,
+    budget,
+    violations: run.allowExpand ? [] : scopeViolations(changed, budget),
+  };
 }
 
 /** Classify all run-touched files against the Lock. */
