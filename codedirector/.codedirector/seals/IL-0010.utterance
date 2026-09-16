@@ -1,0 +1,1 @@
+Do the 0.4.5 bump. Seven features landed: anchor defense with a low-confidence flag, the flight recorder at .codedirector/mcp.log, verify coverage with a verifyCovers escape hatch, Swift indexing, the rejudge path, a budget that may name a file it will create, and identity beating coincidence in anchor ranking.

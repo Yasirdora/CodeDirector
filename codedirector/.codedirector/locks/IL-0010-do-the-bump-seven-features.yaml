@@ -1,0 +1,82 @@
+schemaVersion: 1
+id: IL-0010
+status: verified
+utterance: "Do the 0.4.5 bump. Seven features landed: anchor defense with a low-confidence flag, the flight recorder at .codedirector/mcp.log, verify coverage with a verifyCovers escape hatch, Swift indexing, the rejudge path, a budget that may name a file it will create, and identity beating coincidence in anchor ranking."
+goal: package.json reads 0.4.5 and the README describes the tool as it now behaves — Swift among the indexed languages, verifyCovers in the Lock schema, the flight recorder, and verify re-judging a recorded run rather than replaying it.
+interpretation: |
+  Two files. The version, and the documentation the version is meant to
+  describe — a bump that leaves the README describing 0.4.4 is a lie with a
+  new number on it.
+
+  Four passages are now false and are the whole documentation scope:
+
+    - "Parsing choice" says parsing uses the official TypeScript and
+      JavaScript grammars. It now also uses the prebuilt Swift grammar from
+      tree-sitter-wasms, and the reason that package was chosen over
+      tree-sitter-swift — which ships native bindings and no .wasm — belongs
+      beside the sentence claiming pure WASM and no native compilation.
+    - "Apple projects" offers Swift repositories a deny preset. They now get
+      an index: eDraft reads as 294 files, 213 of them Swift.
+    - The Lock schema list omits verifyCovers.
+    - `cdir verify` is described as re-running the ladder. It now also
+      re-judges scope against the Lock as it stands, which is the difference
+      between a raised ceiling clearing a refusal and being ignored.
+
+  The flight recorder gets a line where the MCP server is described, since a
+  log a human is expected to read when something hangs is worth naming.
+
+  Anchor defense, the low-confidence flag and identity-over-coincidence are
+  deliberately NOT given new prose. They change what `cdir lock new` prints,
+  and the README already documents that command by showing its output; a
+  paragraph asserting the behaviour would duplicate what the tool says for
+  itself.
+
+  no-new-dependency is absent from keep for a mechanical reason, not an
+  editorial one: the clause hashes package.json and fails on any edit to it,
+  and a version bump is an edit to it. The clause cannot tell a version from
+  a dependency. Recorded as a finding rather than worked around.
+keep: []
+deny:
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - src/**
+  - test/**
+change: Bump the version to 0.4.5 and correct the four README passages the seven features made false. No code changes.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - package.json
+    - README.md
+  symbols: []
+  maxFiles: 2
+  maxLines: 200
+accept:
+  - package.json reads 0.4.5.
+  - The parsing section names the Swift grammar and why tree-sitter-wasms was chosen over tree-sitter-swift.
+  - The Apple section says Swift is indexed, not only denied.
+  - The Lock schema list includes verifyCovers and what it is for.
+  - The verify command reference says it re-judges scope against the current Lock.
+  - The MCP section names .codedirector/mcp.log.
+  - No file outside package.json and README.md changes.
+  - npm test green at 175 — a documentation change must not move it.
+assumptions:
+  - text: no-new-dependency is omitted because it hashes package.json and a version bump edits package.json. The clause cannot distinguish a version from a dependency, so it would fail on a change that adds nothing. A finding about the clause, not a reason to avoid the bump — worth its own feature.
+    source: system
+    confirmed: false
+  - text: 'src/** and test/** are denied, so "no code changes" is structural rather than promised. package-lock.json is denied for the same reason: a version bump does not touch it.'
+    source: system
+    confirmed: false
+  - text: Anchor defense, the low-confidence flag and identity-over-coincidence get no new prose. They change what lock new prints, and the README documents that command by showing its output; prose asserting the behaviour would duplicate what the tool says for itself.
+    source: system
+    confirmed: false
+  - text: "Budget replaced by hand for the eleventh time — and the first time since identity-over-coincidence landed, so it is also evidence about that feature's limits. The auto-draft anchored on checkpointsPath, clearSkipFlags, createCheckpoint, deleteGitPaths and dirtyPaths: all WHOLE-name matches now, on words this utterance genuinely contains, and still the wrong files. Identity beats coincidence; it does not make an utterance about a release into an utterance about code."
+    source: system
+    confirmed: false
+  - text: Ceiling padded to 200 for a change expected around 90 lines.
+    source: user
+    confirmed: true
+createdAt: 2026-09-16T22:14:27.062Z
+createdBy: Yasirdora

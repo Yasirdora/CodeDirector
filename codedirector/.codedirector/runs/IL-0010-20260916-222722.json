@@ -1,0 +1,72 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0010-20260916-222722.json",
+  "baselineSha256": "01fa319513741024dd3f3a14221630d8100dc725890cb103a6aa295fc8fc6ede",
+  "budget": {
+    "filesChanged": 2,
+    "linesChanged": 58,
+    "maxFiles": 2,
+    "maxLines": 200
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "package.json",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260916T222721155",
+    "createdAt": "2026-09-16T22:27:21.190Z",
+    "dirty": false,
+    "id": "ckpt-20260916T222721155",
+    "ref": "c5351a8d90df269c0ba35d27a99706dae5d8a941",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260916T222721155"
+  },
+  "command": [
+    "python3",
+    "/private/tmp/claude-501/-Users-x-Documents-Film-maker/464ad830-e9d2-471e-b400-1ff65fd0f690/scratchpad/il0010_apply.py"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-16T22:27:22.305Z",
+  "keepResults": [],
+  "lockId": "IL-0010",
+  "startedAt": "2026-09-16T22:27:22.261Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0010-20260916-222722.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 1,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0010",
+    "verifiedAt": "2026-09-16T22:27:45.982Z",
+    "violations": []
+  },
+  "violations": []
+}
