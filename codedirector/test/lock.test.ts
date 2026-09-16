@@ -21,7 +21,7 @@ import {
 } from "../src/lock/draft";
 import { resolveAnchorsDetailed } from "../src/core/map";
 import { buildGraph } from "../src/core/graph";
-import { checkLock } from "../src/lock/check";
+import { checkLock, verifyCoverage } from "../src/lock/check";
 import { listLocks, loadLock } from "../src/lock/store";
 import { matchPath, validateGlob } from "../src/lock/glob";
 import { copyDemoRepo, copyFixture, makeGitRepo } from "./helpers";
@@ -38,6 +38,86 @@ function defense(over: Partial<AnchorDefense> = {}): AnchorDefense {
     ...over,
   };
 }
+
+/** A lock with the budget and verify command under test, nothing else. */
+function coverageLock(files: string[], verifyCommand?: string, verifyCovers?: string[]): VibeCheck {
+  return {
+    ...sampleLock(),
+    budget: { files, symbols: [], maxFiles: Math.max(files.length, 1), maxLines: 100 },
+    ...(verifyCommand !== undefined ? { verifyCommand } : {}),
+    ...(verifyCovers !== undefined ? { verifyCovers } : {}),
+  };
+}
+
+test("verify coverage: Swift behind a TypeScript-only check is not covered", () => {
+  const coverage = verifyCoverage(coverageLock(["apple/Sources/Surface.swift"], "npm test"));
+  assert.deepEqual(coverage.budgetLanguages, ["Swift"]);
+  assert.deepEqual(coverage.missing, ["Swift"]);
+});
+
+test("verify coverage: TypeScript behind a Swift-only check is not covered", () => {
+  const coverage = verifyCoverage(coverageLock(["src/lock/check.ts"], "swift test --package-path ."));
+  assert.deepEqual(coverage.missing, ["TypeScript"]);
+});
+
+test("verify coverage: every language in a mixed budget must be reached", () => {
+  const mixed = ["apple/Sources/Surface.swift", "packages/engine/src/paginate.ts"];
+  assert.deepEqual(verifyCoverage(coverageLock(mixed, "swift test")).missing, ["TypeScript"]);
+  assert.deepEqual(verifyCoverage(coverageLock(mixed, "npm test")).missing, ["Swift"]);
+  assert.deepEqual(
+    verifyCoverage(coverageLock(mixed, "npm test && swift test --package-path apple")).missing,
+    [],
+  );
+});
+
+test("verify coverage: a declared language is accepted on the human's word", () => {
+  const coverage = verifyCoverage(
+    coverageLock(["apple/Sources/Surface.swift"], "npm test", ["Swift"]),
+  );
+  assert.deepEqual(coverage.missing, [], "verifyCovers is the escape hatch for a bespoke harness");
+});
+
+test("verify coverage: files that name no language are not counted against a lock", () => {
+  // eDraft's IL-0022 is a lock whose entire budget is one Markdown file.
+  // Refusing it for having no test command would be the opposite of useful.
+  const coverage = verifyCoverage(coverageLock([".gitignore", "docs/RFC.md"], "npm test"));
+  assert.deepEqual(coverage.budgetLanguages, []);
+  assert.deepEqual(coverage.missing, []);
+});
+
+test("check: a budget the verify command cannot reach refuses the lock", () => {
+  const repo = copyFixture();
+  const lock = coverageLock(["src/math.ts"], "swift test --package-path apple");
+  const result = checkLock(repo, lock, null);
+  assert.equal(result.ok, false, "a lock that cannot be verified must not validate");
+  const message = result.errors.join(" ");
+  assert.ok(message.includes("TypeScript"), "the refusal names the language left unverified");
+  assert.ok(message.includes("src/math.ts"), "and the files it would leave unverified");
+  assert.ok(message.includes("verifyCovers"), "and how to override it");
+});
+
+test("check: an unreadable verify command warns rather than refusing", () => {
+  const repo = copyFixture();
+  const lock = coverageLock(["src/math.ts"], "./scripts/verify-everything.sh");
+  const result = checkLock(repo, lock, null);
+  assert.equal(result.ok, true, "a bespoke harness is not grounds for refusal");
+  assert.ok(result.warnings.join(" ").includes("names no toolchain"));
+});
+
+test("check: a lock with no verify command is not judged on coverage", () => {
+  const repo = copyFixture();
+  const lock = coverageLock(["src/math.ts"]);
+  const result = checkLock(repo, lock, null);
+  assert.equal(result.ok, true);
+  assert.ok(!result.warnings.join(" ").includes("toolchain"));
+});
+
+test("yaml: verifyCovers round-trips", () => {
+  const lock = coverageLock(["a.swift"], "npm test", ["Swift", "Objective-C"]);
+  const back = lockFromYaml(lockToYaml(lock));
+  assert.deepEqual(back.verifyCovers, ["Swift", "Objective-C"]);
+  assert.equal(lockFromYaml(lockToYaml(coverageLock(["a.ts"]))).verifyCovers, undefined);
+});
 
 test("anchor defense: every anchor names its file and the word that picked it", async () => {
   const repo = copyDemoRepo();

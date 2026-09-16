@@ -59,6 +59,7 @@ export function lockToYaml(lock: VibeCheck): string {
     change: lock.change,
     ...(lock.verifyCommand !== undefined ? { verifyCommand: lock.verifyCommand } : {}),
     ...(lock.verifyTimeoutMs !== undefined ? { verifyTimeoutMs: lock.verifyTimeoutMs } : {}),
+    ...(lock.verifyCovers !== undefined ? { verifyCovers: lock.verifyCovers } : {}),
     budget: budgetToYaml(lock.budget),
     accept: lock.accept,
     assumptions: lock.assumptions.map(assumptionToYaml),
@@ -169,6 +170,9 @@ export function lockFromYaml(text: string): VibeCheck {
       : {}),
     ...(raw.verifyTimeoutMs !== undefined
       ? { verifyTimeoutMs: reqInt(raw, "verifyTimeoutMs", "lock") }
+      : {}),
+    ...(raw.verifyCovers !== undefined
+      ? { verifyCovers: strList(raw.verifyCovers, "verifyCovers") }
       : {}),
     budget,
     accept: strList(raw.accept, "accept"),

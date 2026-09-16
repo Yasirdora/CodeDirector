@@ -1,0 +1,96 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0005-20260916-203640.json",
+  "baselineSha256": "1b00b99ea1efa537e6dd3644537451f3aca2302d44edf7578e155a479569c236",
+  "budget": {
+    "filesChanged": 1,
+    "linesChanged": 23,
+    "maxFiles": 4,
+    "maxLines": 380
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/lock/check.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260916T203639955",
+    "createdAt": "2026-09-16T20:36:40.051Z",
+    "dirty": true,
+    "id": "ckpt-20260916T203639955",
+    "ref": "d63c25e875864ca3c8a565b741c2c0b70aea9e51",
+    "statusHash": "af9decc84c551afebc2977fdc7005b406141dda631aeb926b8dec639dac428b5",
+    "tag": "cdir/ckpt-20260916T203639955"
+  },
+  "command": [
+    "python3",
+    "/private/tmp/claude-501/-Users-x-Documents-Film-maker/464ad830-e9d2-471e-b400-1ff65fd0f690/scratchpad/il0005_fix.py"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-16T20:36:41.002Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0005",
+  "startedAt": "2026-09-16T20:36:40.967Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0005-20260916-203640.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0005-20260916-203640.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0005-20260916-203640.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0005",
+    "verifiedAt": "2026-09-16T20:37:07.023Z",
+    "violations": []
+  },
+  "violations": []
+}

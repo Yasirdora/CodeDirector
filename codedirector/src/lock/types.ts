@@ -96,6 +96,16 @@ export interface VibeCheck {
    * test suites need more than the 60s default. CLI --test-timeout overrides.
    */
   verifyTimeoutMs?: number;
+  /**
+   * Languages the human asserts `verifyCommand` exercises, for when its
+   * reach cannot be read from its text — an npm script that shells out to
+   * swift, a Makefile target, any bespoke harness. Names are the ones
+   * `languageOf` produces ("Swift", "TypeScript", …).
+   *
+   * The escape hatch for the coverage check, and a claim the human owns:
+   * nothing here verifies that the command does what this says it does.
+   */
+  verifyCovers?: string[];
   budget: LockBudget;
   /** Acceptance signals (text in v1). */
   accept: string[];
