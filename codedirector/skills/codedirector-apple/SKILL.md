@@ -32,6 +32,16 @@ signing assets (*.p8, *.mobileprovision, *.cer), and DerivedData, and keeps
   `custom:XCTest performAccessibilityAudit passes` as a keep clause — audit it
   before reporting done.
 
+## Interface guidance
+
+`docs/HUMAN-INTERFACE-GUIDELINES.md` is the rulebook for "is this screen
+HIG-correct?" Read it before any UI work. The short version: enforce the
+mechanical half (tap targets, contrast, Dynamic Type, safe area, labels and
+traits — the audit measures them); never fake the judgment half (taste,
+hierarchy, motion are the user's call); label every Apple claim as sourced or
+"no official guidance — this is my judgment"; and compile a probe against the
+project's Xcode before recommending any API.
+
 ## Verification ladder
 
 - SPM package at the root: `swift test` (the profile sets this as
