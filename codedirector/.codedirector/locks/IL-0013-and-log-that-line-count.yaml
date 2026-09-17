@@ -1,0 +1,67 @@
+schemaVersion: 1
+id: IL-0013
+status: verified
+utterance: And log that line-count discrepancy — the report said 12 where git counts 9, on a tracked file this time. Add it as an observation on the untracked-directory entry or as its own note in the roadmap; a miscounting ruler undermines the ceiling system it serves.
+goal: docs/ROADMAP.md records the line-count discrepancy as its own 0.4.6 candidate — what was counted, the cause as the source has it, why it matters for maxLines, what is wanted and a test; nothing else in the roadmap changes.
+interpretation: |
+  Its own 0.4.6 candidate rather than an observation on the untracked-
+  directory entry: the cause is a different one, and it bites on a tracked
+  file. Traced before drafting:
+
+    - IL-0012's 12 = docs/ROADMAP.md's 9 + .codedirector/seals.json's 3
+      (+2 −1, the seal `lock activate` wrote before the run). The classifier
+      leaves .codedirector/ out; changedLineCount does not.
+    - It counts seals.json because the baseline has no hash for it: in a
+      project rooted in a subfolder, snapshotWorkTree lists files with
+      `git ls-files` (subfolder-relative) and reads them as git-root-relative,
+      so IL-0012's baseline hashed 3 files, from the wrong copies.
+    - IL-0011's "3 lines of 127" was the same 3 seal lines; its new file
+      counted 0. eDraft (rooted at its git root) counted exactly that day:
+      IL-0029 10 of 10, IL-0030 1,877 of 1,877.
+
+  The entry says what was counted, the cause with file references, why a
+  ruler that errs both ways matters to maxLines, what is wanted, and a test.
+  The classify.ts:145 use of the same hashes is named as not checked.
+
+  Additions only: the IL-0011 sentence already committed ("counted as 3 lines
+  of 127") stays as the report said it, and the new entry explains it. Not
+  committed by this lock.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: docs/ROADMAP.md only gains lines — no existing line is changed or removed, and the three existing candidates are untouched
+deny:
+  - package.json
+  - package-lock.json
+  - src/**
+  - test/**
+  - eval/**
+  - dist/**
+  - README.md
+  - plugin/**
+  - skills/**
+  - integrations/**
+change: Add a 0.4.6 candidate to docs/ROADMAP.md — the changed-line count is wrong in a project rooted in a subfolder.
+verifyCommand: test "$(git diff --numstat HEAD -- docs/ROADMAP.md | cut -f2)" = "0" && grep -q "^### The changed-line count is wrong in a project rooted in a subfolder" docs/ROADMAP.md && grep -q "IL-0030 1,877 of 1,877" docs/ROADMAP.md
+verifyTimeoutMs: 60000
+budget:
+  files:
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 1
+  maxLines: 80
+accept:
+  - docs/ROADMAP.md has a fourth 0.4.6 candidate on the line count, with the 12-versus-9 evidence, the seals.json cause, the subfolder snapshot cause, why it matters, what is wanted and a test.
+  - git diff shows only added lines in docs/ROADMAP.md (56).
+assumptions:
+  - text: Budget and deny replaced by hand. The auto-draft anchored on four functions named "git" and proposed six source files.
+    source: system
+    confirmed: false
+  - text: "maxLines 80 for 56 added lines: if this project's counter again adds the 3 seal lines this entry describes, the run still measures under the ceiling (59)."
+    source: system
+    confirmed: false
+  - text: "Asked for by the human: log the 12-versus-9 discrepancy, as an observation on the untracked-directory entry or as its own note."
+    source: user
+    confirmed: true
+createdAt: 2026-09-17T14:29:54.108Z
+createdBy: Yasirdora

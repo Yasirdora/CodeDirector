@@ -134,3 +134,59 @@ logic, because the approved scope did not change.
 `.codedirector/`, activate two locks without committing, fail a run of one,
 and undo. The same documented outcome holds in both repos, the other lock's
 seal is untouched, and the undo output states what happened to the seal.
+
+### The changed-line count is wrong in a project rooted in a subfolder
+
+**Found in:** IL-0012, 2026-09-17, on this roadmap. The Change Report counted
+12 lines. Git counts 9 added and none removed, on a tracked file.
+
+**What happens:**
+
+- **The extra 3:** they are `.codedirector/seals.json` (+2/−1), the approval
+  seal that `lock activate` wrote before the run started. The classifier
+  leaves `.codedirector/` out of the changed files, but the line counter
+  counts it.
+- **IL-0011's "3 lines of 127":** the same 3 seal lines. The new 127-line file
+  counted 0, because its untracked folder can't be read as a file (see the
+  untracked-directory entry).
+- **At the git root, counts were exact:** eDraft's lock root is its git root,
+  and the same day IL-0029 counted 10 of 10 and IL-0030 1,877 of 1,877.
+
+**Cause (from the source):**
+
+- `changedLineCount` (`src/run/classify.ts`) sums
+  `git diff --numstat <baseline HEAD>` over the whole repository. It skips a
+  file only when the baseline's `workTreeHashes` shows it unchanged since
+  capture, and has no `.codedirector/` filter of its own.
+- `snapshotWorkTree` (`src/run/tree.ts`) lists tracked files with
+  `git ls-files`. In a subfolder that prints paths relative to the subfolder,
+  which are then read as relative to the git root, so almost none resolve.
+  IL-0012's baseline hashed 3 files: `.gitignore`, `LICENSE` and `README.md`,
+  names that exist at both levels, hashed from the wrong copies.
+- With no baseline hash for `seals.json`, the seal written before the run is
+  counted as the run's change.
+- At the git root, the snapshot hashes every tracked file (465 in eDraft),
+  `seals.json` included, so the earlier write is recognised and skipped.
+- The same hashes are consulted when classifying files
+  (`src/run/classify.ts:145`). Whether that misjudges pre-existing changes in
+  a subfolder project was not checked.
+
+**Why it matters:** `maxLines` is a tripwire, and the ruler errs in both
+directions. Lines it adds can trip a legitimate run. Lines it drops (a new file
+in a new folder counted as 0) pass under the ceiling unmeasured.
+
+**Wanted:**
+
+- Count only what the run changed, leaving `.codedirector/` out of the line
+  count as the classifier already does.
+- Resolve `git ls-files` paths in one frame (`--full-name`, or run from the git
+  root), so a subfolder project's baseline hashes its own files.
+- Count a new file inside a new folder by its lines.
+
+**Test:**
+
+- **Subfolder root:** activate a lock (which writes `seals.json`), then run a
+  command that adds 9 lines to a tracked file. The report counts 9.
+- **Git root:** the same. The report counts 9.
+- **New folder:** a run that creates a 127-line file in a new folder counts
+  127.

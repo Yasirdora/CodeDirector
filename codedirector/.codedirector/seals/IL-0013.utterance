@@ -1,0 +1,1 @@
+And log that line-count discrepancy — the report said 12 where git counts 9, on a tracked file this time. Add it as an observation on the untracked-directory entry or as its own note in the roadmap; a miscounting ruler undermines the ceiling system it serves.
