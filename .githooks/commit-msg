@@ -1,0 +1,10 @@
+#!/bin/sh
+# Reject commits that credit an AI assistant as co-author.
+# The work is committed under the human's name; agents are tools, not authors.
+msg="$1"
+if grep -iE 'co-authored-by:.*(claude|anthropic|gemini|google|openai|gpt|chatgpt|grok|xai|copilot|cursor|codeium|windsurf)' "$msg" >/dev/null 2>&1; then
+	echo "commit rejected: AI co-author trailers are not allowed in this repository." >&2
+	echo "Remove the Co-authored-by trailer crediting an AI assistant and commit again." >&2
+	exit 1
+fi
+exit 0
