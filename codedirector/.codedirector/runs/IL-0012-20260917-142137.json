@@ -1,0 +1,111 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0012-20260917-142137.json",
+  "baselineSha256": "838debd31badad6e3f9cfb566a62647e9ff49ebc4125a07958f3dcbeaf07e020",
+  "budget": {
+    "filesChanged": 1,
+    "linesChanged": 12,
+    "maxFiles": 1,
+    "maxLines": 20
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/ROADMAP.md",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260917T142136319",
+    "createdAt": "2026-09-17T14:21:36.351Z",
+    "dirty": false,
+    "id": "ckpt-20260917T142136319",
+    "ref": "a2a54b556aa47e0ee8e90bc10abc5eedf54093ee",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260917T142136319"
+  },
+  "command": [
+    "cp",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/af0a1ac6-4074-42f7-8704-98ad4f440402/scratchpad/cdir-ROADMAP-v2.md",
+    "docs/ROADMAP.md"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-17T14:21:37.913Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "docs/ROADMAP.md only gains lines — no existing line is changed or removed, and the other two candidates are untouched — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0012",
+  "startedAt": "2026-09-17T14:21:37.909Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0012-20260917-142137.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0012-20260917-142137.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0012-20260917-142137.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"test \\\"$(git diff --numstat HEAD -- docs/ROADMAP.md | cut -f2)\\\" = \\\"0\\\" && grep -q \\\"A lock can.t create a file in a new folder\\\" docs/ROADMAP.md && grep -q \\\"notes/new.md\\\" docs/ROADMAP.md\" → exit 0",
+        "detail": "verifyCommand passed: test \"$(git diff --numstat HEAD -- docs/ROADMAP.md | cut -f2)\" = \"0\" && grep -q \"A lock can.t create a file in a new folder\" docs/ROADMAP.md && grep -q \"notes/new.md\" docs/ROADMAP.md",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · test \"$(git diff --numstat HEAD -- docs/ROADMAP.md | cut -f2)\" = \"0\" && grep -q \"A lock can.t create a file in a new folder\" docs/ROADMAP.md && grep -q \"notes/new.md\" docs/ROADMAP.md",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · docs/ROADMAP.md only gains lines — no existing line is changed or removed, and the other two candidates are untouched",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0012",
+    "verifiedAt": "2026-09-17T14:21:41.389Z",
+    "violations": []
+  },
+  "violations": []
+}

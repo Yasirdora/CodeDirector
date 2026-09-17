@@ -65,6 +65,12 @@ new change after it, a false scope violation.
 - **Can't undo changes there:** a run that really did edit a file inside such
   a folder would have no checkpoint bytes to restore it from. This is read
   from the code, not reproduced.
+- **A lock can't create a file in a new folder.** Reproduced by IL-0011, the
+  lock that wrote this roadmap. Its budget named `docs/ROADMAP.md`, but
+  `docs/` did not exist, so the new file arrived as `?? docs/`. It was judged
+  as "docs/" against the budget (OUT-OF-BUDGET) and counted as 3 lines of
+  127, with the verify command passing. A budget may name a file its run
+  will create (IL-0008), but not when the file's folder is new too.
 
 **Wanted:**
 
@@ -83,6 +89,9 @@ new change after it, a false scope violation.
 - **Expect:** no OUT-OF-BUDGET, and 1 of N files changed.
 - **Then:** `undo --force` restores the committed file, and `tools/hook.sh`
   still exists, unchanged and not listed as lost.
+- **And:** a lock whose budget names `notes/new.md`, in a folder that does
+  not exist yet, runs a command that creates it. Expect no OUT-OF-BUDGET,
+  1 file changed, and the file's real line count.
 
 ### Undo rolls approval seals back by accident, and says nothing
 

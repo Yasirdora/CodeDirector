@@ -1,0 +1,59 @@
+schemaVersion: 1
+id: IL-0012
+status: verified
+utterance: Commit the roadmap file so docs/ is tracked, then add the new-folder symptom to the untracked-directory entry under a small new lock.
+goal: The untracked-directory entry in docs/ROADMAP.md also records the new-folder symptom IL-0011 reproduced, with a test case for it; nothing else in the roadmap changes.
+interpretation: |
+  docs/ROADMAP.md is committed (a2a54b5), so docs/ is tracked and this edit
+  is judged as the file it is — which IL-0011, creating it, could not be.
+
+  Two additions to the "Untracked directories are never expanded into their
+  files" entry, both additions only:
+
+    - under "Also", the new-folder symptom IL-0011 reproduced: a budget
+      naming docs/ROADMAP.md, a docs/ that did not exist, the new file
+      arriving as `?? docs/`, judged as "docs/" (OUT-OF-BUDGET) and counted
+      as 3 lines of 127 while the verify command passed — so a budget may
+      name a file its run will create (IL-0008), but not when the file's
+      folder is new too;
+    - under "Test", the case that pins it: a lock budgeting notes/new.md in
+      a folder that does not exist yet passes, with the file's real line
+      count.
+
+  Nothing else in the roadmap changes; not committed by this lock.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: docs/ROADMAP.md only gains lines — no existing line is changed or removed, and the other two candidates are untouched
+deny:
+  - package.json
+  - package-lock.json
+  - src/**
+  - test/**
+  - eval/**
+  - dist/**
+  - README.md
+  - plugin/**
+  - skills/**
+  - integrations/**
+change: Add the new-folder symptom and its test case to the untracked-directory entry of docs/ROADMAP.md.
+verifyCommand: test "$(git diff --numstat HEAD -- docs/ROADMAP.md | cut -f2)" = "0" && grep -q "A lock can.t create a file in a new folder" docs/ROADMAP.md && grep -q "notes/new.md" docs/ROADMAP.md
+verifyTimeoutMs: 60000
+budget:
+  files:
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 1
+  maxLines: 20
+accept:
+  - The untracked-directory entry names the new-folder symptom with IL-0011's evidence, and its Test section has the new-folder case.
+  - git diff shows only added lines in docs/ROADMAP.md (9).
+assumptions:
+  - text: Budget and deny replaced by hand. The auto-draft came back low-confidence, anchored on fragments ("lock", "tracked", "file"), and proposed six source files.
+    source: system
+    confirmed: false
+  - text: "Asked for by the human: commit the roadmap so docs/ is tracked (done, a2a54b5), then add the new-folder symptom to the untracked-directory entry under a small new lock."
+    source: user
+    confirmed: true
+createdAt: 2026-09-17T14:12:24.568Z
+createdBy: Yasirdora
