@@ -1,0 +1,127 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0011-20260917-134929.json",
+  "baselineSha256": "1c0510c833e1e92bdab96dbaf071d422302a7eb2850372f471df08d0e907f96f",
+  "budget": {
+    "filesChanged": 1,
+    "linesChanged": 3,
+    "maxFiles": 1,
+    "maxLines": 160
+  },
+  "changed": [
+    {
+      "class": "out-of-budget",
+      "path": "docs/",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260917T134928795",
+    "createdAt": "2026-09-17T13:49:28.827Z",
+    "dirty": false,
+    "id": "ckpt-20260917T134928795",
+    "ref": "66b685b57ffa66d20f05656c2fd40e772cdc548d",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260917T134928795"
+  },
+  "command": [
+    "bash",
+    "-c",
+    "mkdir -p docs && cp /private/tmp/claude-501/-Users-x-Documents-edraft/af0a1ac6-4074-42f7-8704-98ad4f440402/scratchpad/cdir-ROADMAP.md docs/ROADMAP.md"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-17T13:49:29.835Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "the only file changed is the new docs/ROADMAP.md; no source, test, README, package or lock file is touched — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "each candidate states what was observed, the cause as the code has it, what is wanted and a test — nothing claimed that was not observed or read in the source — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0011",
+  "startedAt": "2026-09-17T13:49:29.827Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0011-20260917-134929.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 2
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0011-20260917-134929.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0011-20260917-134929.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"test -f docs/ROADMAP.md && grep -q \\\"^## 0.4.6 candidates\\\" docs/ROADMAP.md && grep -q \\\"^### Feature 8\\\" docs/ROADMAP.md && grep -q \\\"^### Untracked directories\\\" docs/ROADMAP.md && grep -q \\\"^### Undo rolls approval seals back\\\" docs/ROADMAP.md\" → exit 0",
+        "detail": "verifyCommand passed: test -f docs/ROADMAP.md && grep -q \"^## 0.4.6 candidates\" docs/ROADMAP.md && grep -q \"^### Feature 8\" docs/ROADMAP.md && grep -q \"^### Untracked directories\" docs/ROADMAP.md && grep -q \"^### Undo rolls approval seals back\" docs/ROADMAP.md",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · test -f docs/ROADMAP.md && grep -q \"^## 0.4.6 candidates\" docs/ROADMAP.md && grep -q \"^### Feature 8\" docs/ROADMAP.md && grep -q \"^### Untracked directories\" docs/ROADMAP.md && grep -q \"^### Undo rolls approval seals back\" docs/ROADMAP.md",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · the only file changed is the new docs/ROADMAP.md; no source, test, README, package or lock file is touched",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · each candidate states what was observed, the cause as the code has it, what is wanted and a test — nothing claimed that was not observed or read in the source",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0011",
+    "verifiedAt": "2026-09-17T13:49:32.746Z",
+    "violations": []
+  },
+  "violations": [
+    "OUT-OF-BUDGET: docs/ is not in budget.files"
+  ]
+}

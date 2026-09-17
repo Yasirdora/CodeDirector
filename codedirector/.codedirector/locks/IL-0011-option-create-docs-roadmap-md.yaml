@@ -1,0 +1,78 @@
+schemaVersion: 1
+id: IL-0011
+status: failed
+utterance: "Option 2 — create docs/ROADMAP.md in the codedirector repo with a \"0.4.6 candidates\" section: Feature 8 (no-new-dependency can't tell a version bump from a dependency) and the new fingerprint gap (checkpoint must expand untracked directories into their files — false-positive scope violation on pre-existing untracked folders). I'll mirror them as GitHub issues under Yasirdora myself later. Under a lock, as always."
+goal: docs/ROADMAP.md exists with a "0.4.6 candidates" section naming Feature 8, the untracked-directory fingerprint gap and undo's silent seal rollback, each with enough evidence to become a GitHub issue as written.
+interpretation: |
+  One new document, docs/ROADMAP.md (there is no docs/ folder yet), with a
+  "0.4.6 candidates" section holding three items, each written so it can be
+  mirrored as a GitHub issue as it stands — the human will do that under
+  Yasirdora later; nothing is posted from here.
+
+    Feature 8 — no-new-dependency cannot tell a version bump from a
+    dependency, as recorded in IL-0010. Stated as the code has it today:
+    package.json is already compared by its dependency maps only
+    (src/run/deps.ts), but every other manifest — package-lock.json first —
+    is hashed whole, and a bump rewrites the lockfile's own version fields.
+
+    The untracked-directory fingerprint gap — found in eDraft IL-0028: the
+    checkpoint and baseline take `git status --porcelain`, which reports a
+    pre-existing untracked folder as one `?? dir/` line; readFileSync on it
+    throws EISDIR, swallowed as "vanished", so the folder's files are never
+    snapshotted or hashed and it reads as a new change after the run — a
+    false OUT-OF-BUDGET. Evidence, cause with file references, the undo
+    preview that named it "will be LOST" while leaving it intact, the fix and
+    a regression test.
+
+    Undo rolls approval seals back by accident, and says nothing — added by
+    the human at approval, found during the same undo: undo resets a
+    committed .codedirector/seals.json to HEAD (.codedirector/ is excluded
+    from checkpoint blobs), so IL-0028's seal vanished silently, and which
+    seals survive depends on whether a repo commits .codedirector/. Framed
+    as the human asked: rolling the seal back with the work has logic too,
+    so the candidate is to make the behaviour deliberate and loud, not to
+    preserve seals.
+
+  Documentation only: no source, test, README or package change. Not
+  committed by this lock.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: the only file changed is the new docs/ROADMAP.md; no source, test, README, package or lock file is touched
+  - kind: custom
+    text: each candidate states what was observed, the cause as the code has it, what is wanted and a test — nothing claimed that was not observed or read in the source
+deny:
+  - package.json
+  - package-lock.json
+  - src/**
+  - test/**
+  - eval/**
+  - dist/**
+  - README.md
+  - plugin/**
+  - skills/**
+  - integrations/**
+change: Create docs/ROADMAP.md with a "0.4.6 candidates" section — Feature 8, the untracked-directory fingerprint gap, and undo's silent seal rollback.
+verifyCommand: test -f docs/ROADMAP.md && grep -q "^## 0.4.6 candidates" docs/ROADMAP.md && grep -q "^### Feature 8" docs/ROADMAP.md && grep -q "^### Untracked directories" docs/ROADMAP.md && grep -q "^### Undo rolls approval seals back" docs/ROADMAP.md
+verifyTimeoutMs: 60000
+budget:
+  files:
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 1
+  maxLines: 160
+accept:
+  - docs/ROADMAP.md exists with a "0.4.6 candidates" section and exactly the three items the human named — the seal item framed as "make it deliberate and loud", not "preserve".
+  - Each item carries evidence, cause, what is wanted and a test, and reads as an issue without this conversation.
+assumptions:
+  - text: Budget and deny replaced by hand. The auto-draft anchored on the word "checkpoint" and proposed six source files — this lock records the gap, it does not fix it.
+    source: system
+    confirmed: false
+  - text: docs/ROADMAP.md is placed in the package directory (codedirector/docs/), beside src/ and README.md, where this project's locks are rooted — the git root holds only design documents and research.
+    source: system
+    confirmed: false
+  - text: "Decided by the human: a docs/ROADMAP.md with a 0.4.6 candidates section, Feature 8 and the fingerprint gap; GitHub issues mirrored later by the human. At approval, the human added the undo seal rollback as a third candidate: not obviously 'preserve' — make the behaviour deliberate and loud."
+    source: user
+    confirmed: true
+createdAt: 2026-09-17T13:22:14.821Z
+createdBy: Yasirdora
