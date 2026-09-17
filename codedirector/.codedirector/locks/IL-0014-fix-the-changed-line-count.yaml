@@ -1,0 +1,51 @@
+schemaVersion: 1
+id: IL-0014
+status: verified
+utterance: "Fix the changed-line count: a subfolder project's ruler errs in both directions"
+goal: changedLineCount leaves .codedirector/ out as the classifier already does; snapshotWorkTree resolves ls-files paths with --full-name so a subfolder baseline hashes its own files; a new file in a new folder counts its real lines
+interpretation: Three causes, three minimal fixes, all verified against the source (roadmap 0.4.6 candidate "The changed-line count is wrong in a project rooted in a subfolder"). (1) changedLineCount's numstat loop (classify.ts ~line 316) gains the same .codedirector/ segment skip the changed-file classifier already has. (2) snapshotWorkTree (tree.ts ~line 113) adds --full-name to git ls-files so paths print git-root-relative in a subfolder-rooted project. (3) changedLineCount's untracked loop expands a path that is a directory (porcelain's collapsed ?? dir/ entry) and sums its files' lines. The same ls-files mis-framing in listHidden and checkpoint/index.ts is explicitly OUT of scope — recorded as a follow-up.
+keep:
+  - kind: no-new-dependency
+deny:
+  - src/core/**
+  - src/lock/**
+  - src/mcp/**
+  - src/checkpoint/**
+  - src/report/**
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - package.json
+  - package-lock.json
+change: Fix the changed-line count for subfolder-rooted projects and new-folder files
+verifyCommand: npm test
+budget:
+  files:
+    - src/run/classify.ts
+    - src/run/tree.ts
+    - test/run.test.ts
+    - test/helpers.ts
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 5
+  maxLines: 400
+accept:
+  - "Subfolder root: a lock activated (writes .codedirector/seals.json), then a run adding 9 lines to a tracked file — the report counts 9, not 12"
+  - "Git root: the same scenario counts 9 (no regression at the root frame)"
+  - "New folder: a run creating a 127-line file in a folder that did not exist counts 127, not 0"
+  - npm test green; the existing counting tests (delta-only vs dirt, untracked file fully counted) pass unchanged
+assumptions:
+  - text: "Twelfth consecutive mis-anchor: every anchor is a fragment hit on \"line\" (ImagePipeline x4 in the demo repo, porcelainLinePaths in denied src/checkpoint/). Budget set by hand from the roadmap's verified evidence; anchors ignored. Low-confidence flag worked as designed."
+    source: user
+    confirmed: true
+  - text: Anchors defended — ImagePipeline — examples/demo-repo/src/pipeline.ts (TypeScript); "line" only occurs inside "ImagePipeline" · ImagePipeline.describe — examples/demo-repo/src/pipeline.ts (TypeScript); "line" only occurs inside "ImagePipeline.describe" · ImagePipeline.renderExport — examples/demo-repo/src/pipeline.ts (TypeScript); "line" only occurs inside "ImagePipeline.renderExport" · ImagePipeline.renderPreview — examples/demo-repo/src/pipeline.ts (TypeScript); "line" only occurs inside "ImagePipeline.renderPreview" · porcelainLinePaths — src/checkpoint/index.ts (TypeScript); "line" only occurs inside "porcelainLinePaths"
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: ImagePipeline, ImagePipeline.describe, ImagePipeline.renderExport, ImagePipeline.renderPreview, porcelainLinePaths (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-17T20:35:21.452Z
+createdBy: Yasirdora

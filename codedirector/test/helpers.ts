@@ -57,3 +57,22 @@ export function makeDemoGitRepo(): string {
   git(tmp, ["commit", "-qm", "init"]);
   return tmp;
 }
+
+/**
+ * The subfolder-project layout: demo repo inside <tmp>/sub, git rooted at
+ * <tmp>. A tracked .codedirector/seals.json is committed empty so a later
+ * seal write shows up in `git diff --numstat HEAD` — the IL-0012 scenario.
+ * Returns rootDir (the sub folder).
+ */
+export function makeSubfolderDemoGitRepo(): string {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "cdir-subgit-"));
+  const sub = path.join(parent, "sub");
+  fs.mkdirSync(path.join(sub, ".codedirector"), { recursive: true });
+  fs.cpSync(path.join(DEMO_REPO, "src"), path.join(sub, "src"), { recursive: true });
+  fs.cpSync(path.join(DEMO_REPO, "test"), path.join(sub, "test"), { recursive: true });
+  fs.writeFileSync(path.join(sub, ".codedirector", "seals.json"), "{}\n");
+  git(parent, ["init", "-q"]);
+  git(parent, ["add", "-A"]);
+  git(parent, ["commit", "-qm", "init"]);
+  return sub;
+}

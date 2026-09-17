@@ -59,6 +59,13 @@ new change after it, a false scope violation.
 
 **Also:**
 
+- **Half of this landed in IL-0014:** a run that creates a file in a new
+  folder now counts its real lines (the numstat/untracked side). What remains
+  here is the classification half — the collapsed `?? dir/` entry is still
+  judged as a path and still reads OUT-OF-BUDGET — plus the checkpoint,
+  undo-preview and EISDIR symptoms. A test in `test/run.test.ts` ("a new file
+  in a new folder counts its real lines") pins a tolerated OUT-OF-BUDGET that
+  this item's fix must remove.
 - **Misleading preview:** `undo --force` listed the folder (and
   `screenshot.png`) as "will be LOST", then left both byte-identical
   (`deletedUntracked: []`).
@@ -136,6 +143,15 @@ and undo. The same documented outcome holds in both repos, the other lock's
 seal is untouched, and the undo output states what happened to the seal.
 
 ### The changed-line count is wrong in a project rooted in a subfolder
+
+**Status: landed (IL-0014).** The numstat loop now skips `.codedirector/` as
+the classifier does, `snapshotWorkTree` lists tracked files with
+`--full-name` so a subfolder baseline hashes its own files, and an untracked
+folder entry is expanded and counted file by file. The evidence below is kept
+as the record. Known leftover: `listHidden` (tree.ts) and two `ls-files`
+calls in `checkpoint/index.ts` share the old mis-framed call and were left
+out of IL-0014's scope — they matter only if hidden-flag files are used in a
+subfolder-rooted project.
 
 **Found in:** IL-0012, 2026-09-17, on this roadmap. The Change Report counted
 12 lines. Git counts 9 added and none removed, on a tracked file.

@@ -314,6 +314,7 @@ export function changedLineCount(rootDir: string, untrackedPaths: string[], base
     for (const line of numstat.split("\n")) {
       const m = /^(\d+)\t(\d+)\t(.+)$/.exec(line);
       if (!m) continue;
+      if (m[3].split("/").includes(".codedirector")) continue; // the counter ignores cdir's own state, as the classifier does
       const rel = toRootRelative(prefix, m[3]);
       const preHash = pre[m[3]] ?? (rel !== null ? pre[rel] : undefined);
       if (preHash !== undefined) {
@@ -333,7 +334,34 @@ export function changedLineCount(rootDir: string, untrackedPaths: string[], base
       const text = fs.readFileSync(path.join(rootDir, p), "utf8");
       total += text === "" ? 0 : text.split("\n").length;
     } catch {
-      /* binary or vanished — not counted */
+      // porcelain collapses an untracked folder to one ?? dir/ entry —
+      // expand it and count its files (a lock may create files in new folders)
+      try {
+        const abs = path.join(rootDir, p);
+        if (fs.statSync(abs).isDirectory()) total += dirLineCount(abs);
+      } catch {
+        /* binary or vanished — not counted */
+      }
+    }
+  }
+  return total;
+}
+
+/** Sum the line counts of every text file under dir. */
+function dirLineCount(dir: string): number {
+  let total = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === ".codedirector" || entry.name === ".git" || entry.name === "node_modules") continue;
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      total += dirLineCount(p);
+    } else if (entry.isFile()) {
+      try {
+        const text = fs.readFileSync(p, "utf8");
+        total += text === "" ? 0 : text.split("\n").length;
+      } catch {
+        /* unreadable — not counted */
+      }
     }
   }
   return total;

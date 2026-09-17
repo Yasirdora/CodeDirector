@@ -16,14 +16,14 @@ import { sealLock, sealViolation } from "../src/lock/seal";
 import { VibeCheck } from "../src/lock/types";
 import { runWithLock, RunError } from "../src/run/run";
 import { undo } from "../src/checkpoint";
-import { makeDemoGitRepo } from "./helpers";
+import { makeDemoGitRepo, makeSubfolderDemoGitRepo, git } from "./helpers";
 
 const NODE = process.execPath;
 const append = (file: string, text: string) =>
   `${JSON.stringify(text)};require("fs").appendFileSync(${JSON.stringify(file)},${JSON.stringify(text)})`;
 
-async function setup(customize?: (lock: VibeCheck) => void): Promise<{ root: string; lock: VibeCheck }> {
-  const root = makeDemoGitRepo();
+async function setup(customize?: (lock: VibeCheck) => void, root?: string): Promise<{ root: string; lock: VibeCheck }> {
+  root ??= makeDemoGitRepo();
   const { index } = await buildIndex(root);
   const { lock } = draftLock(root, index, "make the preview feel instant", {
     now: "2026-09-11T00:00:00.000Z",
@@ -353,5 +353,57 @@ test("run: no-new-dependency KEEP clause diffs manifests against the baseline", 
   assert.ok(
     dirty.record.violations.some((v) => v.includes("KEEP no-new-dependency")),
     `violations: ${dirty.record.violations.join("; ")}`,
+  );
+});
+
+test("run: subfolder root — the approval seal does not count against maxLines", async () => {
+  // Field case: IL-0012 appended 9 lines and the report counted 12 — the +2/−1
+  // seal write in the tracked .codedirector/seals.json was counted as the run's
+  // change, and the baseline hashed almost nothing (ls-files paths mis-framed).
+  const root = makeSubfolderDemoGitRepo();
+  const { lock } = await setup(undefined, root);
+  const nine = Array.from({ length: 9 }, (_, i) => `// line ${i}`).join("\n") + "\n";
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", nine)], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  assert.equal(outcome.record.budget.linesChanged, 9, "the run's 9 lines, seal excluded");
+});
+
+test("run: git root — the approval seal is not counted either", async () => {
+  // Same scenario at the git root frame: tracked seals.json, sealed in setup,
+  // then a 9-line run. Regression guard for the root frame.
+  const root = makeDemoGitRepo();
+  fs.mkdirSync(path.join(root, ".codedirector"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".codedirector", "seals.json"), "{}\n");
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-qm", "track seals"]);
+  const { lock } = await setup(undefined, root);
+  const nine = Array.from({ length: 9 }, (_, i) => `// line ${i}`).join("\n") + "\n";
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", nine)], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  assert.equal(outcome.record.budget.linesChanged, 9);
+});
+
+test("run: a new file in a new folder counts its real lines", async () => {
+  // Field case: IL-0011 created docs/ROADMAP.md (127 lines) and the report
+  // counted 3 — porcelain collapsed the new folder to ?? docs/ and the
+  // directory could not be read as a file.
+  const { root, lock } = await setup((l) => {
+    l.budget.files = ["src/preview.ts", "notes/new.md"];
+    l.budget.maxFiles = 2;
+    l.budget.maxLines = 200;
+  });
+  const body = Array.from({ length: 127 }, (_, i) => `line ${i}`).join("\n");
+  const mk = `require("fs").mkdirSync("notes",{recursive:true});require("fs").writeFileSync("notes/new.md",${JSON.stringify(body)})`;
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", mk], { stdio: "pipe" });
+  assert.equal(outcome.record.budget.linesChanged, 127, "the file's real line count, not the collapsed folder's 0");
+  // The OUT-OF-BUDGET on the collapsed ?? notes/ entry is the untracked-directory
+  // roadmap item — deliberately out of IL-0014's scope; this tolerance goes with it.
+  assert.ok(
+    outcome.record.violations.some((v) => v.includes("OUT-OF-BUDGET") && v.includes("notes/")),
+    `expected the known collapsed-folder classification gap; violations: ${outcome.record.violations.join("; ")}`,
   );
 });

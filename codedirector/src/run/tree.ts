@@ -110,7 +110,7 @@ export function snapshotWorkTree(rootDir: string): WorkTreeSnapshot {
 
   let tracked: string[] = [];
   try {
-    tracked = git(rootDir, ["ls-files", "-z"]).split("\0").filter(Boolean);
+    tracked = git(rootDir, ["ls-files", "-z", "--full-name"]).split("\0").filter(Boolean);
   } catch {
     tracked = [];
   }
