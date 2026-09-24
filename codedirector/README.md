@@ -323,8 +323,12 @@ far as possible, in ladder order (cheapest/strongest first):
    measured. No compiler or no tsconfig → Unchecked with the reason named.
 3. **Tests (measured)** — each `tests-pass` glob is expanded and run via
    `node --test` with a timeout; pass → measured, fail → measured violation
-   with the failing test names, empty glob → **violated** (fail closed). A
-   Lock-level `verifyCommand` (e.g. `npm test`) runs the same way. Probes
+   with the failing test names, empty glob → **violated** (fail closed).
+   `node --test` runs JavaScript and TypeScript only: `lock check` refuses a
+   glob that names another file type (`Tests/**/*.swift`), and a glob that
+   reaches such a file anyway is Unchecked with the reason, never "failing".
+   Other suites belong in `verifyCommand`. A Lock-level `verifyCommand`
+   (e.g. `npm test`) runs the same way. Probes
    are isolated (tree restored afterwards) and strip `NODE_TEST_CONTEXT`.
 4. **Output (measured)** — each `output-unchanged` command is re-run in
    isolation and its stdout **and stderr** sha256 compared to the baseline

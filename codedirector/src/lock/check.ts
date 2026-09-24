@@ -12,7 +12,7 @@ import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { RepoIndex } from "../core/types";
 import { buildGraph } from "../core/graph";
-import { VibeCheck, KeepClause, clauseCheckability } from "./types";
+import { VibeCheck, KeepClause, clauseCheckability, NODE_TEST_FILE } from "./types";
 import { validateGlob } from "./glob";
 // `languageOf` lives in draft.ts because IL-0001 needed it there first.
 // A fundamental module importing from the drafter is the wrong direction and
@@ -138,6 +138,15 @@ function checkClause(clause: KeepClause, index: RepoIndex | null): ClauseCheck {
       } else {
         const g = validateGlob(clause.glob);
         if (g) errors.push(`tests-pass glob invalid: ${g}`);
+        // A glob that names its file type can be judged here; one that does
+        // not (`Tests/**`) is judged file by file when the verifier runs.
+        const ext = /\.([A-Za-z0-9]+)$/.exec(clause.glob);
+        if (!g && ext && !NODE_TEST_FILE.test(clause.glob)) {
+          errors.push(
+            `tests-pass runs \`node --test\`, which cannot run .${ext[1]} files (${clause.glob}) — ` +
+              `put that suite in the lock's verifyCommand instead`,
+          );
+        }
       }
       if (errors.length === 0) note = "executed by the verifier via `node --test`";
       break;

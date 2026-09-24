@@ -27,7 +27,7 @@ import * as path from "node:path";
 import { RepoIndex } from "../core/types";
 import { buildIndex, hashContent } from "../core/builder";
 import { buildGraph } from "../core/graph";
-import { VibeCheck, DEPENDENCY_MANIFESTS } from "../lock/types";
+import { VibeCheck, DEPENDENCY_MANIFESTS, NODE_TEST_FILE } from "../lock/types";
 import { loadLock } from "../lock/store";
 import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
@@ -301,6 +301,20 @@ function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions):
         detail: `glob matched no test files: ${glob}`,
         artifactRef: `glob expansion → 0 file(s) matched ${JSON.stringify(glob)}`,
       });
+      continue;
+    }
+    const foreign = files.filter((f) => !NODE_TEST_FILE.test(f));
+    if (foreign.length > 0) {
+      // Nothing is run: node would fail on these files whatever the tests say.
+      items.push(
+        uncheckedItem(
+          "keep-clause",
+          subject,
+          `node --test cannot run ${foreign.length} matched file(s) (${foreign.slice(0, 3).join(", ")}) — ` +
+            `tests-pass measures JavaScript/TypeScript suites only; put this suite in the lock's verifyCommand`,
+          clause.kind,
+        ),
+      );
       continue;
     }
     const argv = [process.execPath];

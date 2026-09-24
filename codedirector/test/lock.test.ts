@@ -59,6 +59,22 @@ test("check: a budget path that does not exist yet is a warning, not a refusal",
   assert.ok(warning!.includes("the path is wrong"), "and the second");
 });
 
+test("check: a tests-pass glob naming files node --test cannot run is refused", () => {
+  const repo = copyFixture();
+  const withGlob = (glob: string): VibeCheck => ({ ...coverageLock(["src/math.ts"]), keep: [{ kind: "tests-pass", glob }] });
+  const swift = checkLock(repo, withGlob("Tests/**/*.swift"), null);
+  assert.equal(swift.ok, false);
+  assert.ok(
+    swift.errors.some((e) => e.includes("cannot run .swift files") && e.includes("verifyCommand")),
+    swift.errors.join("; "),
+  );
+  // JavaScript, TypeScript, and globs that name no file type are left to the verifier
+  for (const glob of ["test/**/*.test.ts", "test/*.test.js", "test/*.mjs", "test/**"]) {
+    const r = checkLock(repo, withGlob(glob), null);
+    assert.ok(!r.errors.some((e) => e.includes("cannot run")), `${glob}: ${r.errors.join("; ")}`);
+  }
+});
+
 test("check: an absolute budget path is refused", () => {
   const repo = copyFixture();
   const result = checkLock(repo, coverageLock(["/etc/passwd"]), null);

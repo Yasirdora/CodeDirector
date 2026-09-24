@@ -1,0 +1,71 @@
+schemaVersion: 1
+id: IL-0018
+status: verified
+utterance: please fix them
+goal: "tests-pass never reports a suite node --test cannot run as failing: lock check refuses a tests-pass glob that names a non-JavaScript/TypeScript file type, and a glob that reaches such a file anyway is Unchecked with the reason, pointing to verifyCommand."
+interpretation: |
+  SIZED BY A SPIKE on top of IL-0017's patch. Reproduced on the installed build: a
+  passing Swift test under tests-pass was reported "tests failing (exit 1)" —
+  node --test ran the .swift file as JavaScript.
+
+  THE FIX: NODE_TEST_FILE (lock/types.ts) names what node --test can run —
+  .js/.mjs/.cjs and .ts/.mts/.cts (the verifier already strips types on Node
+  >= 22). lock check refuses a glob whose extension is anything else, pointing to
+  verifyCommand; a glob that names no type (Tests/**) is judged when it runs,
+  where any matched file node cannot run makes the clause Unchecked with the
+  reason, and nothing is executed. Not a runner per language — verifyCommand
+  already runs other suites.
+
+  TESTS: lock.test.ts +1, verify.test.ts +1. FAIL-BEFORE: both fail. AFTER: npm
+  test 194/194.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones
+  - kind: custom
+    text: No existing test assertion is weakened or removed (the one exception is named in the lock that makes it)
+  - kind: custom
+    text: JavaScript and TypeScript tests-pass globs run exactly as before, including an empty glob failing closed
+deny:
+  - src/run/**
+  - src/mcp/**
+  - src/checkpoint/**
+  - src/cli.ts
+  - src/lock/seal.ts
+  - src/core/**
+  - src/report/**
+  - src/hook/**
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - eval/**
+  - test/fixtures/**
+  - package.json
+  - package-lock.json
+change: tests-pass refuses or leaves unchecked the files node --test cannot run
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/lock/types.ts
+    - src/lock/check.ts
+    - src/verify/verify.ts
+    - test/lock.test.ts
+    - test/verify.test.ts
+    - README.md
+  symbols: []
+  maxFiles: 6
+  maxLines: 90
+accept:
+  - lock check refuses tests-pass:Tests/**/*.swift, naming verifyCommand; .ts, .js, .mjs and extension-less globs pass check
+  - A tests-pass glob that reaches a Swift file is Unchecked with the reason, and the run is not failed by it
+  - npm test green in full
+assumptions:
+  - text: "Owner's words, 2026-09-24: \"please fix them\" — the four cdir faults verified by reproduction on the installed 0.4.5 (2b9ddde): the seal hole, pre-existing untracked folders and deletions read as the run's change, a typecheck that blames runs for errors they did not cause, and tests-pass reporting a Swift suite as failing. One lock each, applied in order IL-0015 → IL-0018."
+    source: user
+    confirmed: true
+  - text: "Budget set by hand from the spike; the drafter's anchors (fixture, gitPrefix, double, square — \"fix\" fragments) and its suggested deny of test/**/*.test.* were discarded: the fix needs its tests."
+    source: system
+    confirmed: false
+createdAt: 2026-09-24 18:42:11.899000+00:00
+createdBy: Yasirdora

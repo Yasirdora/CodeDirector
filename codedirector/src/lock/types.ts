@@ -141,6 +141,15 @@ export const CHECKABILITY_MARK: Record<ClauseCheckability, string> = {
   custom: "?",
 };
 
+/**
+ * Test files `node --test` can run: JavaScript, and TypeScript through type
+ * stripping. A tests-pass glob that reaches anything else (a Swift, Python or
+ * JSX file) cannot be measured by this clause — node reads it as a script,
+ * fails, and the clause used to report a passing suite as failing (a Swift
+ * test file, reproduced on 0.4.5). Such suites belong in verifyCommand.
+ */
+export const NODE_TEST_FILE = /\.(?:[cm]?js|[cm]?ts)$/;
+
 /** Dependency manifests / lockfiles hashed for no-new-dependency checks. */
 export const DEPENDENCY_MANIFESTS = [
   "package.json",

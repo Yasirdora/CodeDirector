@@ -111,6 +111,24 @@ test("verify: tests-pass with an empty glob is a violation, not a silent pass", 
   assert.ok(item.detail.includes("matched no test files"), `detail: ${item.detail}`);
 });
 
+test("verify: a tests-pass glob that reaches a Swift file is unchecked with the reason, not failing", async () => {
+  // Reproduced on 0.4.5: a passing Swift test file was reported "tests
+  // failing (exit 1)" — node --test ran it as a JavaScript file.
+  const { root, lock } = await setup([{ kind: "tests-pass", glob: "Tests/**" }]);
+  fs.mkdirSync(path.join(root, "Tests"), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, "Tests/AppTests.swift"),
+    "import XCTest\nfinal class AppTests: XCTestCase { func testN() { XCTAssertEqual(1, 1) } }\n",
+  );
+  git(root, ["add", "Tests"]);
+  git(root, ["commit", "-qm", "swift tests"]);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  const item = find(outcome.record.verification!.items, "tests-pass")[0];
+  assert.equal(item.verdict, "unchecked");
+  assert.match(item.reason ?? "", /node --test cannot run 1 matched file\(s\) \(Tests\/AppTests\.swift\)/);
+});
+
 test("verify: output-unchanged round-trips and detects change", async () => {
   const { root, lock } = await setup([{ kind: "output-unchanged", command: "node src/render.js" }]);
 
