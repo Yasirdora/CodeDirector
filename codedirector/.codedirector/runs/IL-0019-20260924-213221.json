@@ -1,0 +1,111 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0019-20260924-213221.json",
+  "baselineSha256": "48a3b99932093337657b0d03631e2d046b4bf705930c1f6665c0e5f0f848e37d",
+  "budget": {
+    "filesChanged": 1,
+    "linesChanged": 39,
+    "maxFiles": 1,
+    "maxLines": 60
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/ROADMAP.md",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260924T213217316",
+    "createdAt": "2026-09-24T21:32:17.348Z",
+    "dirty": false,
+    "id": "ckpt-20260924T213217316",
+    "ref": "02a6ee019ff52bda350c9909683f295c3ea4e58d",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260924T213217316"
+  },
+  "command": [
+    "cp",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/f18134e9-a2b1-4be9-86e4-e051e895a434/scratchpad/cdir-doc/codedirector/docs/ROADMAP.md",
+    "docs/ROADMAP.md"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-24T21:32:21.425Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "Only docs/ROADMAP.md changes — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0019",
+  "startedAt": "2026-09-24T21:32:21.422Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0019-20260924-213221.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0019-20260924-213221.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0019-20260924-213221.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Only docs/ROADMAP.md changes",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0019",
+    "verifiedAt": "2026-09-24T21:33:03.579Z",
+    "violations": []
+  },
+  "violations": []
+}

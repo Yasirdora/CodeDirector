@@ -6,6 +6,45 @@ can become a GitHub issue as it stands.
 
 ## 0.4.6 candidates
 
+### A run can hide a file from the fence by adding it to `.gitignore`
+
+**Found:** 2026-09-24 — a run's three-line `.gitignore` change wasn't
+counted ("16 changed" for 17 files). Reproduced on
+main (02a6ee0) the same day.
+
+**What happens:**
+
+- `.gitignore` is never judged. `isToolPath` (`src/run/tree.ts:161`) treats it
+  as cdir's own file, because cdir writes its ignore block there, so a run's
+  edits to it are not in the changed files, the budget or the line count —
+  even when the lock's `deny` names `.gitignore`.
+- So a run can hide what it creates. Reproduced: a lock budgeting `src/a.ts`
+  and denying `.gitignore`; a run that edits `src/a.ts`, creates `notes.txt`
+  and appends `notes.txt` to `.gitignore`. Verdict: VERIFIED, "1 changed".
+  The same run without the `.gitignore` line: OUT-OF-BUDGET: notes.txt.
+
+**Why it matters:** the fence promises that nothing outside the budget changes
+unseen. This is the same class as the 0.4.5 seal hole (IL-0015): an agent can
+be marked verified for work outside its scope.
+
+**Wanted:**
+
+- Judge `.gitignore` like any other file, except cdir's own
+  `# BEGIN cdir … # END cdir` block: compare it with that block removed on
+  both sides.
+- Classify files the run's own ignore rules hide: compare
+  `git ls-files --others --ignored --exclude-standard` before and after the
+  run (or evaluate paths against the baseline's copy of `.gitignore`), so a
+  file hidden by a rule the run added is still judged.
+
+**Test:**
+
+- A run appending a line to `.gitignore` under a lock that doesn't budget it:
+  OUT-OF-BUDGET: .gitignore — and DENY when the lock denies it.
+- A run that creates `notes.txt` and ignores it: OUT-OF-BUDGET: notes.txt, as
+  without the ignore line.
+- cdir writing its own block on a repo's first run: no finding.
+
 ### Feature 8: `no-new-dependency` can't tell a version bump from a dependency
 
 **Found in:** IL-0010, the 0.4.5 bump. The clause was left out of that lock's

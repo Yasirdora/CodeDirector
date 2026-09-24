@@ -1,0 +1,35 @@
+schemaVersion: 1
+id: IL-0019
+status: verified
+utterance: yes, thank you for that, if you find any issue problem in future also please report them to me
+goal: The roadmap records, with its reproduction, that a run can hide a file from the fence by adding it to .gitignore — as a 0.4.6 candidate with what's wanted and how to test it.
+interpretation: 'Docs only: one new 0.4.6 candidate in docs/ROADMAP.md — "A run can hide a file from the fence by adding it to .gitignore" — with the reproduction made on main (02a6ee0) on 2026-09-24, what is wanted, and the tests. No code change; the fix is a separate, approved step.'
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: Only docs/ROADMAP.md changes
+deny:
+  - src/**
+  - test/**
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+change: "Roadmap entry: the .gitignore blind spot"
+verifyCommand: npm test
+verifyTimeoutMs: 600000
+budget:
+  files:
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 1
+  maxLines: 60
+accept:
+  - The entry states the reproduction, why it matters, what is wanted and the tests
+  - npm test still passes
+assumptions:
+  - text: "Owner's words, 2026-09-24: \"yes, thank you for that, if you find any issue problem in future also please report them to me\" — yes to adding the .gitignore finding to the roadmap."
+    source: user
+    confirmed: true
+createdAt: 2026-09-24 21:32:02.369000+00:00
+createdBy: Yasirdora
