@@ -257,7 +257,9 @@ A Lock **rejects** clauses it cannot even in principle check, unless
 `show` renders the Lock with per-clause checkability markers (✓ machine-checkable / ? human judges).
 `check` validates against the current index — budget files exist, symbols
 resolve, deny globs valid, `maxFiles >= files.length` — and exits non-zero
-on invalid. `activate` moves draft → active only when check passes.
+on invalid. `activate` moves draft → active only when check passes; it is also
+the re-approval of an active, verified or failed Lock whose content changed
+(it re-seals). An abandoned Lock cannot be activated.
 
 ### `cdir checkpoint` · `cdir undo [--force] [--keep-untracked]`
 

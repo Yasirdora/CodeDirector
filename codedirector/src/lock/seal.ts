@@ -62,21 +62,30 @@ export function refreshSeal(rootDir: string, lock: VibeCheck): void {
 }
 
 /**
- * The re-approval refusal, or null when the Lock may run. Only ACTIVE Locks
- * are gated: drafts never run anyway, and verified/failed Locks are history.
+ * The re-approval refusal, or null when the Lock may run. Every Lock that can
+ * still run is gated: active, and verified/failed too, because `cdir run`
+ * accepts both. A Lock turns verified after its first clean run and keeps
+ * running for the rest of the work; failed runs are retried the same way.
+ * Drafts and abandoned Locks never run, so they are not gated here.
  *
- * Fail CLOSED on a missing seal: an active Lock with no seal entry was
+ * Field case (2026-09-24): the gate covered active Locks only, on the reading
+ * that verified/failed Locks are history. After one clean run, dropping the
+ * Lock's deny and widening its budget by hand, then running, reported "within
+ * the agreed scope" with no re-approval.
+ *
+ * Fail CLOSED on a missing seal: a runnable Lock with no seal entry was
  * activated outside the official path (a direct hand-edit of status, which
- * creates no seal) — that is exactly the bypass sealing exists to prevent.
- * Locks sealed before this rule shipped are unaffected: their entries exist.
+ * creates no seal), or its seal was lost — exactly the bypass sealing exists
+ * to prevent. Locks sealed before this rule shipped are unaffected: their
+ * entries exist.
  */
 export function sealViolation(rootDir: string, lock: VibeCheck): string | null {
-  if (lock.status !== "active") return null;
+  if (lock.status === "draft" || lock.status === "abandoned") return null;
   const seal = readSeals(rootDir)[lock.id];
   if (seal === undefined) {
     return (
-      `lock ${lock.id} is active but has no approval seal — it was activated outside the ` +
-      `official path, so the user's approval was never pinned. Approve it properly: ` +
+      `lock ${lock.id} is ${lock.status} but has no approval seal — it was activated outside the ` +
+      `official path, or its seal was lost, so the user's approval is not pinned. Approve it properly: ` +
       `\`cdir lock check ${lock.id} && cdir lock activate ${lock.id}\`.`
     );
   }

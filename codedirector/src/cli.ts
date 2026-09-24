@@ -329,9 +329,9 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
       if (!id) fail("lock activate requires an id, e.g. cdir lock activate IL-0001", 2);
       const lock = loadLock(root, id);
       if (!lock) fail(`no such lock: ${id}`);
-      // draft → active, or re-activation of an active Lock (the re-approval
-      // path after a seal mismatch). verified/failed/abandoned are history.
-      if (lock.status !== "draft" && lock.status !== "active") {
+      // draft → active, or re-approval of a Lock that can still run (active,
+      // verified, failed) after a seal mismatch. Only abandoned is history.
+      if (lock.status === "abandoned") {
         fail(`lock ${id} has status "${lock.status}" — it cannot be activated`);
       }
       const index = await indexOnDemand(root);

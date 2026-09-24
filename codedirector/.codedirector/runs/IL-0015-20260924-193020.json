@@ -1,0 +1,166 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0015-20260924-193020.json",
+  "baselineSha256": "ce4d90b3a4df834fecadce9b8dfd289dd5daf96be20705334124307d07926361",
+  "budget": {
+    "filesChanged": 6,
+    "linesChanged": 168,
+    "maxFiles": 6,
+    "maxLines": 185
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/cli.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/seal.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/server.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/mcp.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/run.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260924T193019412",
+    "createdAt": "2026-09-24T19:30:19.448Z",
+    "dirty": false,
+    "id": "ckpt-20260924T193019412",
+    "ref": "2b9ddde24e041e7004d5d27ef43bafbd99de32da",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260924T193019412"
+  },
+  "command": [
+    "git",
+    "-C",
+    "/Users/x/codedirector",
+    "apply",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/f18134e9-a2b1-4be9-86e4-e051e895a434/scratchpad/patches/0001-spike-fix-1-seal.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-24T19:30:20.874Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "No existing test assertion is weakened or removed (the one exception is named in the lock that makes it) — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "A lock whose content is unchanged keeps running after it reads verified or failed — multi-run work is not blocked; drafts and abandoned locks behave exactly as before — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0015",
+  "startedAt": "2026-09-24T19:30:20.860Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0015-20260924-193020.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 3
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0015-20260924-193020.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0015-20260924-193020.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · No existing test assertion is weakened or removed (the one exception is named in the lock that makes it)",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · A lock whose content is unchanged keeps running after it reads verified or failed — multi-run work is not blocked; drafts and abandoned locks behave exactly as before",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0015",
+    "verifiedAt": "2026-09-24T19:30:45.959Z",
+    "violations": []
+  },
+  "violations": []
+}

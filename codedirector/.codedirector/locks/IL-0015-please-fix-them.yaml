@@ -1,0 +1,88 @@
+schemaVersion: 1
+id: IL-0015
+status: verified
+utterance: please fix them
+goal: "The seal guards every lock that can still run: a verified or failed lock whose contract was edited after approval is refused by run and verify until the human re-approves it with lock check + lock activate, and activate accepts that re-approval for active, verified and failed locks (abandoned stays closed)."
+interpretation: |
+  SIZED BY A SPIKE, NOT GUESSED: a scratch clone of 2b9ddde; nothing in this tree
+  is touched until this lock is active. The run applies the spike's patch with
+  `git -C /Users/x/codedirector apply`.
+
+  THE HOLE (reproduced on the installed build): sealViolation (src/lock/seal.ts)
+  returned null for every status but active, on the reading that verified/failed
+  locks are history. They are not — cdir run accepts both, and a lock reads
+  verified after its first clean run. Removing a verified lock's deny and
+  widening its budget by hand, then editing the denied file, reported "Done —
+  verified … within the agreed scope". MCP run_locked and cdir verify call the
+  same check.
+
+  THE FIX: gate active, verified and failed (drafts and abandoned never run).
+  Closing the hole also closes the documented rejudge path (README: raise a
+  ceiling after a refusal and re-verify), which only worked through it — so
+  lock activate (CLI and MCP) now accepts verified and failed as the
+  re-approval, exactly as it already did for active. Abandoned stays closed.
+
+  TESTS: run.test.ts +5 (verified edited → refused, command never ran; failed
+  edited → refused; finished lock with no seal → refused; CLI activate
+  re-approves a failed lock, abandoned refused; an unchanged verified lock runs
+  again — a guard). mcp.test.ts +1 (edited failed lock refused by run_locked
+  until lock_activate). FAIL-BEFORE at 2b9ddde: 5 of the 6 fail; the guard
+  passes before and after. AFTER: npm test 184/184.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones
+  - kind: custom
+    text: No existing test assertion is weakened or removed (the one exception is named in the lock that makes it)
+  - kind: custom
+    text: A lock whose content is unchanged keeps running after it reads verified or failed — multi-run work is not blocked; drafts and abandoned locks behave exactly as before
+deny:
+  - src/run/**
+  - src/verify/**
+  - src/checkpoint/**
+  - src/core/**
+  - src/report/**
+  - src/hook/**
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - eval/**
+  - test/fixtures/**
+  - package.json
+  - package-lock.json
+change: Seal every runnable lock; lock activate re-approves verified and failed locks
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/lock/seal.ts
+    - src/cli.ts
+    - src/mcp/server.ts
+    - README.md
+    - test/run.test.ts
+    - test/mcp.test.ts
+  symbols: []
+  maxFiles: 6
+  maxLines: 185
+accept:
+  - A verified lock whose deny was removed and budget widened by hand is refused by run ("seal mismatch") and its command never runs
+  - A failed lock edited by hand is refused by run and by verify
+  - A verified or failed lock with no seal entry is refused (fail-closed), naming lock check + lock activate
+  - cdir lock activate and MCP lock_activate re-approve an edited failed lock (re-seal); an abandoned lock is still refused
+  - An unchanged verified lock runs again
+  - npm test green in full
+assumptions:
+  - text: "Owner's words, 2026-09-24: \"please fix them\" — the four cdir faults verified by reproduction on the installed 0.4.5 (2b9ddde): the seal hole, pre-existing untracked folders and deletions read as the run's change, a typecheck that blames runs for errors they did not cause, and tests-pass reporting a Swift suite as failing. One lock each, applied in order IL-0015 → IL-0018."
+    source: user
+    confirmed: true
+  - text: "DECIDED BY THE OWNER, 2026-09-24 — option A: \"for cdir I think option A\". lock activate re-approves verified and failed locks (still the human's act), so the documented rejudge path keeps working once the hole is closed. Option B (finished locks never re-approvable; an edited one needs a new lock; the README rejudge paragraph changes) was declined."
+    source: user
+    confirmed: true
+  - text: "Consequence: a finished lock with no seal entry cannot run until re-approved — in eDraft IL-0001–0005, 0011, 0012, 0018, 0019 (verified) and IL-0028 (failed), all history."
+    source: system
+    confirmed: false
+  - text: "Budget set by hand from the spike; the drafter's anchors (fixture, gitPrefix, double, square — \"fix\" fragments) and its suggested deny of test/**/*.test.* were discarded: the fix needs its tests."
+    source: system
+    confirmed: false
+createdAt: 2026-09-24 18:42:01.734000+00:00
+createdBy: Yasirdora

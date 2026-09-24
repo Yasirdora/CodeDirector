@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { draftLock } from "../src/lock/draft";
@@ -277,6 +278,99 @@ test("run: internal status transitions (verified/failed) never trip the seal", a
   assert.equal(again.exitCode, 1, "out-of-budget failure, not a seal refusal");
   assert.equal(loadLock(root, lock.id)!.status, "failed");
   assert.equal(sealViolation(root, loadLock(root, lock.id)!), null);
+});
+
+/** Hand-edit a Lock file the way an agent's write tool would — no saveLock, so no seal refresh. */
+function handEdit(root: string, id: string, edit: (yaml: string) => string): void {
+  const p = lockPathFor(root, id)!;
+  fs.writeFileSync(p, edit(fs.readFileSync(p, "utf8")));
+}
+
+test("run: a verified lock edited after approval is refused, and its command never runs", async () => {
+  // Field case (2026-09-24): a lock reads verified after its first clean run,
+  // and the seal was only checked for active locks. Dropping the deny and
+  // budgeting the denied file by hand, then editing it, came back "verified —
+  // within the agreed scope" with no re-approval.
+  const { root, lock } = await setup();
+  const ok = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// faster\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(ok.exitCode, 0, ok.record.violations.join("; "));
+  assert.equal(loadLock(root, lock.id)!.status, "verified");
+  handEdit(root, lock.id, (y) =>
+    y.replace(/deny:\n  - [^\n]*export\.ts[^\n]*\n/, "deny: []\n").replace(/maxFiles: 2/, "maxFiles: 3"),
+  );
+  assert.deepEqual(loadLock(root, lock.id)!.deny, [], "the deny really is gone");
+  const before = fs.readFileSync(path.join(root, "src/export.ts"), "utf8");
+  await assert.rejects(
+    () => runWithLock(root, lock.id, [NODE, "-e", append("src/export.ts", "// widened\n")], { stdio: "pipe" }),
+    (e: unknown) =>
+      e instanceof RunError &&
+      /modified after approval \(seal mismatch\)/.test((e as Error).message) &&
+      /cdir lock check IL-\d+ && cdir lock activate/.test((e as Error).message),
+  );
+  assert.equal(fs.readFileSync(path.join(root, "src/export.ts"), "utf8"), before, "the command never ran");
+});
+
+test("run: a failed lock edited after approval is refused", async () => {
+  const { root, lock } = await setup();
+  const bad = await runWithLock(root, lock.id, [NODE, "-e", append("src/pipeline.ts", "// x\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(bad.exitCode, 1);
+  assert.equal(loadLock(root, lock.id)!.status, "failed");
+  handEdit(root, lock.id, (y) => y.replace("maxLines: 400", "maxLines: 600"));
+  await assert.rejects(
+    () => runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// retry\n")], { stdio: "pipe" }),
+    (e: unknown) => e instanceof RunError && /seal mismatch/.test((e as Error).message),
+  );
+});
+
+test("run: an unchanged verified lock keeps running — multi-run work is not blocked", async () => {
+  const { root, lock } = await setup();
+  const first = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// one\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(first.exitCode, 0, first.record.violations.join("; "));
+  assert.equal(loadLock(root, lock.id)!.status, "verified");
+  const second = await runWithLock(root, lock.id, [NODE, "-e", append("src/slider.ts", "// two\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(second.exitCode, 0, second.record.violations.join("; "));
+});
+
+test("run: a finished lock with no seal is refused (fail-closed)", async () => {
+  const { root, lock } = await setup();
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// faster\n")], { stdio: "pipe" });
+  const sealsFile = path.join(root, ".codedirector", "seals.json");
+  const seals = JSON.parse(fs.readFileSync(sealsFile, "utf8")) as Record<string, string>;
+  delete seals[lock.id];
+  fs.writeFileSync(sealsFile, JSON.stringify(seals));
+  await assert.rejects(
+    () => runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" }),
+    (e: unknown) =>
+      e instanceof RunError && /is verified but has no approval seal/.test((e as Error).message),
+  );
+});
+
+test("run: `cdir lock activate` re-approves a failed lock after an edit; abandoned stays closed", async () => {
+  const CLI = path.join(__dirname, "..", "src", "cli.js");
+  const { root, lock } = await setup();
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/pipeline.ts", "// x\n")], { stdio: "pipe" });
+  assert.equal(loadLock(root, lock.id)!.status, "failed");
+  handEdit(root, lock.id, (y) => y.replace("maxLines: 400", "maxLines: 600"));
+  await assert.rejects(() => runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" }), /seal mismatch/);
+
+  // the human reviews the edit and re-approves it
+  execFileSync(NODE, [CLI, "lock", "activate", lock.id, "--root", root], { stdio: "pipe" });
+  assert.equal(loadLock(root, lock.id)!.status, "active");
+  assert.equal(sealViolation(root, loadLock(root, lock.id)!), null, "re-approval re-sealed the edited contract");
+
+  handEdit(root, lock.id, (y) => y.replace(/^status: active$/m, "status: abandoned"));
+  assert.throws(
+    () => execFileSync(NODE, [CLI, "lock", "activate", lock.id, "--root", root], { stdio: "pipe" }),
+    (e: unknown) => /cannot be activated/.test(String((e as { stderr?: Buffer }).stderr)),
+  );
 });
 
 test("run: mixed pre-existing dirt and run changes counts the run's delta only", async () => {

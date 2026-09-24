@@ -236,8 +236,9 @@ const TOOLS: ToolDef[] = [
       const lockId = str(a, "lockId");
       const lock = loadLock(root, lockId);
       if (!lock) return fail(`no such lock: ${lockId}`);
-      // draft → active, or re-activation of an active Lock (re-approval after a seal mismatch).
-      if (lock.status !== "draft" && lock.status !== "active") {
+      // draft → active, or re-approval of a Lock that can still run (active, verified,
+      // failed) after a seal mismatch. Only abandoned is history.
+      if (lock.status === "abandoned") {
         return fail(`lock ${lockId} has status "${lock.status}" — it cannot be activated`);
       }
       const index = await indexFor(root);

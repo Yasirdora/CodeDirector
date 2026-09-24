@@ -75,6 +75,40 @@ test("mcp: lists the eight workflow tools with schemas and descriptions", async 
   }
 });
 
+test("mcp: an edited failed lock is refused by run_locked until lock_activate re-approves it", async () => {
+  const root = makeGitRepo(FILES);
+  const { client, close } = await connect(root);
+  try {
+    const draft = await client.callTool({ name: "lock_draft", arguments: { utterance: "make math faster" } });
+    const lockId = JSON.parse(resultText(draft)).lockId as string;
+    const lockDir = path.join(root, ".codedirector", "locks");
+    const lockFile = path.join(lockDir, fs.readdirSync(lockDir).find((n) => n.startsWith(lockId))!);
+    const edit = (f: (y: string) => string) => fs.writeFileSync(lockFile, f(fs.readFileSync(lockFile, "utf8")));
+    edit((y) => y.replace("  files: []", '  files:\n    - "src/math.js"').replace("deny: []", 'deny:\n  - "src/secret.js"'));
+    assert.ok(!isError(await client.callTool({ name: "lock_activate", arguments: { lockId } })));
+    const write = (file: string) => ({
+      name: "run_locked",
+      arguments: { lockId, command: [NODE, "-e", `require("fs").appendFileSync(${JSON.stringify(file)},"// x\\n")`] },
+    });
+    assert.ok(isError(await client.callTool(write("src/secret.js"))), "the deny holds: the lock fails");
+
+    // the agent drops the deny by hand and tries again: refused, nothing runs
+    edit((y) => y.replace(/^deny:\n(?:  - .*\n)+/m, "deny: []\n"));
+    assert.ok(/^deny: \[\]$/m.test(fs.readFileSync(lockFile, "utf8")), "the deny really is gone");
+    const again = await client.callTool(write("src/secret.js"));
+    assert.ok(isError(again));
+    assert.ok(resultText(again).includes("seal mismatch"), resultText(again).slice(0, 300));
+
+    // the human approves the edited scope: the failed lock is re-sealed and runs
+    const act = await client.callTool({ name: "lock_activate", arguments: { lockId } });
+    assert.ok(!isError(act), resultText(act));
+    const ok = await client.callTool(write("src/math.js"));
+    assert.ok(!resultText(ok).includes("seal"), resultText(ok).slice(0, 300));
+  } finally {
+    await close();
+  }
+});
+
 test("mcp: full workflow — draft, activate, in-budget run, deny violation is an error", async () => {
   const root = makeGitRepo(FILES);
   const { client, close } = await connect(root);
