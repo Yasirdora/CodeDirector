@@ -317,8 +317,10 @@ far as possible, in ladder order (cheapest/strongest first):
 2. **Typecheck (proven when clean)** — if `tsconfig.json` exists and a
    compiler is available (`node_modules/typescript`, else
    `npx --no-install tsc`), run `tsc --noEmit` with a 120s timeout. Clean →
-   proven; errors → measured violation; no compiler or no tsconfig →
-   Unchecked with the reason named.
+   proven. The baseline records the errors that already existed before the
+   run (file, code and message, without positions), and only errors the run
+   added are a measured violation; errors that were all there before → held,
+   measured. No compiler or no tsconfig → Unchecked with the reason named.
 3. **Tests (measured)** — each `tests-pass` glob is expanded and run via
    `node --test` with a timeout; pass → measured, fail → measured violation
    with the failing test names, empty glob → **violated** (fail closed). A

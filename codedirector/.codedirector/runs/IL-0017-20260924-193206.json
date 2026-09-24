@@ -1,0 +1,180 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0017-20260924-193206.json",
+  "baselineSha256": "1de7bfbdb0680f6edd57b244568b6641a697bcf697b1de4561bfce8265cb7d7f",
+  "budget": {
+    "filesChanged": 6,
+    "linesChanged": 287,
+    "maxFiles": 6,
+    "maxLines": 315
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/baseline.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/typecheck.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/verify.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260924T193204519",
+    "createdAt": "2026-09-24T19:32:04.556Z",
+    "dirty": false,
+    "id": "ckpt-20260924T193204519",
+    "ref": "7086db4bfdb2c30f365b3812f2b103bc8ef273e0",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260924T193204519"
+  },
+  "command": [
+    "git",
+    "-C",
+    "/Users/x/codedirector",
+    "apply",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/f18134e9-a2b1-4be9-86e4-e051e895a434/scratchpad/patches/0003-spike-fix-3-typecheck-baseline.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-24T19:32:06.104Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "No existing test assertion is weakened or removed (the one exception is named in the lock that makes it) — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "A clean typecheck is still proven; a baseline without an error list (older, tampered, or no compiler at capture) keeps the strict reading — any error fails — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "Cost is named, not hidden: one extra tsc --noEmit per run when tsconfig.json exists (0.68 s on eDraft, measured 2026-09-24) — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0017",
+  "startedAt": "2026-09-24T19:32:06.093Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0017-20260924-193206.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 4
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0017-20260924-193206.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0017-20260924-193206.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · No existing test assertion is weakened or removed (the one exception is named in the lock that makes it)",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · A clean typecheck is still proven; a baseline without an error list (older, tampered, or no compiler at capture) keeps the strict reading — any error fails",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Cost is named, not hidden: one extra tsc --noEmit per run when tsconfig.json exists (0.68 s on eDraft, measured 2026-09-24)",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0017",
+    "verifiedAt": "2026-09-24T19:32:53.055Z",
+    "violations": []
+  },
+  "violations": []
+}

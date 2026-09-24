@@ -6,7 +6,8 @@
  *                              against the pre-captured baseline.
  *   2. Typecheck (proven)    — `tsc --noEmit` when a tsconfig exists and a
  *                              compiler is available; otherwise Unchecked
- *                              with the reason named.
+ *                              with the reason named. Only errors absent
+ *                              from the baseline are the run's.
  *   3. Tests (measured)      — each tests-pass glob run via `node --test`;
  *                              a Lock-level verifyCommand ("npm test", ...)
  *                              executed the same way.
@@ -35,6 +36,7 @@ import { Baseline, baselineFileHash, latestBaselinePath, loadBaseline } from "..
 import { dependencyFingerprint } from "../run/deps";
 import { runArgvProbe, runShellProbe, sha256 } from "../run/probe";
 import { runIsolated } from "../run/tree";
+import { newTypecheckErrors, probeTypecheck, typecheckErrors } from "../run/typecheck";
 import {
   countByClass,
   VerificationItem,
@@ -207,11 +209,6 @@ function verifyNoNewDependency(
 // ---------------------------------------------------------------------
 // Rung 2 — typecheck (proven when clean)
 
-function localTsc(rootDir: string): string | null {
-  const p = path.join(rootDir, "node_modules", "typescript", "bin", "tsc");
-  return fs.existsSync(p) ? p : null;
-}
-
 /** First diagnostic lines from compiler output (error lines preferred). */
 function compilerDiagnostics(stdout: string, stderr: string): string {
   const errorLines = stdout.split("\n").filter((l) => l.includes("error TS")).slice(0, 5);
@@ -220,54 +217,55 @@ function compilerDiagnostics(stdout: string, stderr: string): string {
   return any.length > 0 ? ` — output: ${any.join(" · ").slice(0, 300)}` : "";
 }
 
-function verifyTypecheck(rootDir: string, opts: VerifyOptions): VerificationItem[] {
+/**
+ * `tsc --noEmit`, judged against the errors the baseline recorded before the
+ * run: only errors the run added are its violation. A baseline without that
+ * record (captured before it existed, tampered, or taken when the compiler
+ * could not run) keeps the old strict reading — any error fails.
+ */
+function verifyTypecheck(rootDir: string, opts: VerifyOptions, baseline: Baseline | null): VerificationItem[] {
   if (opts.typecheck === false) return [];
   const subject = "typecheck · tsc --noEmit";
-  if (!fs.existsSync(path.join(rootDir, "tsconfig.json"))) {
+  const result = probeTypecheck(rootDir, { timeoutMs: opts.typecheckTimeoutMs, env: opts.env });
+  if (result.kind === "no-tsconfig") {
     return [uncheckedItem("typecheck", subject, "no tsconfig.json — typecheck rung skipped")];
   }
-  const timeout = opts.typecheckTimeoutMs ?? 120_000;
-  const tsc = localTsc(rootDir);
-  if (tsc) {
-    const probe = runIsolated(rootDir, () =>
-      runArgvProbe(rootDir, [process.execPath, tsc, "--noEmit", "-p", "."], timeout, opts.env),
-    );
-    if (probe.timedOut) {
-      return [uncheckedItem("typecheck", subject, `tsc --noEmit timed out after ${timeout}ms`)];
+  if (result.kind === "unavailable") return [uncheckedItem("typecheck", subject, result.reason)];
+  const { probe, how } = result;
+  const artifactRef = `${how} → exit ${probe.exitCode}`;
+  if (probe.exitCode === 0) {
+    return [{ source: "typecheck", subject, verdict: "held", evidenceClass: "proven", detail: "tsc --noEmit clean", artifactRef }];
+  }
+  const before = baseline?.typecheckErrors;
+  const after = typecheckErrors(probe.stdout);
+  if (before !== undefined && after.length > 0) {
+    const fresh = newTypecheckErrors(before, after);
+    if (fresh.length === 0) {
+      return [{
+        source: "typecheck",
+        subject,
+        verdict: "held",
+        evidenceClass: "measured",
+        detail: `tsc --noEmit: ${after.length} error(s), all present before the run — none new`,
+        artifactRef,
+      }];
     }
-    if (probe.error || probe.exitCode === null) {
-      return [uncheckedItem("typecheck", subject, `tsc could not run: ${probe.error ?? "spawn failed"}`)];
-    }
-    if (probe.exitCode === 0) {
-      return [{ source: "typecheck", subject, verdict: "held", evidenceClass: "proven", detail: "tsc --noEmit clean", artifactRef: `node node_modules/typescript/bin/tsc --noEmit -p . → exit 0` }];
-    }
-    const firstErrors = compilerDiagnostics(probe.stdout, probe.stderr);
     return [{
       source: "typecheck",
       subject,
       verdict: "violated",
       evidenceClass: "measured",
-      detail: `tsc --noEmit failed (exit ${probe.exitCode})${firstErrors}`,
-      artifactRef: `node node_modules/typescript/bin/tsc --noEmit -p . → exit ${probe.exitCode}`,
+      detail: `tsc --noEmit: ${fresh.length} new error(s) since the baseline: ${fresh.slice(0, 5).map((e) => e.line).join(" · ")}`,
+      artifactRef,
     }];
   }
-  // No local install: probe npx without allowing downloads.
-  const probe = runIsolated(rootDir, () => runShellProbe(rootDir, "npx --no-install tsc --noEmit", timeout, opts.env));
-  const out = `${probe.stdout}\n${probe.stderr}`;
-  if (probe.error || probe.timedOut || /could not determine executable|npm error|not installed|not the tsc command/i.test(out)) {
-    return [uncheckedItem("typecheck", subject, "typescript compiler unavailable (no node_modules/typescript; `npx --no-install tsc` found no real compiler)")];
-  }
-  if (probe.exitCode === 0) {
-    return [{ source: "typecheck", subject, verdict: "held", evidenceClass: "proven", detail: "tsc --noEmit clean", artifactRef: `npx --no-install tsc --noEmit → exit 0` }];
-  }
-  const firstErrors = compilerDiagnostics(probe.stdout, probe.stderr);
   return [{
     source: "typecheck",
     subject,
     verdict: "violated",
     evidenceClass: "measured",
-    detail: `tsc --noEmit failed (exit ${probe.exitCode})${firstErrors}`,
-    artifactRef: `npx --no-install tsc --noEmit → exit ${probe.exitCode}`,
+    detail: `tsc --noEmit failed (exit ${probe.exitCode})${compilerDiagnostics(probe.stdout, probe.stderr)}`,
+    artifactRef,
   }];
 }
 
@@ -437,7 +435,7 @@ export function verifyWithBaseline(
   let items: VerificationItem[] = [
     ...verifyApiUnchanged(lock, baseline, baselineRel, indexAfter),
     ...verifyNoNewDependency(rootDir, lock, baseline, baselineRel),
-    ...verifyTypecheck(rootDir, opts),
+    ...verifyTypecheck(rootDir, opts, tampered ? null : baseline),
     ...verifyTestsPass(rootDir, lock, opts),
     ...verifyCommand(rootDir, lock, opts),
     ...verifyOutputUnchanged(rootDir, lock, baseline, baselineRel, opts),

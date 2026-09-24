@@ -367,3 +367,83 @@ test("verify: a command that edits the baseline invalidates the run (tamper dete
   assert.equal(outcome.record.verification!.baselineTampered, true);
   assert.ok(outcome.record.baselineSha256, "capture-time hash recorded in the run record");
 });
+
+/** A committed TypeScript project with a local compiler, and an active, sealed lock over `budget`. */
+async function tsProject(files: Record<string, string>, budget: string[]): Promise<{ root: string; lock: VibeCheck }> {
+  const codedirModules = path.join(__dirname, "..", "..", "node_modules");
+  const root = makeGitRepo({
+    "tsconfig.json": '{"compilerOptions":{"strict":true,"noEmit":true},"include":["src"]}\n',
+    ...files,
+  });
+  fs.symlinkSync(codedirModules, path.join(root, "node_modules"), "dir");
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-qm", "link node_modules"]);
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "tidy", { now: "2026-09-11T00:00:00.000Z", createdBy: "test" });
+  lock.budget = { files: budget, symbols: [], maxFiles: budget.length, maxLines: 100 };
+  lock.status = "active";
+  saveLock(root, lock);
+  sealLock(root, lock);
+  return { root, lock };
+}
+
+test("typecheck: another session's uncommitted type error does not fail a run that did not cause it", async () => {
+  // Field case: eDraft IL-0090 — a Swift-only run failed on a half-written
+  // SvelteKit route another session was writing. Reproduced on 0.4.5.
+  const { root, lock } = await tsProject(
+    { "src/other.ts": "export const n: number = 1;\n", "Sources/App.swift": "struct App {}\n" },
+    ["Sources/App.swift"],
+  );
+  fs.writeFileSync(path.join(root, "src/other.ts"), 'export const n: number = "one";\n');
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("Sources/App.swift", "// x\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  const tc = outcome.record.verification!.items.find((i) => i.source === "typecheck")!;
+  assert.equal(tc.verdict, "held");
+  assert.equal(tc.evidenceClass, "measured", "an error exists, so this is not proven-clean");
+  assert.match(tc.detail!, /1 error\(s\), all present before the run — none new/);
+});
+
+test("typecheck: a committed type error is not new; an error the run adds still fails, named alone", async () => {
+  const { root, lock } = await tsProject(
+    { "src/old.ts": 'export const n: number = "one";\n', "src/ok.ts": "export const x: number = 1;\n" },
+    ["src/ok.ts"],
+  );
+  const clean = await runWithLock(root, lock.id, [NODE, "-e", append("src/ok.ts", "export const y: number = 2;\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(clean.exitCode, 0, clean.record.violations.join("; "));
+  const broken = await runWithLock(root, lock.id, [NODE, "-e", append("src/ok.ts", 'export const z: number = "nope";\n')], {
+    stdio: "pipe",
+  });
+  assert.equal(broken.exitCode, 1);
+  const v = broken.record.violations.find((x) => x.startsWith("VERIFY typecheck"))!;
+  assert.match(v, /1 new error\(s\) since the baseline: src\/ok\.ts\(\d+,\d+\)/);
+  assert.ok(!v.includes("src/old.ts"), `the old error is not blamed: ${v}`);
+});
+
+test("typecheck: moving a pre-existing error down its file does not make it new", async () => {
+  const { root, lock } = await tsProject({ "src/ok.ts": 'export const n: number = "one";\n' }, ["src/ok.ts"]);
+  const prepend = `const f="src/ok.ts";const fs=require("fs");fs.writeFileSync(f,"// a\\n// b\\n"+fs.readFileSync(f,"utf8"))`;
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", prepend], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+});
+
+test("typecheck: a run that breaks a caller it never touched is caught", async () => {
+  // Why the rung diffs before/after instead of looking only at the files the
+  // run changed: a changed signature surfaces as an error somewhere else.
+  const { root, lock } = await tsProject(
+    {
+      "src/old.ts": 'export const n: number = "one";\n',
+      "src/lib.ts": "export function f(): number { return 1; }\n",
+      "src/use.ts": 'import { f } from "./lib";\nexport const k: number = f();\n',
+    },
+    ["src/lib.ts"],
+  );
+  const retype = `require("fs").writeFileSync("src/lib.ts","export function f(): string { return \\"1\\"; }\\n")`;
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", retype], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 1);
+  const v = outcome.record.violations.find((x) => x.startsWith("VERIFY typecheck"))!;
+  assert.match(v, /1 new error\(s\) since the baseline: src\/use\.ts/);
+});

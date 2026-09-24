@@ -215,7 +215,12 @@ export async function runWithLock(
 
   // 2. refresh index + capture baseline (outside the source tree)
   const { index: indexBefore } = await buildIndex(rootDir);
-  const baseline: Baseline = captureBaseline(rootDir, lock, indexBefore, checkpoint.tag);
+  const vo = opts.verify === false ? { typecheck: false } : (opts.verifyOptions ?? {});
+  const baseline: Baseline = captureBaseline(rootDir, lock, indexBefore, checkpoint.tag, {
+    typecheck: vo.typecheck,
+    typecheckTimeoutMs: vo.typecheckTimeoutMs,
+    env: vo.env,
+  });
   const baselinePath = saveBaseline(rootDir, baseline);
   // Hash the baseline at capture: the executed command could edit files under
   // .codedirector/baselines/ and fake a "held" verdict. The hash goes into

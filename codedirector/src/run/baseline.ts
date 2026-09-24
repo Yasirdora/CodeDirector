@@ -19,6 +19,7 @@ import { signatureHash } from "../lock/check";
 import { runShellProbe, sha256 } from "./probe";
 import { currentHead, listHidden, runIsolated, snapshotWorkTree, WorkTreeSnapshot } from "./tree";
 import { dependencyFingerprint } from "./deps";
+import { probeTypecheck, typecheckErrors } from "./typecheck";
 
 /**
  * Pre-change state of one output-unchanged KEEP clause: the clause's command
@@ -70,11 +71,23 @@ export interface Baseline {
    * never counts against maxLines. Absent when the tree was clean.
    */
   treeDir?: string;
+  /**
+   * `tsc --noEmit` errors at capture, one key per error (file, code, message —
+   * no position). The typecheck rung fails a run only for errors not in this
+   * list. Absent when no typecheck result was possible at capture (no
+   * tsconfig, no compiler, timeout) or it was switched off; empty when clean.
+   */
+  typecheckErrors?: string[];
 }
 
 export interface BaselineOptions {
   /** Per-command timeout for output-unchanged probes (default 30s). */
   outputTimeoutMs?: number;
+  /** Record the pre-run typecheck errors (default true; mirrors VerifyOptions.typecheck). */
+  typecheck?: boolean;
+  /** tsc --noEmit timeout (default 120s). */
+  typecheckTimeoutMs?: number;
+  env?: NodeJS.ProcessEnv;
 }
 
 export function baselinesDir(rootDir: string): string {
@@ -175,6 +188,13 @@ export function captureBaseline(
     }
   }
 
+  // Pre-run type errors, so the run is judged only on the ones it adds.
+  let typecheckKeys: string[] | undefined;
+  if (opts.typecheck !== false) {
+    const tc = probeTypecheck(rootDir, { timeoutMs: opts.typecheckTimeoutMs, env: opts.env });
+    if (tc.kind === "ran") typecheckKeys = tc.probe.exitCode === 0 ? [] : typecheckErrors(tc.probe.stdout).map((e) => e.key);
+  }
+
   const status = workTreeStatusPorcelain(rootDir);
   const snap = snapshotWorkTree(rootDir);
   const capturedAt = new Date().toISOString();
@@ -192,6 +212,7 @@ export function captureBaseline(
     workTreeHashes: snap.hashes,
     hidden: listHidden(rootDir),
     ...(treeDir !== undefined ? { treeDir } : {}),
+    ...(typecheckKeys !== undefined ? { typecheckErrors: typecheckKeys } : {}),
   };
 }
 

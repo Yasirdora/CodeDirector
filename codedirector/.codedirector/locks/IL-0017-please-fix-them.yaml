@@ -1,0 +1,79 @@
+schemaVersion: 1
+id: IL-0017
+status: verified
+utterance: please fix them
+goal: "The typecheck rung fails a run only for type errors the run added: the baseline records the tsc --noEmit errors that existed before the run (file, code and message, without positions), errors that were all there before read as held, and a new error — including one in a file the run never touched — is still a violation."
+interpretation: |
+  SIZED BY A SPIKE on top of IL-0016's patch. Reproduced on the installed build: a
+  Swift-only lock failed on a TypeScript error it never touched, whether the
+  error was uncommitted (another session) or committed at HEAD — the rung runs
+  tsc on the whole project with no before/after comparison.
+
+  THE FIX: the tsc probe moves into src/run/typecheck.ts, shared by the
+  baseline and the ladder (verify.ts cannot be imported by baseline.ts — it
+  imports baseline). captureBaseline records typecheckErrors: one key per error
+  (file, code, message — no position). The rung fails a run only for errors not
+  in that multiset; all-pre-existing errors read held/measured. A before/after
+  diff, not "errors in changed files", because a changed signature breaks an
+  untouched caller. run.ts passes the typecheck toggle, timeout and env to the
+  baseline; a tampered baseline is ignored (strict reading).
+
+  TESTS: verify.test.ts +4. FAIL-BEFORE: all 4 fail; 3 on behaviour, and "breaks
+  a caller it never touched" only on wording — the old code also caught it; it
+  guards the diff design. AFTER: npm test 192/192.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones
+  - kind: custom
+    text: No existing test assertion is weakened or removed (the one exception is named in the lock that makes it)
+  - kind: custom
+    text: A clean typecheck is still proven; a baseline without an error list (older, tampered, or no compiler at capture) keeps the strict reading — any error fails
+  - kind: custom
+    text: "Cost is named, not hidden: one extra tsc --noEmit per run when tsconfig.json exists (0.68 s on eDraft, measured 2026-09-24)"
+deny:
+  - src/lock/**
+  - src/mcp/**
+  - src/checkpoint/**
+  - src/cli.ts
+  - src/run/classify.ts
+  - src/run/tree.ts
+  - src/core/**
+  - src/report/**
+  - src/hook/**
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - eval/**
+  - test/fixtures/**
+  - package.json
+  - package-lock.json
+change: Judge the typecheck on the errors a run added, against a baseline of the errors before it
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/run/typecheck.ts
+    - src/run/baseline.ts
+    - src/run/run.ts
+    - src/verify/verify.ts
+    - test/verify.test.ts
+    - README.md
+  symbols: []
+  maxFiles: 6
+  maxLines: 315
+accept:
+  - Another session's uncommitted type error does not fail a Swift-only run (held, measured, "none new")
+  - A committed type error is not new; an error the run adds fails, and only the new one is named
+  - Moving a pre-existing error down its file does not make it new
+  - A run that breaks a caller it never touched is still a violation
+  - npm test green in full
+assumptions:
+  - text: "Owner's words, 2026-09-24: \"please fix them\" — the four cdir faults verified by reproduction on the installed 0.4.5 (2b9ddde): the seal hole, pre-existing untracked folders and deletions read as the run's change, a typecheck that blames runs for errors they did not cause, and tests-pass reporting a Swift suite as failing. One lock each, applied in order IL-0015 → IL-0018."
+    source: user
+    confirmed: true
+  - text: "Budget set by hand from the spike; the drafter's anchors (fixture, gitPrefix, double, square — \"fix\" fragments) and its suggested deny of test/**/*.test.* were discarded: the fix needs its tests."
+    source: system
+    confirmed: false
+createdAt: 2026-09-24 18:42:10.237000+00:00
+createdBy: Yasirdora
