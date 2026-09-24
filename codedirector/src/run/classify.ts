@@ -19,6 +19,7 @@ import { Baseline } from "./baseline";
 // stays a one-way edge.
 import type { BudgetStats, RunRecord } from "./run";
 import {
+  ABSENT,
   currentHead,
   gitToAbsRel,
   listHidden,
@@ -158,8 +159,8 @@ function changedFilesSinceBaseline(
     const gitPath = prefix && !rel.startsWith("..") ? prefix + rel : rel.replace(/^\.\.\//, "");
     const preHash = pre[gitPath] ?? pre[rel];
     if (preHash !== undefined && !committed.has(rel)) {
-      const now = hashGitPath(rootDir, gitPath) ?? hashGitPath(rootDir, rel);
-      if (now === preHash) continue; // pre-existing dirt, untouched
+      const now = hashGitPath(rootDir, gitPath) ?? hashGitPath(rootDir, rel) ?? ABSENT;
+      if (now === preHash) continue; // pre-existing dirt (or deletion), untouched
     }
     out.push({ path: rel, status });
   }
@@ -318,8 +319,8 @@ export function changedLineCount(rootDir: string, untrackedPaths: string[], base
       const rel = toRootRelative(prefix, m[3]);
       const preHash = pre[m[3]] ?? (rel !== null ? pre[rel] : undefined);
       if (preHash !== undefined) {
-        const now = hashGitPath(rootDir, m[3]) ?? (rel !== null ? hashGitPath(rootDir, rel) : null);
-        if (now === preHash) continue; // pre-existing dirt, untouched by the run
+        const now = hashGitPath(rootDir, m[3]) ?? (rel !== null ? hashGitPath(rootDir, rel) : null) ?? ABSENT;
+        if (now === preHash) continue; // pre-existing dirt (or deletion), untouched by the run
       }
       total += lineDelta(rootDir, baseline?.treeDir, m[3], preHash, parseInt(m[1], 10) + parseInt(m[2], 10));
     }

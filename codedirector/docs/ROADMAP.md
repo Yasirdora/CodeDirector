@@ -33,6 +33,21 @@ patch` holds. A run that adds a dependency is still violated.
 
 ### Untracked directories are never expanded into their files
 
+**Status: landed (IL-0016)** for the verdict, the line count and the
+checkpoint. `git status` now lists untracked files one by one
+(`--untracked-files=all`), and a file already deleted when the baseline is
+captured gets a fingerprint of its own, so neither a pre-existing untracked
+folder nor a pre-existing deletion reads as the run's change (eDraft IL-0045's
+three PNGs were the deletion case). The tolerated OUT-OF-BUDGET that
+`test/run.test.ts` pinned is gone. Still open, both in undo:
+
+- The `undo --force` preview lists pre-existing untracked files as "will be
+  LOST" and then leaves them in place.
+- `undo --force` brings back a tracked file that was already deleted before
+  the checkpoint (`git reset --hard`), undoing someone else's deletion.
+
+The evidence below is kept as the record.
+
 **Found in:** eDraft IL-0028, 2026-09-17.
 
 **What happens:** a folder that was already untracked before a run reads as a

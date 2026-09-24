@@ -1,0 +1,161 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0016-20260924-193116.json",
+  "baselineSha256": "c050d888056fe2ff732a2c61e412237ec345481ad0a9295d2189a2e99a9363d5",
+  "budget": {
+    "filesChanged": 5,
+    "linesChanged": 113,
+    "maxFiles": 5,
+    "maxLines": 125
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/ROADMAP.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/checkpoint/index.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/classify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/tree.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/run.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260924T193114176",
+    "createdAt": "2026-09-24T19:31:14.265Z",
+    "dirty": false,
+    "id": "ckpt-20260924T193114176",
+    "ref": "d9c2e30a6a331b7e832e49b874a8c1b6f4781892",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260924T193114176"
+  },
+  "command": [
+    "git",
+    "-C",
+    "/Users/x/codedirector",
+    "apply",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/f18134e9-a2b1-4be9-86e4-e051e895a434/scratchpad/patches/0002-spike-fix-2-untracked-folders-deletions.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-24T19:31:16.337Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "No existing test assertion is weakened or removed (the one exception is named in the lock that makes it) — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "A run that edits a file inside a pre-existing untracked folder, or deletes a denied file, is still caught; untracked files survive undo --force exactly as before — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0016",
+  "startedAt": "2026-09-24T19:31:16.327Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0016-20260924-193116.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 3
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0016-20260924-193116.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0016-20260924-193116.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · No existing test assertion is weakened or removed (the one exception is named in the lock that makes it)",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · A run that edits a file inside a pre-existing untracked folder, or deletes a denied file, is still caught; untracked files survive undo --force exactly as before",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0016",
+    "verifiedAt": "2026-09-24T19:31:42.014Z",
+    "violations": []
+  },
+  "violations": []
+}

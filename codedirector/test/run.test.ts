@@ -494,10 +494,67 @@ test("run: a new file in a new folder counts its real lines", async () => {
   const mk = `require("fs").mkdirSync("notes",{recursive:true});require("fs").writeFileSync("notes/new.md",${JSON.stringify(body)})`;
   const outcome = await runWithLock(root, lock.id, [NODE, "-e", mk], { stdio: "pipe" });
   assert.equal(outcome.record.budget.linesChanged, 127, "the file's real line count, not the collapsed folder's 0");
-  // The OUT-OF-BUDGET on the collapsed ?? notes/ entry is the untracked-directory
-  // roadmap item — deliberately out of IL-0014's scope; this tolerance goes with it.
+  // Untracked files are listed one by one, so the new file is judged by its
+  // own path — the budgeted notes/new.md — not as a collapsed "notes/".
+  assert.deepEqual(outcome.record.violations, []);
+  assert.deepEqual(
+    outcome.record.changed.map((c) => [c.path, c.class]),
+    [["notes/new.md", "in-budget"]],
+  );
+});
+
+test("run: an untracked folder that existed before the run is not the run's change", async () => {
+  // Field case: eDraft IL-0028 — the owner's untracked .githooks/ read as
+  // OUT-OF-BUDGET after a run that never touched it, and failed the lock.
+  const { root, lock } = await setup();
+  fs.mkdirSync(path.join(root, "tools"), { recursive: true });
+  fs.writeFileSync(path.join(root, "tools/hook.sh"), "#!/bin/sh\necho hi\n");
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// faster\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  assert.deepEqual(outcome.record.changed.map((c) => c.path), ["src/preview.ts"]);
+  assert.equal(outcome.record.budget.linesChanged, 1, "the folder's lines are not charged to the run");
+});
+
+test("run: editing a file inside a pre-existing untracked folder is caught, and undo restores it", async () => {
+  const { root, lock } = await setup();
+  fs.mkdirSync(path.join(root, "tools"), { recursive: true });
+  fs.writeFileSync(path.join(root, "tools/hook.sh"), "#!/bin/sh\necho hi\n");
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("tools/hook.sh", "rm -rf /\n")], {
+    stdio: "pipe",
+  });
   assert.ok(
-    outcome.record.violations.some((v) => v.includes("OUT-OF-BUDGET") && v.includes("notes/")),
-    `expected the known collapsed-folder classification gap; violations: ${outcome.record.violations.join("; ")}`,
+    outcome.record.violations.some((v) => v.startsWith("OUT-OF-BUDGET: tools/hook.sh")),
+    outcome.record.violations.join("; "),
+  );
+  undo(root, { force: true });
+  assert.equal(fs.readFileSync(path.join(root, "tools/hook.sh"), "utf8"), "#!/bin/sh\necho hi\n", "the checkpoint had its bytes");
+});
+
+test("run: a file deleted before the run is not the run's change, and stays deleted", async () => {
+  // Field case: eDraft IL-0045 — three PNGs deleted before the run read as
+  // DENIED, with their whole line count charged to the budget.
+  const { root, lock } = await setup((l) => {
+    l.verifyCommand = `${JSON.stringify(NODE)} -e 1`; // runs isolated: the tree is restored after it
+  });
+  fs.rmSync(path.join(root, "src/export.ts")); // a denied path, deleted by someone else
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// faster\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  assert.deepEqual(outcome.record.changed.map((c) => c.path), ["src/preview.ts"]);
+  assert.equal(outcome.record.budget.linesChanged, 1);
+  assert.equal(fs.existsSync(path.join(root, "src/export.ts")), false, "not resurrected from HEAD");
+});
+
+test("run: a run that deletes a denied file is still caught", async () => {
+  const { root, lock } = await setup();
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", 'require("fs").rmSync("src/export.ts")'], {
+    stdio: "pipe",
+  });
+  assert.ok(
+    outcome.record.violations.some((v) => v.startsWith("DENY: src/export.ts")),
+    outcome.record.violations.join("; "),
   );
 });

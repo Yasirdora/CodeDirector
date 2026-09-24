@@ -1,0 +1,88 @@
+schemaVersion: 1
+id: IL-0016
+status: verified
+utterance: please fix them
+goal: "A run is not blamed for files that were already untracked or already deleted before it: git status lists untracked files one by one, a pre-existing deletion gets a fingerprint in the baseline, and neither reads as the run's change (verdict, file count or line count), while a run that edits such a file or deletes a denied file is still caught."
+interpretation: |
+  SIZED BY A SPIKE on top of IL-0015's patch. Reproduced on the installed build: a
+  pre-existing untracked folder read as OUT-OF-BUDGET and a pre-existing deleted
+  file as DENY, failing the lock; pre-existing modified files and loose untracked
+  files were already ignored correctly.
+
+  CAUSES: `git status --porcelain` collapses an untracked folder to one `?? dir/`
+  line, which the checkpoint cannot read (EISDIR) and the baseline cannot hash;
+  a deleted file has no bytes, so the baseline recorded no hash, and "unchanged
+  since baseline" could never match.
+
+  THE FIX: gitStatusPorcelain passes --untracked-files=all (one change, every
+  consumer); snapshotWorkTree records ABSENT for a dirty path with no bytes;
+  both judging sites (the classifier and the line counter) read "still absent"
+  as unchanged; restoreWorkTree keeps an ABSENT path deleted instead of checking
+  it out from HEAD (load-bearing: without it the verify step resurrects the
+  file — proven by removing it in the spike).
+
+  EXISTING TEST CHANGED: "a new file in a new folder counts its real lines"
+  pinned the tolerated OUT-OF-BUDGET on "notes/"; its own comment says the
+  tolerance goes with this roadmap item. It now asserts no violations and the
+  in-budget notes/new.md — stricter, not weaker.
+
+  TESTS: run.test.ts +4 new, 1 updated. FAIL-BEFORE: 4 fail (3 new + the updated
+  one); the "deletes a denied file" guard passes before and after. AFTER: npm
+  test 188/188. ROADMAP marks the item landed and names what stays open, both in
+  undo: the preview lists pre-existing untracked files as LOST, and undo --force
+  brings back a file deleted before the checkpoint (reproduced on both builds).
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: npm test passes in full — 178 tests at 2b9ddde, plus this lock's new ones
+  - kind: custom
+    text: No existing test assertion is weakened or removed (the one exception is named in the lock that makes it)
+  - kind: custom
+    text: A run that edits a file inside a pre-existing untracked folder, or deletes a denied file, is still caught; untracked files survive undo --force exactly as before
+deny:
+  - src/lock/**
+  - src/mcp/**
+  - src/verify/**
+  - src/cli.ts
+  - src/core/**
+  - src/report/**
+  - src/hook/**
+  - dist/**
+  - node_modules/**
+  - examples/**
+  - eval/**
+  - test/fixtures/**
+  - package.json
+  - package-lock.json
+change: List untracked files one by one and fingerprint pre-existing deletions
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/checkpoint/index.ts
+    - src/run/tree.ts
+    - src/run/classify.ts
+    - test/run.test.ts
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 5
+  maxLines: 125
+accept:
+  - An untracked folder that existed before the run is not in the run's changed files, verdict or line count
+  - A file deleted before the run is not the run's change, and is still deleted after an isolated verify step
+  - A new file in a new folder is judged by its own path (in-budget), with its real line count
+  - Editing a file inside a pre-existing untracked folder is OUT-OF-BUDGET, and undo --force restores its bytes
+  - A run that deletes a denied file is still DENY
+  - npm test green in full
+assumptions:
+  - text: "Owner's words, 2026-09-24: \"please fix them\" — the four cdir faults verified by reproduction on the installed 0.4.5 (2b9ddde): the seal hole, pre-existing untracked folders and deletions read as the run's change, a typecheck that blames runs for errors they did not cause, and tests-pass reporting a Swift suite as failing. One lock each, applied in order IL-0015 → IL-0018."
+    source: user
+    confirmed: true
+  - text: "--untracked-files=all applies wherever git status is read (checkpoint, classify, snapshot, undo): a repo with a large untracked, un-ignored folder pays for listing it file by file."
+    source: system
+    confirmed: false
+  - text: "Budget set by hand from the spike; the drafter's anchors (fixture, gitPrefix, double, square — \"fix\" fragments) and its suggested deny of test/**/*.test.* were discarded: the fix needs its tests."
+    source: system
+    confirmed: false
+createdAt: 2026-09-24 18:42:08.371000+00:00
+createdBy: Yasirdora

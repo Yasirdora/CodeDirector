@@ -102,8 +102,15 @@ export function dirtyPaths(porcelain: string): string[] {
   return [...new Set(out)].sort();
 }
 
+/**
+ * `git status --porcelain`, untracked files listed one by one. Without
+ * `--untracked-files=all` git collapses an untracked folder to a single
+ * `?? dir/` line: the checkpoint cannot read it (EISDIR), the baseline cannot
+ * hash it, and a folder that existed before a run read as that run's change
+ * (eDraft IL-0028, .githooks/). Every consumer wants files, not folders.
+ */
 export function gitStatusPorcelain(rootDir: string): string {
-  return git(rootDir, ["status", "--porcelain"]);
+  return git(rootDir, ["status", "--porcelain", "--untracked-files=all"]);
 }
 
 /**

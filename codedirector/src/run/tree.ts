@@ -37,6 +37,14 @@ function git(rootDir: string, args: string[]): string {
   });
 }
 
+/**
+ * The work-tree hash of a dirty path that does not exist — a file already
+ * deleted when the snapshot was taken. It is not a sha256, so it can never
+ * equal a real file's hash. Without it a pre-existing deletion had no entry,
+ * and every later run read it as its own change (eDraft IL-0045: three PNGs).
+ */
+export const ABSENT = "absent";
+
 export function sha256Bytes(data: Buffer | string): string {
   return createHash("sha256").update(data).digest("hex");
 }
@@ -130,6 +138,8 @@ export function snapshotWorkTree(rootDir: string): WorkTreeSnapshot {
       if (text !== null) {
         contents[p] = text;
         hashes[p] = sha256Bytes(text);
+      } else {
+        hashes[p] = ABSENT;
       }
       if (status === "??") untracked.push(p);
     }
@@ -215,6 +225,11 @@ export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): void {
   for (const p of candidates) {
     if (!(p in snap.hashes) || p in snap.contents) continue;
     const now = readGitPath(rootDir, p);
+    if (snap.hashes[p] === ABSENT) {
+      // Deleted at snapshot: keep it deleted (a probe that recreated it loses it).
+      if (now !== null) fs.rmSync(path.join(rootDir, gitToAbsRel(rootDir, p)), { force: true });
+      continue;
+    }
     if (now === null || sha256Bytes(now) !== snap.hashes[p]) stale.push(p);
   }
   for (let i = 0; i < stale.length; i += CHECKOUT_BATCH) {
