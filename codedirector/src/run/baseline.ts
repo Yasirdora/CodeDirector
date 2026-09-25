@@ -20,6 +20,7 @@ import { runShellProbe, sha256 } from "./probe";
 import { currentHead, listHidden, runIsolated, snapshotWorkTree, WorkTreeSnapshot } from "./tree";
 import { dependencyFingerprint } from "./deps";
 import { probeTypecheck, typecheckErrors } from "./typecheck";
+import { ProbePutBack } from "../verify/types";
 
 /**
  * Pre-change state of one output-unchanged KEEP clause: the clause's command
@@ -88,6 +89,8 @@ export interface BaselineOptions {
   /** tsc --noEmit timeout (default 120s). */
   typecheckTimeoutMs?: number;
   env?: NodeJS.ProcessEnv;
+  /** Collects what the baseline's probes changed and had put back. */
+  putBack?: ProbePutBack[];
 }
 
 export function baselinesDir(rootDir: string): string {
@@ -165,7 +168,11 @@ export function captureBaseline(
   for (const clause of lock.keep) {
     if (clause.kind !== "output-unchanged" || !clause.command) continue;
     capturedAnyOutput = true;
-    const probe = runIsolated(rootDir, () => runShellProbe(rootDir, clause.command!, outputTimeout));
+    const probe = runIsolated(
+      rootDir,
+      () => runShellProbe(rootDir, clause.command!, outputTimeout),
+      (p) => opts.putBack?.push({ probe: `baseline · output-unchanged · ${clause.command}`, ...p }),
+    );
     if (probe.error || probe.timedOut) {
       outputs[clause.command] = {
         command: clause.command,
@@ -191,7 +198,11 @@ export function captureBaseline(
   // Pre-run type errors, so the run is judged only on the ones it adds.
   let typecheckKeys: string[] | undefined;
   if (opts.typecheck !== false) {
-    const tc = probeTypecheck(rootDir, { timeoutMs: opts.typecheckTimeoutMs, env: opts.env });
+    const tc = probeTypecheck(rootDir, {
+      timeoutMs: opts.typecheckTimeoutMs,
+      env: opts.env,
+      onPutBack: (p) => opts.putBack?.push({ probe: "baseline · typecheck · tsc --noEmit", ...p }),
+    });
     if (tc.kind === "ran") typecheckKeys = tc.probe.exitCode === 0 ? [] : typecheckErrors(tc.probe.stdout).map((e) => e.key);
   }
 

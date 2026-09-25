@@ -18,6 +18,9 @@ main (02a6ee0) the same day.
   as cdir's own file, because cdir writes its ignore block there, so a run's
   edits to it are not in the changed files, the budget or the line count —
   even when the lock's `deny` names `.gitignore`.
+- **Update 2026-09-25:** cdir no longer writes to the project's
+  `.gitignore`; its rules are in `.codedirector/.gitignore`. The exemption
+  is now only needed where the old block is still in `.gitignore`.
 - So a run can hide what it creates. Reproduced: a lock budgeting `src/a.ts`
   and denying `.gitignore`; a run that edits `src/a.ts`, creates `notes.txt`
   and appends `notes.txt` to `.gitignore`. Verdict: VERIFIED, "1 changed".

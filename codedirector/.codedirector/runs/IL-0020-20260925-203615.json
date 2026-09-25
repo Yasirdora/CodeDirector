@@ -1,0 +1,182 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0020-20260925-203615.json",
+  "baselineSha256": "a74bb5ee86fc4095c26992d3afbbf1822a00914a708e8006a9b5606f39bf7660",
+  "budget": {
+    "filesChanged": 12,
+    "linesChanged": 408,
+    "maxFiles": 12,
+    "maxLines": 450
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/ROADMAP.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/store.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/baseline.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/tree.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/typecheck.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/types.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/scope.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/verify.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260925T203610375",
+    "createdAt": "2026-09-25T20:36:10.415Z",
+    "dirty": false,
+    "id": "ckpt-20260925T203610375",
+    "ref": "5b049036afc13e5a0364ac935f00a7019ff94a03",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260925T203610375"
+  },
+  "command": [
+    "rsync",
+    "-a",
+    "--files-from=/private/tmp/claude-501/-Users-x-Documents-edraft/f18134e9-a2b1-4be9-86e4-e051e895a434/scratchpad/il0020-files.txt",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/f18134e9-a2b1-4be9-86e4-e051e895a434/scratchpad/cd1/codedirector/",
+    "./"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-25T20:36:15.569Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "Existing behavior is unchanged apart from the two fixes (the whole suite passes) — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "Nothing is published or pushed — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0020",
+  "startedAt": "2026-09-25T20:36:15.548Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0020-20260925-203615.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 2
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0020-20260925-203615.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0020-20260925-203615.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Existing behavior is unchanged apart from the two fixes (the whole suite passes)",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Nothing is published or pushed",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0020",
+    "verifiedAt": "2026-09-25T20:37:14.999Z",
+    "violations": []
+  },
+  "violations": []
+}

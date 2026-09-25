@@ -32,6 +32,7 @@ import {
   countByClass,
   EvidenceClass,
   enforceArtifactRule,
+  ProbePutBack,
   VerificationItem,
   VerificationReport,
 } from "../verify/types";
@@ -118,6 +119,26 @@ function computeFindings(index: RepoIndex, changed: ClassifiedChange[]): Finding
   return findings;
 }
 
+/**
+ * A probe changed or added files, and they were put back. Named, because a
+ * probe can't tell its own writes from another session's: if someone was
+ * editing those files during the check, their version is in the kept folder.
+ */
+export function putBackFinding(p: ProbePutBack): Finding {
+  const list = (files: string[]) => files.slice(0, 5).join(", ") + (files.length > 5 ? ` and ${files.length - 5} more` : "");
+  const parts = [
+    ...(p.restored.length > 0 ? [`changed ${p.restored.length} file(s), put back as they were: ${list(p.restored)}`] : []),
+    ...(p.removed.length > 0 ? [`added ${p.removed.length} file(s), removed: ${list(p.removed)}`] : []),
+  ];
+  return {
+    text:
+      `${p.probe} ${parts.join("; it ")}.` +
+      (p.keptIn ? ` The versions it left are in ${p.keptIn}/ — if another session edited these files during the check, its work is there.` : ""),
+    evidenceClass: "asserted",
+    ...(p.keptIn ? { artifactRef: p.keptIn } : {}),
+  };
+}
+
 export async function buildReport(
   rootDir: string,
   lockId: string,
@@ -161,6 +182,8 @@ export async function buildReport(
     const index = opts.index ?? (await buildIndex(rootDir)).index;
     findings = computeFindings(index, run.changed);
   }
+  // Always named, whatever else is: files were moved aside.
+  findings.push(...(verification.putBack ?? []).map(putBackFinding));
 
   const violations = rejudged
     ? [...rejudged.violations, ...verification.violations]

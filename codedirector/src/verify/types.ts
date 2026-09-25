@@ -15,6 +15,7 @@
  */
 
 import { KeepClauseKind } from "../lock/types";
+import { PutBack } from "../run/tree";
 
 export type EvidenceClass = "measured" | "proven" | "asserted" | "unchecked";
 
@@ -45,6 +46,12 @@ export interface VerificationItem {
   reason?: string;
 }
 
+/** What one probe (a verifyCommand, a test run, the typecheck…) left behind and had put back. */
+export interface ProbePutBack extends PutBack {
+  /** The check that ran: "verifyCommand · npm test". */
+  probe: string;
+}
+
 export interface VerificationReport {
   lockId: string;
   verifiedAt: string;
@@ -53,6 +60,12 @@ export interface VerificationReport {
   /** True when the baseline file's hash no longer matches the run record. */
   baselineTampered?: boolean;
   items: VerificationItem[];
+  /**
+   * Files a probe changed or added, put back as they were before it — with
+   * where its versions were moved. Absent when every probe left the tree as
+   * it found it. Includes the baseline's probes when a run passes them in.
+   */
+  putBack?: ProbePutBack[];
   /** "KEEP <kind>: <detail>" / "VERIFY <source>: <detail>" for every violated item. */
   violations: string[];
   /** Items per evidence class (all four keys always present). */

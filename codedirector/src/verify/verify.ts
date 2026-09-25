@@ -39,6 +39,7 @@ import { runIsolated } from "../run/tree";
 import { newTypecheckErrors, probeTypecheck, typecheckErrors } from "../run/typecheck";
 import {
   countByClass,
+  ProbePutBack,
   VerificationItem,
   VerificationReport,
 } from "./types";
@@ -66,6 +67,12 @@ export interface VerifyOptions {
    * `cdir run` could otherwise edit the baseline and fake "held".)
    */
   expectedBaselineSha256?: string;
+  /**
+   * Collects what each probe changed and had put back. verifyWithBaseline
+   * makes one when none is given; a run passes the baseline's in, so the
+   * report names both.
+   */
+  putBack?: ProbePutBack[];
 }
 
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", ".codedirector"]);
@@ -226,7 +233,11 @@ function compilerDiagnostics(stdout: string, stderr: string): string {
 function verifyTypecheck(rootDir: string, opts: VerifyOptions, baseline: Baseline | null): VerificationItem[] {
   if (opts.typecheck === false) return [];
   const subject = "typecheck · tsc --noEmit";
-  const result = probeTypecheck(rootDir, { timeoutMs: opts.typecheckTimeoutMs, env: opts.env });
+  const result = probeTypecheck(rootDir, {
+    timeoutMs: opts.typecheckTimeoutMs,
+    env: opts.env,
+    onPutBack: (p) => opts.putBack?.push({ probe: subject, ...p }),
+  });
   if (result.kind === "no-tsconfig") {
     return [uncheckedItem("typecheck", subject, "no tsconfig.json — typecheck rung skipped")];
   }
@@ -323,7 +334,7 @@ function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions):
       argv.push("--experimental-strip-types");
     }
     argv.push("--test", "--test-reporter=tap", ...files);
-    const probe = runIsolated(rootDir, () => runArgvProbe(rootDir, argv, timeout, opts.env));
+    const probe = runIsolated(rootDir, () => runArgvProbe(rootDir, argv, timeout, opts.env), (p) => opts.putBack?.push({ probe: subject, ...p }));
     const artifactRef = `node --test ${glob} (${files.length} file(s)) → exit ${probe.exitCode ?? "?"}`;
     if (probe.timedOut) {
       items.push(uncheckedItem("keep-clause", subject, `test run timed out after ${timeout}ms`, clause.kind));
@@ -351,7 +362,11 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): V
   if (!lock.verifyCommand) return [];
   const subject = `verifyCommand · ${lock.verifyCommand}`;
   const timeout = opts.testTimeoutMs ?? lock.verifyTimeoutMs ?? 60_000;
-  const probe = runIsolated(rootDir, () => runShellProbe(rootDir, lock.verifyCommand!, timeout, opts.env));
+  const probe = runIsolated(
+    rootDir,
+    () => runShellProbe(rootDir, lock.verifyCommand!, timeout, opts.env),
+    (p) => opts.putBack?.push({ probe: subject, ...p }),
+  );
   const artifactRef = `sh -c ${JSON.stringify(lock.verifyCommand)} → exit ${probe.exitCode ?? "?"}`;
   if (probe.timedOut) {
     return [uncheckedItem("verify-command", subject, `verifyCommand timed out after ${timeout}ms`)];
@@ -384,7 +399,7 @@ function verifyOutputUnchanged(rootDir: string, lock: VibeCheck, baseline: Basel
       items.push(uncheckedItem("keep-clause", subject, `baseline capture failed (${captured.error ?? "unknown"}) — nothing to diff against`, clause.kind));
       continue;
     }
-    const probe = runIsolated(rootDir, () => runShellProbe(rootDir, cmd, timeout, opts.env));
+    const probe = runIsolated(rootDir, () => runShellProbe(rootDir, cmd, timeout, opts.env), (p) => opts.putBack?.push({ probe: subject, ...p }));
     const baseRef = `${baselineRel}#outputs[${JSON.stringify(cmd)}]`;
     if (probe.timedOut || probe.error || probe.exitCode === null) {
       items.push(uncheckedItem("keep-clause", subject, `command could not run at verify time: ${probe.timedOut ? `timed out after ${timeout}ms` : probe.error}`, clause.kind));
@@ -443,8 +458,10 @@ export function verifyWithBaseline(
   baseline: Baseline | null,
   baselineRel: string | undefined,
   indexAfter: RepoIndex,
-  opts: VerifyOptions = {},
+  given: VerifyOptions = {},
 ): VerificationReport {
+  const putBack = given.putBack ?? [];
+  const opts: VerifyOptions = { ...given, putBack };
   const tampered = baselineTampered(rootDir, baselineRel, opts);
   let items: VerificationItem[] = [
     ...verifyApiUnchanged(lock, baseline, baselineRel, indexAfter),
@@ -474,6 +491,7 @@ export function verifyWithBaseline(
     ...(baselineRel !== undefined ? { baselinePath: baselineRel } : {}),
     ...(tampered ? { baselineTampered: true } : {}),
     items,
+    ...(putBack.length > 0 ? { putBack } : {}),
     violations,
     counts: countByClass(items),
   };

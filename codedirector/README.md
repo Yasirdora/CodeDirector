@@ -175,6 +175,12 @@ reparsed. Honored skips: `.git`, `node_modules`, `dist`, `.codedirector`,
 plus root `.gitignore` / `.ignore` patterns (nested `.gitignore` files are
 not yet honored).
 
+cdir's ignore rules for its working state (index, baselines, runs,
+checkpoints) live in `.codedirector/.gitignore`; locks stay commitable. The
+project's own `.gitignore` is never edited. Older versions added a
+`# BEGIN cdir … # END cdir` block there; where one exists, it is left as it
+is and still works.
+
 ### `cdir map "<query>" [--top N] [--max-tokens N]`
 
 Prints a ranked repo map: symbols most relevant to the query, ordered by
@@ -329,7 +335,11 @@ far as possible, in ladder order (cheapest/strongest first):
    reaches such a file anyway is Unchecked with the reason, never "failing".
    Other suites belong in `verifyCommand`. A Lock-level `verifyCommand`
    (e.g. `npm test`) runs the same way. Probes
-   are isolated (tree restored afterwards) and strip `NODE_TEST_CONTEXT`.
+   are isolated and strip `NODE_TEST_CONTEXT`. Afterwards the tree is put
+   back as it was, but only the files a probe changed are written back, so
+   every other file keeps its time. What a probe changed or added is moved
+   to `.codedirector/runs/put-back/` and named in the Change Report: a probe
+   can't tell its own writes from another session's, so nothing is lost.
 4. **Output (measured)** — each `output-unchanged` command is re-run in
    isolation and its stdout **and stderr** sha256 compared to the baseline
    capture. If the lock was edited after the baseline was captured, the

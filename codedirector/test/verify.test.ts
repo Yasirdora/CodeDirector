@@ -18,6 +18,7 @@ import { captureBaseline, saveBaseline, latestBaselinePath, loadBaseline } from 
 import { runWithLock } from "../src/run/run";
 import { verifyLock, verifyWithBaseline } from "../src/verify/verify";
 import { VerificationItem } from "../src/verify/types";
+import { buildReport } from "../src/report/report";
 import { git, makeGitRepo } from "./helpers";
 
 const NODE = process.execPath;
@@ -227,6 +228,71 @@ test("verify: lock-level verifyCommand is measured", async () => {
   const fail = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// more\n")], { stdio: "pipe" });
   assert.equal(fail.exitCode, 1);
   assert.ok(fail.record.violations.some((v) => v.includes("VERIFY verify-command")), `violations: ${fail.record.violations.join("; ")}`);
+});
+
+test("verify: what a verifyCommand changes is put back — the report names the files and where its versions are", async () => {
+  const write = 'const fs=require("fs");fs.writeFileSync("notes.md","written during the check\\n");fs.writeFileSync("out.log","log\\n")';
+  const { root, lock } = await setup([{ kind: "tests-pass", glob: "test/writes.test.js" }], (l) => {
+    l.verifyCommand = `${JSON.stringify(NODE)} -e ${JSON.stringify(write)}`;
+  });
+  fs.writeFileSync(path.join(root, "notes.md"), "mine\n"); // someone's file, not part of the change
+  // A test that leaves a file behind.
+  fs.writeFileSync(path.join(root, "test/writes.test.js"), 'import test from "node:test";\nimport fs from "node:fs";\ntest("writes", () => fs.writeFileSync("from-test.txt", "x"));\n');
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.record.violations));
+  assert.equal(fs.readFileSync(path.join(root, "notes.md"), "utf8"), "mine\n");
+  assert.equal(fs.existsSync(path.join(root, "out.log")), false);
+  assert.equal(fs.existsSync(path.join(root, "from-test.txt")), false);
+  const putBack = outcome.record.verification!.putBack!;
+  assert.deepEqual(
+    putBack.map((p) => [p.probe, p.restored.join(","), p.removed.join(",")]),
+    [
+      ["tests-pass · test/writes.test.js", "", "from-test.txt"],
+      [`verifyCommand · ${lock.verifyCommand}`, "notes.md", "out.log"],
+    ],
+  );
+  assert.equal(fs.readFileSync(path.join(root, putBack[1].keptIn!, "notes.md"), "utf8"), "written during the check\n");
+
+  const report = await buildReport(root, lock.id, { verification: outcome.record.verification, run: outcome.record });
+  const finding = report.findings.find((f) => f.text.startsWith("verifyCommand"));
+  assert.equal(
+    finding?.text,
+    `verifyCommand · ${lock.verifyCommand} changed 1 file(s), put back as they were: notes.md; it added 1 file(s), removed: out.log. ` +
+      `The versions it left are in ${putBack[1].keptIn}/ — if another session edited these files during the check, its work is there.`,
+  );
+  assert.equal(report.verdict, "verified", "putting back is reported, not a failure");
+});
+
+test("verify: every probe that changes the tree is named — before the change and after it", async () => {
+  // The typecheck writes a build-info file (incremental), and the output command writes out.txt:
+  // each time either runs, the file is removed again and named.
+  const codedirModules = path.join(__dirname, "..", "..", "node_modules");
+  const root = makeGitRepo({
+    "tsconfig.json": '{"compilerOptions":{"strict":true,"noEmit":true,"incremental":true,"tsBuildInfoFile":"types.tsbuildinfo"},"include":["src"]}\n',
+    "src/ok.ts": "export const x: number = 1;\n",
+  });
+  fs.symlinkSync(codedirModules, path.join(root, "node_modules"), "dir");
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-qm", "link node_modules"]);
+  const cmd = `${JSON.stringify(NODE)} -e ${JSON.stringify('require("fs").writeFileSync("out.txt","x");console.log("same")')}`;
+  const { lock } = draftLock(root, (await buildIndex(root)).index, "tidy types", { now: "2026-09-25T00:00:00.000Z", createdBy: "test" });
+  lock.keep = [{ kind: "output-unchanged", command: cmd }];
+  lock.budget = { files: ["src/ok.ts"], symbols: [], maxFiles: 1, maxLines: 100 };
+  lock.status = "active";
+  saveLock(root, lock);
+  sealLock(root, lock);
+
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/ok.ts", "export const y: number = 2;\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.record.violations));
+  const named = outcome.record.verification!.putBack!.map((p) => [p.probe, p.removed.join(",")]);
+  assert.deepEqual(named, [
+    [`baseline · output-unchanged · ${cmd}`, "out.txt"],
+    ["baseline · typecheck · tsc --noEmit", "types.tsbuildinfo"],
+    ["typecheck · tsc --noEmit", "types.tsbuildinfo"],
+    [`output-unchanged · ${cmd}`, "out.txt"],
+  ]);
+  assert.equal(fs.existsSync(path.join(root, "out.txt")), false);
+  assert.equal(fs.existsSync(path.join(root, "types.tsbuildinfo")), false);
 });
 
 test("verify: verifyTimeoutMs precedence — lock field applies, CLI/API override wins", async () => {

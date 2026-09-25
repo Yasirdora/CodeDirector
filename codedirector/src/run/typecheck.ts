@@ -14,12 +14,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { ProbeResult, runArgvProbe, runShellProbe } from "./probe";
-import { runIsolated } from "./tree";
+import { PutBack, runIsolated } from "./tree";
 
 export interface TypecheckOptions {
   /** tsc --noEmit timeout (default 120s). */
   timeoutMs?: number;
   env?: NodeJS.ProcessEnv;
+  /** Hears what the probe changed and had put back, if anything. */
+  onPutBack?: (putBack: PutBack) => void;
 }
 
 export type TypecheckProbe =
@@ -38,8 +40,10 @@ export function probeTypecheck(rootDir: string, opts: TypecheckOptions = {}): Ty
   const timeout = opts.timeoutMs ?? 120_000;
   const tsc = localTsc(rootDir);
   if (tsc) {
-    const probe = runIsolated(rootDir, () =>
-      runArgvProbe(rootDir, [process.execPath, tsc, "--noEmit", "-p", "."], timeout, opts.env),
+    const probe = runIsolated(
+      rootDir,
+      () => runArgvProbe(rootDir, [process.execPath, tsc, "--noEmit", "-p", "."], timeout, opts.env),
+      opts.onPutBack,
     );
     if (probe.timedOut) return { kind: "unavailable", reason: `tsc --noEmit timed out after ${timeout}ms` };
     if (probe.error || probe.exitCode === null) {
@@ -48,7 +52,7 @@ export function probeTypecheck(rootDir: string, opts: TypecheckOptions = {}): Ty
     return { kind: "ran", probe, how: "node node_modules/typescript/bin/tsc --noEmit -p ." };
   }
   // No local install: probe npx without allowing downloads.
-  const probe = runIsolated(rootDir, () => runShellProbe(rootDir, "npx --no-install tsc --noEmit", timeout, opts.env));
+  const probe = runIsolated(rootDir, () => runShellProbe(rootDir, "npx --no-install tsc --noEmit", timeout, opts.env), opts.onPutBack);
   const out = `${probe.stdout}\n${probe.stderr}`;
   if (probe.error || probe.timedOut || /could not determine executable|npm error|not installed|not the tsc command/i.test(out)) {
     return {

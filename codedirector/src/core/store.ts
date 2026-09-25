@@ -51,27 +51,32 @@ function sortKeysDeep(value: unknown): unknown {
   return value;
 }
 
-const GITIGNORE_BLOCK =
-  "# BEGIN cdir\n" +
-  ".codedirector/index.json\n" +
-  ".codedirector/baselines/\n" +
-  ".codedirector/runs/\n" +
-  ".codedirector/ckpt-blobs/\n" +
-  ".codedirector/checkpoints.json\n" +
-  "# END cdir\n";
+/** cdir's own ignore rules, in .codedirector/.gitignore: paths are relative to that folder. */
+export const CODEDIRECTOR_GITIGNORE =
+  "# Code Director's working state. Locks stay commitable.\n" +
+  "/index.json\n" +
+  "/baselines/\n" +
+  "/runs/\n" +
+  "/ckpt-blobs/\n" +
+  "/checkpoints.json\n";
 
-/** Ensure .gitignore ignores tool state (locks stay commitable). Idempotent. */
+/**
+ * Ensure git ignores tool state (locks stay commitable). The rules go in
+ * .codedirector/.gitignore — never the project's own .gitignore. A project
+ * that already has the block older versions wrote there
+ * (`# BEGIN cdir … # END cdir`) is left as it is: that block still works.
+ * Idempotent; an existing .codedirector/.gitignore is never rewritten.
+ */
 export function ensureCodedirectorIgnore(rootDir: string): void {
-  const p = path.join(rootDir, ".gitignore");
-  let existing = "";
   try {
-    existing = fs.readFileSync(p, "utf8");
+    if (fs.readFileSync(path.join(rootDir, ".gitignore"), "utf8").includes("# BEGIN cdir")) return;
   } catch {
-    fs.writeFileSync(p, GITIGNORE_BLOCK);
-    return;
+    // no .gitignore: nothing older to honour
   }
-  if (existing.includes("# BEGIN cdir")) return;
-  fs.writeFileSync(p, existing + (existing.endsWith("\n") ? "" : "\n") + GITIGNORE_BLOCK);
+  const p = path.join(indexDir(rootDir), ".gitignore");
+  if (fs.existsSync(p)) return;
+  fs.mkdirSync(indexDir(rootDir), { recursive: true });
+  fs.writeFileSync(p, CODEDIRECTOR_GITIGNORE);
 }
 
 export function saveIndex(rootDir: string, index: RepoIndex): void {

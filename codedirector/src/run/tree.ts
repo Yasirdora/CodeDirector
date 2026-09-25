@@ -3,6 +3,12 @@
  * tests, verifyCommand, output-unchanged) cannot leave mutations behind,
  * and so classification can see skip-worktree / assume-unchanged files
  * that `git status` hides.
+ *
+ * The restore writes back only files whose bytes moved, so every other file
+ * keeps its bytes and its modification time. What it replaces or removes is
+ * moved aside first, into .codedirector/runs/put-back/, and named: a probe
+ * cannot tell its own writes from another session's, so a change someone
+ * else made during the probe is set aside, never lost.
  */
 
 import * as fs from "node:fs";
@@ -17,6 +23,16 @@ export interface HiddenFile {
   /** S = skip-worktree, h = assume-unchanged */
   flag: "S" | "h";
   hash: string;
+}
+
+/** What a restore put back after a probe (git-root-relative paths). */
+export interface PutBack {
+  /** Files whose bytes the probe changed, or deleted, written back as they were. */
+  restored: string[];
+  /** Files that appeared during the probe, removed. */
+  removed: string[];
+  /** Where the versions the probe left were moved (relative to the project), when there were any. */
+  keptIn?: string;
 }
 
 export interface WorkTreeSnapshot {
@@ -175,7 +191,32 @@ export function listUntracked(rootDir: string): string[] {
 
 const CHECKOUT_BATCH = 200;
 
-export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): void {
+/** The folder a restore moves the probe's versions into: one per restore, made when first needed. */
+function putBackDir(rootDir: string): string {
+  const base = path.join(rootDir, ".codedirector", "runs", "put-back");
+  fs.mkdirSync(base, { recursive: true });
+  return fs.mkdtempSync(path.join(base, `${new Date().toISOString().replace(/[:.]/g, "-")}-`));
+}
+
+export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): PutBack {
+  const restored: string[] = [];
+  const removed: string[] = [];
+  let kept: string | undefined;
+  /** Move the file as the probe left it into the put-back folder — before it's replaced or removed. */
+  const setAside = (p: string): void => {
+    const abs = path.join(rootDir, gitToAbsRel(rootDir, p));
+    if (!fs.existsSync(abs)) return;
+    kept ??= putBackDir(rootDir);
+    const dest = path.join(kept, p);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    try {
+      fs.renameSync(abs, dest);
+    } catch {
+      fs.copyFileSync(abs, dest);
+      fs.rmSync(abs, { force: true });
+    }
+  };
+
   // Drop skip-worktree so checkout/write can land (and so a file the probe
   // hid mid-run becomes visible to porcelain again).
   for (const h of listHidden(rootDir)) {
@@ -191,23 +232,28 @@ export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): void {
     }
   }
 
-  // Delete untracked files created after the snapshot.
+  // Remove untracked files created after the snapshot.
   for (const p of listUntracked(rootDir)) {
     if (snap.untracked.includes(p) || isToolPath(p)) continue;
-    const abs = path.join(rootDir, gitToAbsRel(rootDir, p));
     try {
-      fs.rmSync(abs, { force: true });
+      setAside(p);
+      removed.push(p);
     } catch {
       /* ignore */
     }
   }
 
-  // Restore snapshotted contents (raw bytes — binary-safe).
+  // Restore snapshotted contents (raw bytes — binary-safe) — only where the
+  // bytes moved: a file written back unchanged would still get a new time.
   for (const [p, data] of Object.entries(snap.contents)) {
+    const now = readGitPath(rootDir, p);
+    if (now !== null && now.equals(data)) continue;
     const abs = path.join(rootDir, gitToAbsRel(rootDir, p));
     try {
+      setAside(p);
       fs.mkdirSync(path.dirname(abs), { recursive: true });
       fs.writeFileSync(abs, data);
+      restored.push(p);
     } catch {
       /* ignore */
     }
@@ -226,15 +272,30 @@ export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): void {
     if (!(p in snap.hashes) || p in snap.contents) continue;
     const now = readGitPath(rootDir, p);
     if (snap.hashes[p] === ABSENT) {
-      // Deleted at snapshot: keep it deleted (a probe that recreated it loses it).
-      if (now !== null) fs.rmSync(path.join(rootDir, gitToAbsRel(rootDir, p)), { force: true });
+      // Deleted at snapshot: keep it deleted (a probe that recreated it: set aside).
+      if (now !== null) {
+        try {
+          setAside(p);
+          removed.push(p);
+        } catch {
+          /* ignore */
+        }
+      }
       continue;
     }
     if (now === null || sha256Bytes(now) !== snap.hashes[p]) stale.push(p);
   }
+  for (const p of stale) {
+    try {
+      setAside(p);
+    } catch {
+      /* ignore: checkout still puts it back */
+    }
+  }
   for (let i = 0; i < stale.length; i += CHECKOUT_BATCH) {
     try {
       git(rootDir, ["checkout", "HEAD", "--", ...stale.slice(i, i + CHECKOUT_BATCH)]);
+      restored.push(...stale.slice(i, i + CHECKOUT_BATCH));
     } catch {
       /* ignore */
     }
@@ -253,14 +314,25 @@ export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): void {
       /* ignore */
     }
   }
+
+  return {
+    restored: [...new Set(restored)].sort(),
+    removed: [...new Set(removed)].sort(),
+    ...(kept ? { keptIn: path.relative(rootDir, kept).split(path.sep).join("/") } : {}),
+  };
 }
 
-export function runIsolated<T>(rootDir: string, fn: () => T): T {
+/**
+ * Run a probe, then put the tree back as it was. `onPutBack` hears what had
+ * to be put back — only when something had to be.
+ */
+export function runIsolated<T>(rootDir: string, fn: () => T, onPutBack?: (putBack: PutBack) => void): T {
   const snap = snapshotWorkTree(rootDir);
   try {
     return fn();
   } finally {
-    restoreWorkTree(rootDir, snap);
+    const putBack = restoreWorkTree(rootDir, snap);
+    if (onPutBack && (putBack.restored.length > 0 || putBack.removed.length > 0)) onPutBack(putBack);
   }
 }
 

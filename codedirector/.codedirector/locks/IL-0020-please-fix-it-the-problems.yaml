@@ -1,0 +1,89 @@
+schemaVersion: 1
+id: IL-0020
+status: verified
+utterance: please fix it the problems, also as I said it should work without code director
+goal: "A check never rewrites a file it didn't change, and never loses one: after a probe (verifyCommand, tests, typecheck, output commands), only files whose bytes moved are written back; what the probe changed or added is moved to .codedirector/runs/put-back/ and named in the Change Report. And cdir never edits the project's .gitignore: its rules live in .codedirector/.gitignore (an old block in .gitignore is left as it is)."
+interpretation: |
+  BUILT IN A SPIKE FIRST: a scratch clone of 5b04903; nothing here is touched
+  until this lock is active. The run copies the spike's 12 files in.
+
+  THE TWO PROBLEMS, as the owner was told them (measured on a project that is
+  not this repo, 2026-09-25):
+  1 After its checks, cdir wrote back every dirty and untracked file in the
+    project. 104 untracked files came back byte-identical but all with new
+    times, and a change another session makes during a check would be undone
+    without a word (new files deleted).
+  2 Drafting a lock (cdir lock new → the index), not only a run, added the
+    "# BEGIN cdir" block to the project's .gitignore.
+
+  THE FIX
+  1 restoreWorkTree writes back only files whose bytes moved. Before it
+    replaces or removes a file, it moves the probe's version into
+    .codedirector/runs/put-back/<time>-<id>/ (one folder per restore, made
+    only when needed). It returns what it restored and removed. runIsolated
+    passes that to an optional listener. Every probe (the baseline's output
+    commands and typecheck; the verify's typecheck, tests-pass,
+    verifyCommand and output-unchanged) adds it to verification.putBack, and
+    the Change Report names each as a finding: which check, which files, and
+    where their versions are. A put-back is reported, never a failure.
+  2 ensureCodedirectorIgnore writes .codedirector/.gitignore (rules
+    anchored to that folder) and never the project's .gitignore. A project
+    that has the old block keeps it as it is. An existing
+    .codedirector/.gitignore is never rewritten.
+
+  The owner's "it should work without code director" is about the other
+  project: it no longer uses cdir, and its cdir records were moved out of it.
+  That's outside this repo; nothing here names it.
+
+  EVIDENCE FROM THE SPIKE
+  - npm test: 201 tests (194 before, 7 new), all pass.
+  - Planted bugs, one per behavior: results in the report.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: Existing behavior is unchanged apart from the two fixes (the whole suite passes)
+  - kind: custom
+    text: Nothing is published or pushed
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - src/checkpoint/**
+  - src/run/classify.ts
+  - src/lock/**
+  - .gitignore
+change: Checks write back only what they changed and name it, keeping the replaced versions; cdir's ignore rules move to .codedirector/.gitignore
+verifyCommand: npm test
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - README.md
+    - docs/ROADMAP.md
+    - src/core/store.ts
+    - src/report/report.ts
+    - src/run/baseline.ts
+    - src/run/run.ts
+    - src/run/tree.ts
+    - src/run/typecheck.ts
+    - src/verify/types.ts
+    - src/verify/verify.ts
+    - test/scope.test.ts
+    - test/verify.test.ts
+  symbols: []
+  maxFiles: 12
+  maxLines: 450
+accept:
+  - npm test passes, including the 7 new tests
+  - Every planted bug in the two fixes is caught
+  - A check that changes nothing rewrites nothing (file times kept)
+  - The project's .gitignore is never written
+assumptions:
+  - text: "Owner's words, 2026-09-25: \"please fix it the problems, also as I said it should work without code director\" — yes to fixing the four problems reported; the two cdir ones are this lock."
+    source: user
+    confirmed: true
+  - text: "Kept narrow: judging .gitignore like any other file (roadmap, IL-0019) is not in this lock; the roadmap entry only notes that cdir no longer writes to it. .codedirector/mcp.log isn't in the ignore rules (as before): reported to the owner, not changed."
+    source: system
+    confirmed: false
+createdAt: 2026-09-25T19:27:39.349Z
+createdBy: Yasirdora

@@ -36,7 +36,7 @@ import {
   scopeViolations,
 } from "./classify";
 import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
-import { VerificationReport } from "../verify/types";
+import { ProbePutBack, VerificationReport } from "../verify/types";
 
 export interface KeepResult {
   kind: string;
@@ -216,10 +216,13 @@ export async function runWithLock(
   // 2. refresh index + capture baseline (outside the source tree)
   const { index: indexBefore } = await buildIndex(rootDir);
   const vo = opts.verify === false ? { typecheck: false } : (opts.verifyOptions ?? {});
+  // What any probe — before the command or after it — changed and had put back: the report names it.
+  const putBack: ProbePutBack[] = [];
   const baseline: Baseline = captureBaseline(rootDir, lock, indexBefore, checkpoint.tag, {
     typecheck: vo.typecheck,
     typecheckTimeoutMs: vo.typecheckTimeoutMs,
     env: vo.env,
+    putBack,
   });
   const baselinePath = saveBaseline(rootDir, baseline);
   // Hash the baseline at capture: the executed command could edit files under
@@ -263,6 +266,7 @@ export async function runWithLock(
       : verifyWithBaseline(rootDir, lock, baseline, baselineRel, indexAfter, {
           expectedBaselineSha256: baselineSha256,
           ...opts.verifyOptions,
+          putBack,
         });
   const keepResults = verification
     ? keepResultsFromVerification(verification)

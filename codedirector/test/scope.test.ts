@@ -15,7 +15,8 @@ import { loadLock, saveLock } from "../src/lock/store";
 import { sealLock } from "../src/lock/seal";
 import { VibeCheck } from "../src/lock/types";
 import { runWithLock } from "../src/run/run";
-import { runIsolated } from "../src/run/tree";
+import { PutBack, runIsolated } from "../src/run/tree";
+import { CODEDIRECTOR_GITIGNORE, saveIndex } from "../src/core/store";
 import { dependencyFingerprint } from "../src/run/deps";
 import { undo } from "../src/checkpoint";
 import { git, makeGitRepo } from "./helpers";
@@ -258,6 +259,106 @@ test("runIsolated: clean tracked file modified by the probe is restored", () => 
     fs.writeFileSync(path.join(root, "src/b.js"), "export const b=999;\n");
   });
   assert.equal(fs.readFileSync(path.join(root, "src/b.js"), "utf8"), "export const b=2;\n");
+});
+
+test("runIsolated: files the probe didn't change keep their bytes and their times", () => {
+  const root = makeGitRepo({ "src/a.js": "export const a=1;\n", "src/b.js": "export const b=2;\n" });
+  fs.writeFileSync(path.join(root, "src/a.js"), "export const a=10;\n"); // dirty
+  fs.writeFileSync(path.join(root, "notes.md"), "mine\n"); // untracked
+  const old = new Date("2020-01-01T00:00:00Z");
+  for (const f of ["src/a.js", "notes.md"]) fs.utimesSync(path.join(root, f), old, old);
+  const heard: PutBack[] = [];
+  runIsolated(
+    root,
+    () => fs.writeFileSync(path.join(root, "src/b.js"), "export const b=999;\n"), // the probe changes another file
+    (p) => heard.push(p),
+  );
+  for (const f of ["src/a.js", "notes.md"]) {
+    assert.equal(fs.statSync(path.join(root, f)).mtimeMs, old.getTime(), `${f} keeps its time`);
+  }
+  assert.equal(fs.readFileSync(path.join(root, "src/a.js"), "utf8"), "export const a=10;\n");
+  assert.deepEqual(heard.map((p) => p.restored), [["src/b.js"]]);
+});
+
+test("runIsolated: what the probe changed or added is put back — its versions moved aside and named, never lost", () => {
+  const root = makeGitRepo({ "src/a.js": "export const a=1;\n", "src/b.js": "export const b=2;\n" });
+  fs.writeFileSync(path.join(root, "src/a.js"), "export const a=10;\n"); // dirty
+  fs.writeFileSync(path.join(root, "notes.md"), "mine\n"); // untracked
+  const heard: PutBack[] = [];
+  runIsolated(
+    root,
+    () => {
+      // The probe's writes — or another session's, made while it ran: they look the same.
+      fs.writeFileSync(path.join(root, "src/a.js"), "export const a=11;\n");
+      fs.writeFileSync(path.join(root, "notes.md"), "mine, edited\n");
+      fs.writeFileSync(path.join(root, "src/b.js"), "export const b=999;\n");
+      fs.writeFileSync(path.join(root, "new.txt"), "new\n");
+    },
+    (p) => heard.push(p),
+  );
+  assert.equal(fs.readFileSync(path.join(root, "src/a.js"), "utf8"), "export const a=10;\n");
+  assert.equal(fs.readFileSync(path.join(root, "notes.md"), "utf8"), "mine\n");
+  assert.equal(fs.readFileSync(path.join(root, "src/b.js"), "utf8"), "export const b=2;\n");
+  assert.equal(fs.existsSync(path.join(root, "new.txt")), false);
+  assert.equal(heard.length, 1);
+  const [p] = heard;
+  assert.deepEqual(p.restored, ["notes.md", "src/a.js", "src/b.js"]);
+  assert.deepEqual(p.removed, ["new.txt"]);
+  assert.match(p.keptIn ?? "", /^\.codedirector\/runs\/put-back\/[^/]+$/);
+  const kept = (f: string) => fs.readFileSync(path.join(root, p.keptIn!, f), "utf8");
+  assert.equal(kept("src/a.js"), "export const a=11;\n");
+  assert.equal(kept("notes.md"), "mine, edited\n");
+  assert.equal(kept("src/b.js"), "export const b=999;\n");
+  assert.equal(kept("new.txt"), "new\n");
+});
+
+test("runIsolated: a probe that leaves the tree as it found it is not reported, and nothing is kept", () => {
+  const root = makeGitRepo({ "src/a.js": "export const a=1;\n" });
+  fs.writeFileSync(path.join(root, "notes.md"), "mine\n");
+  let heard = 0;
+  runIsolated(
+    root,
+    () => fs.readFileSync(path.join(root, "notes.md")),
+    () => heard++,
+  );
+  assert.equal(heard, 0);
+  assert.equal(fs.existsSync(path.join(root, ".codedirector", "runs", "put-back")), false);
+});
+
+test("ignore rules: kept in .codedirector/.gitignore — the project's .gitignore is never touched", async () => {
+  const root = makeGitRepo({ "src/a.js": "export const a=1;\n", ".gitignore": "node_modules/\n" });
+  saveIndex(root, (await buildIndex(root)).index);
+  assert.equal(fs.readFileSync(path.join(root, ".gitignore"), "utf8"), "node_modules/\n");
+  assert.equal(fs.readFileSync(path.join(root, ".codedirector", ".gitignore"), "utf8"), CODEDIRECTOR_GITIGNORE);
+  // git ignores the working state, never the locks.
+  const state = [".codedirector/index.json", ".codedirector/baselines/b.json", ".codedirector/runs/r.json", ".codedirector/ckpt-blobs/c/x", ".codedirector/checkpoints.json"];
+  const lockFile = ".codedirector/locks/IL-0001-x.yaml";
+  const ignored = git(root, ["check-ignore", "--no-index", ...state, lockFile]).split("\n").filter(Boolean);
+  assert.deepEqual(ignored, state);
+  // Once there, it's the project's to edit: never rewritten.
+  fs.appendFileSync(path.join(root, ".codedirector", ".gitignore"), "/scratch/\n");
+  saveIndex(root, (await buildIndex(root)).index);
+  assert.equal(fs.readFileSync(path.join(root, ".codedirector", ".gitignore"), "utf8"), `${CODEDIRECTOR_GITIGNORE}/scratch/\n`);
+
+  // A run doesn't touch it either — nor a project with no .gitignore at all.
+  const bare = makeGitRepo({ "src/math.js": "export const add = (a, b) => a + b;\n" });
+  const { lock } = draftLock(bare, (await buildIndex(bare)).index, "tidy math", { now: "2026-09-25T00:00:00.000Z", createdBy: "test" });
+  lock.budget = { files: ["src/math.js"], symbols: [], maxFiles: 1, maxLines: 10 };
+  lock.status = "active";
+  saveLock(bare, lock);
+  sealLock(bare, lock);
+  const outcome = await runWithLock(bare, lock.id, [process.execPath, "-e", 'require("fs").appendFileSync("src/math.js","// tidy\\n")'], { stdio: "pipe", verify: false });
+  assert.equal(outcome.exitCode, 0);
+  assert.equal(fs.existsSync(path.join(bare, ".gitignore")), false);
+  assert.ok(fs.existsSync(path.join(bare, ".codedirector", ".gitignore")));
+});
+
+test("ignore rules: a project with the block older versions wrote in .gitignore is left as it is", async () => {
+  const OLD = "dist/\n# BEGIN cdir\n.codedirector/index.json\n.codedirector/baselines/\n.codedirector/runs/\n.codedirector/ckpt-blobs/\n.codedirector/checkpoints.json\n# END cdir\n";
+  const root = makeGitRepo({ "src/a.js": "export const a=1;\n", ".gitignore": OLD });
+  saveIndex(root, (await buildIndex(root)).index);
+  assert.equal(fs.readFileSync(path.join(root, ".gitignore"), "utf8"), OLD);
+  assert.equal(fs.existsSync(path.join(root, ".codedirector", ".gitignore")), false);
 });
 
 test("dependencyFingerprint: reordered dependency keys give the same fingerprint", () => {
