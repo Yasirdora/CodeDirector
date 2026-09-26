@@ -12,10 +12,10 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as v8 from "node:v8";
 import Parser from "web-tree-sitter";
 import { CallSite, FileIndex, ImportInfo, SymbolInfo, SymbolKind } from "./types";
 import { extractSwift } from "./swift";
+import { hasWasmStartupFlags, WASM_STARTUP_FLAGS } from "./wasm-flags";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SyntaxNode = any;
@@ -52,43 +52,30 @@ const WASM_PATHS: Record<LangKey, string> = {
   swift: "tree-sitter-wasms/out/tree-sitter-swift.wasm",
 };
 
-/**
- * Up to this many Swift files in one indexing pass, the grammar runs on
- * V8's baseline WebAssembly compiler only (see chooseWasmTier).
- */
-export const SWIFT_BASELINE_TIER_MAX_FILES = 3000;
-
-let tierChosen = false;
+let warnedAboutFlags = false;
 
 /**
- * The Swift grammar is a large WebAssembly module. Once a Swift file is
- * parsed, V8 starts optimising that module in the background, and Node
- * waits for the job before the process can exit: measured on Node 22, a
- * `cdir run` that touched one Swift file took 8.4s, of which 0.1s was work.
- * V8's baseline compiler alone parses about 45% slower per file and costs
- * nothing at exit, so it wins until a single pass parses several thousand
- * Swift files — which only a first index of a very large app does.
- *
- * Decided once per process, before any grammar is compiled (the flag has
- * no effect on modules already compiled). A pass with no Swift files leaves
- * V8's defaults alone, so JavaScript/TypeScript indexing is as before.
+ * The Swift grammar needs the process started with WASM_STARTUP_FLAGS
+ * (src/cli.ts explains; the CLI always is). A program that embeds cdir and
+ * parses Swift without them is told once, on stderr, instead of crashing
+ * at exit with nothing to go on.
  */
-function chooseWasmTier(filesToParse: string[] | undefined): void {
-  if (tierChosen) return;
-  tierChosen = true;
-  if (!filesToParse) return;
-  const swift = filesToParse.filter((f) => langForFile(f) === "swift").length;
-  if (swift > 0 && swift <= SWIFT_BASELINE_TIER_MAX_FILES) v8.setFlagsFromString("--liftoff-only");
+function checkSwiftStartupFlags(): void {
+  if (warnedAboutFlags || hasWasmStartupFlags()) return;
+  warnedAboutFlags = true;
+  process.stderr.write(
+    `cdir: parsing Swift in a Node process started without ${WASM_STARTUP_FLAGS.join(" ")} — ` +
+      "V8 may crash this process at exit (Node 24: \"Fatal process out of memory: Zone\") or stall it for seconds; " +
+      `start node with ${WASM_STARTUP_FLAGS.join(" ")}\n`,
+  );
 }
 
 export class StructuralParser {
   private parsers = new Map<LangKey, Parser>();
   private initialized = false;
 
-  /** `filesToParse`, when known, lets the WebAssembly tier be chosen for the work ahead. */
-  async init(filesToParse?: string[]): Promise<void> {
+  async init(): Promise<void> {
     if (this.initialized) return;
-    chooseWasmTier(filesToParse);
     await Parser.init();
     for (const key of Object.keys(WASM_PATHS) as LangKey[]) {
       const wasmPath = require.resolve(WASM_PATHS[key]);
@@ -103,6 +90,7 @@ export class StructuralParser {
   /** Parse one file and extract its structural facts. hash computed by caller. */
   parseFile(relPath: string, source: string, hash: string): FileIndex {
     const lang = langForFile(relPath);
+    if (lang === "swift") checkSwiftStartupFlags();
     const parser = this.parsers.get(lang);
     if (!parser) throw new Error("parser not initialized");
     const tree = parser.parse(source);

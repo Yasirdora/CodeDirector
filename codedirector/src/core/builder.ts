@@ -50,12 +50,9 @@ export async function buildIndex(rootDir: string, opts: BuildOptions = {}): Prom
   let parsed = 0;
   let unchanged = 0;
 
-  // First decide what needs parsing, so the parser knows the work ahead
-  // (it picks its WebAssembly tier from it) and is only started if needed.
-  // Only paths are kept: a first index of a large repo would otherwise hold
-  // every file's text at once.
-  const toParse = new Set<string>();
-  const keep = new Set<string>();
+  // Lazily init the parser only if something actually needs parsing.
+  let parserReady = false;
+
   for (const relPath of files) {
     const abs = path.join(rootDir, relPath);
     let content: string;
@@ -67,27 +64,14 @@ export async function buildIndex(rootDir: string, opts: BuildOptions = {}): Prom
     const hash = hashContent(content);
     const prev = previous.files[relPath];
     if (prev && prev.hash === hash && prev.parserVersion === PARSER_VERSION) {
-      keep.add(relPath);
-      continue;
-    }
-    toParse.add(relPath);
-  }
-  if (toParse.size > 0) await parser.init([...toParse]);
-
-  for (const relPath of files) {
-    if (keep.has(relPath)) {
-      next.files[relPath] = previous.files[relPath];
+      next.files[relPath] = prev;
       unchanged++;
       continue;
     }
-    if (!toParse.has(relPath)) continue; // unreadable — skipped, as before
-    let content: string;
-    try {
-      content = fs.readFileSync(path.join(rootDir, relPath), "utf8");
-    } catch {
-      continue; // vanished since the first pass — skipped, as unreadable
+    if (!parserReady) {
+      await parser.init();
+      parserReady = true;
     }
-    const hash = hashContent(content);
     let fileIndex: FileIndex;
     try {
       fileIndex = parser.parseFile(relPath, content, hash);

@@ -1,0 +1,77 @@
+schemaVersion: 1
+id: IL-0027
+status: verified
+utterance: |-
+  248/249 on my Mac — one door left. The probe-naming test now passes; the git-isolation fix held. Remaining failure:
+  verify: typecheck proven-clean with a local compiler, unchecked without one — actual violated, expected unchecked. The assertion detail: "npx present: tsc --noEmit failed (exit 1) — output: node:internal/modules/cjs/loader:1479 · throw err;"
+  Your 127/126 fix handles "npx missing". This Mac has npx (it lives next to Node in the app's runtime folder), but with compilers hidden, npx tsc exits 1 with a module-not-found loader error — npx present, compiler still unavailable. That's the same semantic case (no compiler → Unchecked), arriving through a different exit path. Cover it: when npx itself can't produce a compiler (exit 1 with the loader's MODULE_NOT_FOUND), report Unchecked with npx's message, not violated. Mutation-check it the same way. Gate stays: 249/249 on my Mac, then I merge PR #3.
+goal: An npx that is present but cannot produce a compiler (Node's loader fails, exit 1) is reported Unchecked with its own message; no real compiler finding can ever be turned into Unchecked; npm test is green on the owner's Mac.
+interpretation: |
+  BUILT IN A SPIKE FIRST: a scratch clone of 9cb0adb; the run copies the
+  spike's 5 files in.
+
+  REPRODUCED with the Mac's layout: an app runtime folder holding node and
+  npm's own npx shell shim side by side. The shim finds npm relative to
+  itself; reached through the test's link, Node's loader fails
+  (MODULE_NOT_FOUND), exit 1. On 9cb0adb: npm test 248/249, the same test,
+  the same message ("npx present: tsc --noEmit failed (exit 1) — output:
+  node:internal/modules/cjs/loader…").
+
+  THE FIX
+  1 Node domain (tsc.ts): npx's "no compiler" patterns include Node's
+    loader failure (MODULE_NOT_FOUND, node:internal/modules/).
+  2 Core (diagnostics.ts): a "no tool here" pattern counts only when the
+    tool exited non-zero AND produced no parseable diagnostic — so tsc's own
+    TS2307 "Cannot find module" can never be hidden as Unchecked. The
+    Unchecked reason carries the tool's telling line (npx's message).
+  3 Tests: the "no compiler" case runs with npx linked, absent and broken;
+    a direct test of the loader case and of the guard, on the real npx plan.
+
+  MUTATIONS: without 1, the broken-npx variant fails with the Mac's exact
+  message; without 2, a real TS2307 finding is reported "unavailable".
+
+  EVIDENCE FROM THE SPIKE: npm test 250/250 in the app-runtime Mac-like
+  composite, on Node 24.15 and on Node 22.22; eval 19/19.
+  THE GATE is the owner's Mac: 250/250 now (one new test). Unchecked here.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: "npm test is green on the owner's Mac — the gate the owner set (250/250 now: this lock adds one test); this container can only stand in for it"
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - src/lock/**
+  - src/mcp/**
+  - src/core/**
+  - src/domain/**
+  - src/cli.ts
+  - src/cli-main.ts
+  - .gitignore
+change: npx failing to load itself is Unchecked with its message; a no-tool pattern never hides a real diagnostic
+verifyCommand: npm test
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - docs/ROADMAP.md
+    - src/domains/node/tsc.ts
+    - src/run/diagnostics.ts
+    - test/probe.test.ts
+    - test/verify.test.ts
+  symbols: []
+  maxFiles: 5
+  maxLines: 200
+accept: []
+assumptions:
+  - text: Anchors defended — git — eval/run.ts (TypeScript); "git" is its whole name · git — src/checkpoint/index.ts (TypeScript); "git" is its whole name · err — src/lock/yaml.ts (TypeScript); "err" is its whole name · git — src/run/ignored.ts (TypeScript); "git" is its whole name · git — src/run/tree.ts (TypeScript); "git" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: git, git, err, git, git (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-26T18:35:08.253Z
+createdBy: Yasirdora

@@ -1,0 +1,6 @@
+Hold the PR: two verify tests still fail here (my Mac has NO global tsc; your container has one — both failures smell like that assumption):
+
+1. `verify: every probe that changes the tree is named` — the after-phase `typecheck · tsc --noEmit` probe entry is missing from actual; only `baseline · typecheck` is there. Expected 4 probe entries, got 3.
+2. `verify: typecheck proven-clean with a local compiler, unchecked without one` — actual `violated`, expected `unchecked`. Without a compiler on PATH, the typecheck apparently ran and failed instead of reporting unchecked.
+
+Both pass in your container, both fail on the real machine — same class of environment assumption as the tsc test you fixed in step 3. New lock, fix the assumption, and the gate is: 248/248 on my Mac. Then I merge PR #3.
