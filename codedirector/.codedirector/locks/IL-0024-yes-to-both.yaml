@@ -1,7 +1,8 @@
 schemaVersion: 1
 id: IL-0024
 status: verified
-utterance: yes to both
+utterance: |
+  yes to both
 goal: "Code Director's log stops showing up as a new file in every project: it's written to .codedirector/runs/mcp.log, which git ignores in every setup (the older .gitignore block and .codedirector/.gitignore), and a log at the old place is moved there on the next write."
 interpretation: |
   BUILT IN A SPIKE FIRST: a scratch clone of 91968d3; nothing here is touched
