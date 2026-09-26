@@ -7,6 +7,7 @@
 
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import test from "node:test";
 import { buildIndex } from "../src/core/builder";
@@ -22,6 +23,28 @@ import { buildReport } from "../src/report/report";
 import { git, makeGitRepo } from "./helpers";
 
 const NODE = process.execPath;
+
+/**
+ * An environment in which no TypeScript compiler can be found: node, npm
+ * and npx stay reachable, but not a globally installed tsc (`npm i -g
+ * typescript`, common on developer machines) nor one in npx's cache. The
+ * "no compiler" case has to establish that itself — it used to assume it,
+ * and failed wherever a global tsc exists.
+ */
+function envWithoutGlobalCompilers(): NodeJS.ProcessEnv {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "cdir-nobin-"));
+  const nodeDir = path.dirname(process.execPath);
+  for (const tool of ["node", "npm", "npx"]) {
+    const target = tool === "node" ? process.execPath : path.join(nodeDir, tool);
+    if (fs.existsSync(target)) fs.symlinkSync(target, path.join(bin, tool));
+  }
+  return {
+    ...process.env,
+    PATH: [bin, "/usr/bin", "/bin"].join(path.delimiter),
+    npm_config_prefix: fs.mkdtempSync(path.join(os.tmpdir(), "cdir-noprefix-")),
+    npm_config_cache: fs.mkdtempSync(path.join(os.tmpdir(), "cdir-nocache-")),
+  };
+}
 const append = (file: string, text: string) =>
   `require("fs").appendFileSync(${JSON.stringify(file)},${JSON.stringify(text)})`;
 
@@ -380,7 +403,10 @@ test("verify: typecheck proven-clean with a local compiler, unchecked without on
   d2.lock.status = "active";
   saveLock(root2, d2.lock);
   sealLock(root2, d2.lock);
-  const outcome2 = await runWithLock(root2, d2.lock.id, [NODE, "-e", append("src/ok.ts", "// ok\n")], { stdio: "pipe" });
+  const outcome2 = await runWithLock(root2, d2.lock.id, [NODE, "-e", append("src/ok.ts", "// ok\n")], {
+    stdio: "pipe",
+    verifyOptions: { env: envWithoutGlobalCompilers() },
+  });
   const tc3 = outcome2.record.verification!.items.find((i) => i.source === "typecheck");
   assert.ok(tc3, "typecheck item present");
   assert.equal(tc3!.verdict, "unchecked");

@@ -40,7 +40,7 @@ import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
 import { Baseline, baselineFileHash, latestBaselinePath, loadBaseline } from "../run/baseline";
-import { runArgvProbe, runShellProbe, sha256 } from "../run/probe";
+import { runArgvProbe, runShellProbe } from "../run/probe";
 import { runIsolated } from "../run/tree";
 import { diagnosticsExcerpt, newDiagnostics, probeDiagnostics } from "../run/diagnostics";
 import { CORE_SKIP_DIRS } from "../core/walk";
@@ -426,13 +426,14 @@ function verifyOutputUnchanged(rootDir: string, lock: VibeCheck, baseline: Basel
       items.push(uncheckedItem("keep-clause", subject, `command could not run at verify time: ${probe.timedOut ? `timed out after ${timeout}ms` : probe.error}`, clause.kind));
       continue;
     }
-    const artifactRef = `sh -c ${JSON.stringify(cmd)} → exit ${probe.exitCode} · stdout sha256 ${sha256(probe.stdout).slice(0, 12)}… · baseline ${baseRef}`;
+    const artifactRef = `sh -c ${JSON.stringify(cmd)} → exit ${probe.exitCode} · stdout sha256 ${probe.stdoutSha256.slice(0, 12)}… · baseline ${baseRef}`;
     if (probe.exitCode !== 0) {
       items.push({ source: "keep-clause", clauseKind: clause.kind, subject, verdict: "violated", evidenceClass: "measured", detail: `output command exited ${probe.exitCode} after the change (was 0 at baseline)`, artifactRef });
       continue;
     }
-    const afterOut = sha256(probe.stdout);
-    const afterErr = sha256(probe.stderr);
+    // Hashes of the whole output: the text a probe returns is capped.
+    const afterOut = probe.stdoutSha256;
+    const afterErr = probe.stderrSha256;
     const stdoutOk = afterOut === captured.stdoutSha256;
     const stderrOk = captured.stderrSha256 === undefined || afterErr === captured.stderrSha256;
     items.push(

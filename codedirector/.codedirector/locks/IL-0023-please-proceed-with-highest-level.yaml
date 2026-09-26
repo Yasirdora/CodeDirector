@@ -1,0 +1,85 @@
+schemaVersion: 1
+id: IL-0023
+status: verified
+utterance: please proceed with highest level of professionalism.
+goal: A check's timeout is enforced on everything the check started, a check can never hang cdir, long output keeps its diagnostics and is hashed whole, and npm test passes on a machine with a global TypeScript.
+interpretation: |
+  STEP 3 of the plan, first half: the process runner. BUILT IN A SPIKE
+  FIRST: a scratch clone of cf2eeda; the run copies the spike's 7 files in.
+  TERRITORY: the utterance names no code; the budget is the spike's diff.
+
+  REPRODUCED ON cf2eeda
+  - A timed-out check left what its shell started running (3 processes).
+  - A check that ignored SIGTERM hung cdir indefinitely.
+  - A check that finished but left a background process was reported as
+    timed out after waiting the whole timeout.
+  - 20 MB of output: "could not run" (ENOBUFS), the diagnostic lost.
+  - npm test failed wherever TypeScript was installed globally.
+
+  THE FIX
+  1 Every check runs under run/supervise.ts: its own process group, output
+    to files, on timeout the whole group stopped (SIGTERM, SIGKILL after
+    3s). Finishing on its own may leave a daemon; that is not a timeout.
+  2 Output past 16 MB per stream keeps its end behind a line naming what
+    was cut; output-unchanged uses the hash of the whole output (identical
+    to the old hash when nothing was cut, so old baselines stay valid).
+  3 The no-compiler test hides global compilers itself.
+  Callers keep the same API. Cost: about 45 ms per check.
+
+  NOT IN THIS LOCK: long checks still block the MCP server (named as open in
+  the ROADMAP; the second half of step 3).
+
+  EVIDENCE FROM THE SPIKE
+  - npm test 241/241 in this container's default environment (global tsc
+    present) — the first time without workarounds. 6 new tests; the old
+    code fails 4 of them and hangs on a fifth.
+  - Eval 19/19. End-to-end output identical to cf2eeda on both fixtures.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: Nothing new to learn or configure — no new flag, command, clause or lock field
+  - kind: custom
+    text: No pull request is opened from here
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - src/lock/**
+  - src/mcp/**
+  - src/core/**
+  - src/domain/**
+  - src/domains/**
+  - src/cli.ts
+  - .gitignore
+change: Checks run under a supervisor that stops their whole process group on timeout and has no output ceiling; the no-compiler test is environment-independent
+verifyCommand: npm test
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - docs/ROADMAP.md
+    - src/run/baseline.ts
+    - src/run/probe.ts
+    - src/run/supervise.ts
+    - src/verify/verify.ts
+    - test/probe.test.ts
+    - test/verify.test.ts
+  symbols: []
+  maxFiles: 7
+  maxLines: 600
+accept: []
+assumptions:
+  - text: 'low confidence — confirm territory with the human: every anchor matched only as a fragment of a symbol name ("level" in <toplevel>, "level" in <toplevel>, "level" in <toplevel>, "level" in <toplevel>, "level" in StructuralParser.extractTopLevel) — an incidental word can do this'
+    source: system
+    confirmed: false
+  - text: Anchors defended — <toplevel> — eval/mcp-drive.ts (TypeScript); "level" only occurs inside "<toplevel>" · <toplevel> — eval/run.ts (TypeScript); "level" only occurs inside "<toplevel>" · <toplevel> — examples/demo-repo/test/pipeline.test.ts (TypeScript); "level" only occurs inside "<toplevel>" · <toplevel> — src/cli.ts (TypeScript); "level" only occurs inside "<toplevel>" · StructuralParser.extractTopLevel — src/core/parser.ts (TypeScript); "level" only occurs inside "extractTopLevel"
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: <toplevel>, <toplevel>, <toplevel>, <toplevel>, StructuralParser.extractTopLevel (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-26T15:19:11.272Z
+createdBy: Yasirdora

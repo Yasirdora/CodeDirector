@@ -16,7 +16,7 @@ import { indexDir, stableStringify } from "../core/store";
 import { workTreeStatusPorcelain } from "../checkpoint";
 import { VibeCheck } from "../lock/types";
 import { signatureHash } from "../lock/check";
-import { runShellProbe, sha256 } from "./probe";
+import { runShellProbe } from "./probe";
 import { currentHead, listHidden, runIsolated, snapshotWorkTree, WorkTreeSnapshot } from "./tree";
 import { probeDiagnostics } from "./diagnostics";
 import { captureIgnoreRules, IgnoreRules } from "./ignored";
@@ -206,8 +206,9 @@ export function captureBaseline(
       outputs[clause.command] = {
         command: clause.command,
         exitCode: probe.exitCode,
-        stdoutSha256: sha256(probe.stdout),
-        stderrSha256: sha256(probe.stderr),
+        // Hashes of the whole output: the text a probe returns is capped.
+        stdoutSha256: probe.stdoutSha256,
+        stderrSha256: probe.stderrSha256,
       };
     }
   }

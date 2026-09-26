@@ -6,6 +6,43 @@ can become a GitHub issue as it stands.
 
 ## 0.4.6 candidates
 
+### A check's timeout did not stop what the check started
+
+**Status: landed (IL-0023).** Checks (verifyCommand, tests, typecheck,
+output commands) ran through Node's synchronous spawn, which can signal only
+the process it started. Reproduced on cf2eeda:
+
+- A timed-out check returned on time, but what its shell started kept
+  running (three processes left behind). With xcodebuild, such orphans hold
+  DerivedData locks the next build needs.
+- A check that ignored SIGTERM hung cdir indefinitely: the timeout was never
+  enforced.
+- A check that finished but left a background process (a dev server) was
+  reported as timed out, after waiting the whole timeout, because that
+  process still held the output pipe.
+- Past 16 MB of output the check failed as "could not run" (ENOBUFS) and the
+  diagnostic was lost.
+
+Each check now runs under a small supervisor process (`run/supervise.ts`):
+its own process group, output written to files, and on timeout the whole
+group is stopped — SIGTERM, then SIGKILL after 3s. A check that finishes on
+its own may leave a daemon running; that is not a timeout. Output past 16 MB
+per stream keeps its end (where diagnostics are) behind a line saying what
+was left out; `output-unchanged` hashes the whole output, so the cut can
+never hide a difference. Cost: about 45 ms per check. Guarded by
+`test/probe.test.ts`; each of its protective tests fails on the old code.
+
+**Still open — long checks block the MCP server.** Verification is
+synchronous, so while `run_locked` runs a 15-minute xcodebuild the server
+answers nothing and sends no progress; an MCP client with a 60-second
+request timeout gives up. Wanted: run the locked command and its checks off
+the server's main thread, and report progress while they run.
+
+**Also fixed:** the "unchecked without a compiler" test assumed no compiler
+existed and failed on any machine with a global TypeScript (`npm i -g
+typescript`); it now hides global compilers itself, so `npm test` passes in
+either environment.
+
 ### Every command that parses a Swift file waits ~8 seconds to exit
 
 **Status: landed (IL-0022).** Found by timing the eval gate: the three Swift
