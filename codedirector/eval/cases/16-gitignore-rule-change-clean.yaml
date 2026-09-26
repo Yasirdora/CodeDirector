@@ -1,0 +1,19 @@
+name: gitignore-rule-change-clean
+# The other side of case 15: a budgeted .gitignore edit is ordinary work,
+# and output the old rules already ignored (dist/, *.log) is not swept in.
+files:
+  .gitignore: |
+    dist/
+    *.log
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: make math faster
+  goal: same behavior, faster
+  change: math internals and ignore rules
+  budget:
+    files: ["src/math.js", ".gitignore"]
+command: node -e 'const f=require("fs");f.appendFileSync("src/math.js","// faster\n");f.appendFileSync(".gitignore","# build output\n");f.mkdirSync("dist");f.writeFileSync("dist/out.js","x\n");f.writeFileSync("run.log","x\n")'
+expect:
+  exitCode: 0
+  status: verified

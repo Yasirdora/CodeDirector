@@ -173,8 +173,9 @@ export function snapshotWorkTree(rootDir: string): WorkTreeSnapshot {
   return { contents, hashes, hidden, untracked: [...new Set(untracked)].sort() };
 }
 
+/** cdir's own state. The project's .gitignore is not: cdir never writes it (IL-0020). */
 function isToolPath(gitPath: string): boolean {
-  return gitPath.split("/").includes(".codedirector") || gitPath === ".gitignore";
+  return gitPath.split("/").includes(".codedirector");
 }
 
 /** Untracked files (git-root-relative), excluding tool dirs. */

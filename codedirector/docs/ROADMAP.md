@@ -8,6 +8,19 @@ can become a GitHub issue as it stands.
 
 ### A run can hide a file from the fence by adding it to `.gitignore`
 
+**Status: landed (IL-0021).** `.gitignore` files are judged like any other
+file: cdir has not written the project's `.gitignore` since IL-0020, so the
+exemption only protected the hole. The baseline keeps the text of every
+ignore source (each `.gitignore`, and `.git/info/exclude`); when a run
+changes one, every path git now ignores is checked against the rules as
+they were, by git itself (`git check-ignore --no-index` in a scratch
+repository), and what the old rules did not ignore is judged as a change
+(status `!!`), counted in the line total. Output the old rules already
+ignored stays out of scope, as before. Eval cases 15 and 16 pin both sides.
+Known limit: a global excludes file (`core.excludesFile`) lives outside the
+repository, and a run that edits it is not seen. The evidence below is kept
+as the record.
+
 **Found:** 2026-09-24 — a run's three-line `.gitignore` change wasn't
 counted ("16 changed" for 17 files). Reproduced on
 main (02a6ee0) the same day.

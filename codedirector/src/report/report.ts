@@ -23,6 +23,7 @@ import * as path from "node:path";
 import { RepoIndex } from "../core/types";
 import { buildIndex } from "../core/builder";
 import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
 import { VibeCheck } from "../lock/types";
 import { loadLock, saveLock } from "../lock/store";
 import { BudgetStats, RunRecord, runsDir } from "../run/run";
@@ -99,15 +100,15 @@ export function latestRunRecord(rootDir: string, lockId: string): { record: RunR
  * v1 rule: an in-budget file was modified but no test file references any of
  * its symbols — the change's behavioral coverage is unknown. Asserted.
  */
-function computeFindings(index: RepoIndex, changed: ClassifiedChange[]): Finding[] {
+function computeFindings(index: RepoIndex, changed: ClassifiedChange[], domains: DomainRegistry): Finding[] {
   const findings: Finding[] = [];
-  const graph = buildGraph(index);
+  const graph = buildGraph(index, domains);
   for (const c of changed) {
-    if (c.class !== "in-budget" || isTestFile(c.path)) continue;
+    if (c.class !== "in-budget" || isTestFile(c.path, domains)) continue;
     const covering = new Set<string>();
     for (const sym of graph.symbols.values()) {
       if (sym.file !== c.path) continue;
-      for (const t of testFilesFor(index, sym)) covering.add(t);
+      for (const t of testFilesFor(index, sym, domains)) covering.add(t);
     }
     if (covering.size === 0) {
       findings.push({
@@ -179,8 +180,9 @@ export async function buildReport(
 
   let findings: Finding[] = [];
   if (opts.findings !== false && run && run.changed.length > 0) {
-    const index = opts.index ?? (await buildIndex(rootDir)).index;
-    findings = computeFindings(index, run.changed);
+    const domains = opts.domains ?? defaultDomains();
+    const index = opts.index ?? (await buildIndex(rootDir, { domains })).index;
+    findings = computeFindings(index, run.changed, domains);
   }
   // Always named, whatever else is: files were moved aside.
   findings.push(...(verification.putBack ?? []).map(putBackFinding));

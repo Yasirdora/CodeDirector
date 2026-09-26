@@ -78,7 +78,9 @@ verification scheduling, artifacts and reports.
    Syntax-derived facts are rebuilt from the current file on every index,
    so they are current by construction.
 6. **Stronger evidence ranks above heuristic evidence but does not erase
-   it.** When a second source establishes an existing edge, its provenance
+   it.** Within one evidence class, what the fact rests on decides: a
+   compiler, then a build system's project description, then syntax, then
+   history, then a name heuristic (`SOURCE_TIER` in `core/provenance.ts`). When a second source establishes an existing edge, its provenance
    is appended and ranked, never substituted. A compiler that finds no
    reference does not delete a heuristic one: it outranks it.
 7. **Verification is differential where possible.** Diagnostics are

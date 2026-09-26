@@ -143,9 +143,10 @@ function verifyApiUnchanged(
   baseline: Baseline | null,
   baselineRel: string | undefined,
   indexAfter: RepoIndex,
+  domains: DomainRegistry,
 ): VerificationItem[] {
   const items: VerificationItem[] = [];
-  const graphAfter = buildGraph(indexAfter);
+  const graphAfter = buildGraph(indexAfter, domains);
   for (const clause of lock.keep) {
     if (clause.kind !== "api-unchanged") continue;
     for (const id of clause.symbols ?? []) {
@@ -274,7 +275,7 @@ function verifyOneDiagnosticsCheck(
     return { source: "typecheck", subject, verdict: "held", evidenceClass: "proven", detail: `${check.label} clean`, artifactRef };
   }
   const before = baselineDiagnostics(baseline, check);
-  const after = check.parse(probe.stdout);
+  const after = check.parse(probe.stdout, probe.stderr);
   if (before !== undefined && after.length > 0) {
     const fresh = newDiagnostics(before, after);
     if (fresh.length === 0) {
@@ -485,7 +486,7 @@ export function verifyWithBaseline(
   const domains = given.domains ?? defaultDomains();
   const tampered = baselineTampered(rootDir, baselineRel, opts);
   let items: VerificationItem[] = [
-    ...verifyApiUnchanged(lock, baseline, baselineRel, indexAfter),
+    ...verifyApiUnchanged(lock, baseline, baselineRel, indexAfter, domains),
     ...verifyNoNewDependency(rootDir, lock, baseline, baselineRel, domains),
     ...verifyDiagnostics(rootDir, opts, tampered ? null : baseline, domains),
     ...verifyTestsPass(rootDir, lock, opts, domains),

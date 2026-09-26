@@ -1,0 +1,206 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0021-20260926-135528.json",
+  "baselineSha256": "ba57578bb775c93db320463f17bf3ec762868cb328bed47a58faca2a558878db",
+  "budget": {
+    "filesChanged": 17,
+    "linesChanged": 581,
+    "maxFiles": 17,
+    "maxLines": 700
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/adr/0001-domain-boundary.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "docs/ROADMAP.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/cases/15-gitignore-hides-file.yaml",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/cases/16-gitignore-rule-change-clean.yaml",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/checkpoint/index.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/provenance.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domain/types.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domains/node/tsc.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/baseline.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/classify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/ignored.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/tree.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/domains.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/ignored.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260926T135524533",
+    "createdAt": "2026-09-26T13:55:24.546Z",
+    "dirty": false,
+    "id": "ckpt-20260926T135524533",
+    "ref": "3b96e497319bddd5c6f21327eba403f9d29d6267",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260926T135524533"
+  },
+  "command": [
+    "node",
+    "/tmp/claude-0/-home-user-mcp/03ffbd30-bffc-59ed-8e8b-79fea6c04402/scratchpad/apply-files.cjs",
+    "/tmp/claude-0/-home-user-mcp/03ffbd30-bffc-59ed-8e8b-79fea6c04402/scratchpad/spike/codedirector",
+    "/tmp/claude-0/-home-user-mcp/03ffbd30-bffc-59ed-8e8b-79fea6c04402/scratchpad/il0021-files.txt"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-26T13:55:28.539Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "Behaviour outside the ignore-rule fix and the four named fixes is unchanged (the whole suite passes; end-to-end output identical to main) — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "No pull request is opened from here — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0021",
+  "startedAt": "2026-09-26T13:55:28.507Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0021-20260926-135528.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 2
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0021-20260926-135528.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0021-20260926-135528.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Behaviour outside the ignore-rule fix and the four named fixes is unchanged (the whole suite passes; end-to-end output identical to main)",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · No pull request is opened from here",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0021",
+    "verifiedAt": "2026-09-26T13:57:00.092Z",
+    "violations": []
+  },
+  "violations": []
+}

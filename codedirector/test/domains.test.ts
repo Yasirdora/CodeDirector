@@ -26,6 +26,10 @@ import { draftLock } from "../src/lock/draft";
 import { describeProfiles, getProfile, PROFILE_NAMES } from "../src/lock/profiles";
 import { LOCK_SCHEMA_VERSION, KeepClause, VibeCheck } from "../src/lock/types";
 import { captureBaseline } from "../src/run/baseline";
+import { runWithLock } from "../src/run/run";
+import { buildReport } from "../src/report/report";
+import { saveLock } from "../src/lock/store";
+import { sealLock } from "../src/lock/seal";
 import { verifyWithBaseline } from "../src/verify/verify";
 import { DEPENDENCY_MANIFESTS } from "../src";
 import { makeGitRepo } from "./helpers";
@@ -384,6 +388,15 @@ test("provenance: stronger evidence ranks first and weaker evidence is kept", ()
   assert.equal(strongestProvenance([syntax, compiler]), compiler);
 });
 
+test("provenance: a resolved import outranks a name guess, a compiler outranks both", () => {
+  const imported: FactProvenance = { source: "tree-sitter", domain: "node", evidence: "asserted", freshness: "current" };
+  const guessed: FactProvenance = { source: "inferred", domain: "core", evidence: "asserted", freshness: "current" };
+  const domainOwn: FactProvenance = { source: "acme-resolver", domain: "acme", evidence: "asserted", freshness: "current" };
+  const project: FactProvenance = { source: "swiftpm", domain: "apple", evidence: "asserted", freshness: "current" };
+  assert.equal(strongestProvenance([guessed, imported]), imported, "both asserted; the guess used to win on its name");
+  assert.deepEqual([guessed, domainOwn, project, imported].sort(compareProvenance), [project, domainOwn, imported, guessed]);
+});
+
 test("provenance: a fact from a stale revision is not evidence", () => {
   assert.equal(freshnessOf("hash-a", "hash-a"), "current");
   assert.equal(freshnessOf("hash-a", "hash-b"), "stale");
@@ -526,4 +539,55 @@ test("boundary: ecosystem names stay out of core code (comments aside)", () => {
     }
   }
   assert.deepEqual(offenders, []);
+});
+
+// ---------------------------------------------------------------------
+// One registry for a whole run
+
+test("registry: the Change Report's findings use the run's domains, not the built-in ones", async () => {
+  const root = makeGitRepo({
+    "lib/math.ts": "export function add(a: number, b: number) { return a + b; }\n",
+    "checks/math.ts": 'import { add } from "@acme/math";\nadd(1, 1);\n',
+  });
+  const domains = acmeOnly();
+  const { index } = await buildIndex(root, { domains });
+  const { lock } = draftLock(root, index, "tweak add", { now: "2026-09-26T00:00:00.000Z", createdBy: "test" }, domains);
+  lock.budget = { files: ["lib/math.ts"], symbols: [], maxFiles: 1, maxLines: 100 };
+  lock.deny = [];
+  lock.keep = [];
+  lock.status = "active";
+  saveLock(root, lock);
+  sealLock(root, lock);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", 'require("fs").appendFileSync("lib/math.ts","// x\\n")'], {
+    stdio: "pipe",
+    verifyOptions: { domains, typecheck: false },
+  });
+  const report = await buildReport(root, lock.id, { domains, typecheck: false, run: outcome.record, verification: outcome.record.verification });
+  assert.ok(
+    !report.findings.some((f) => f.text.includes("no test file references")),
+    `checks/math.ts covers add under the acme domain: ${JSON.stringify(report.findings)}`,
+  );
+});
+
+test("run: with verification off, an untouched package.json is not a new dependency", async () => {
+  // The run's fallback compared a raw hash against the baseline's
+  // dependency fingerprint, so package.json always read as changed.
+  const root = makeGitRepo({ "package.json": '{"name":"x","dependencies":{}}\n', "src/a.js": "export const a = 1;\n" });
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "tweak a", { now: "2026-09-26T00:00:00.000Z", createdBy: "test" });
+  lock.budget = { files: ["src/a.js"], symbols: [], maxFiles: 1, maxLines: 100 };
+  lock.deny = [];
+  lock.keep = [{ kind: "no-new-dependency" }];
+  lock.status = "active";
+  saveLock(root, lock);
+  sealLock(root, lock);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", 'require("fs").appendFileSync("src/a.js","// x\\n")'], {
+    stdio: "pipe",
+    verify: false,
+  });
+  assert.deepEqual(
+    outcome.record.keepResults.filter((r) => r.kind === "no-new-dependency").map((r) => [r.detail, r.status]),
+    [["package.json unchanged", "ok"]],
+  );
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.record.violations));
 });

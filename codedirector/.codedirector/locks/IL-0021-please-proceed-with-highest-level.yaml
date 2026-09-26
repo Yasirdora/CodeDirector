@@ -1,0 +1,96 @@
+schemaVersion: 1
+id: IL-0021
+status: verified
+utterance: please proceed with highest level of professionalism, just one question in back of my mind, when I created an app and want to submit it to apple store should I create something like code director to review it and help me refine the app or should I extend the code director? the ai has hallucination problem how can make it so it can be trusted
+goal: "A run cannot hide what it changes by changing what git ignores: an edited .gitignore is judged like any other file, and a file the run's new ignore rules hide is judged as a change. Plus four small fixes found reviewing the domain split, with no other change in behaviour."
+interpretation: |
+  STEP 1 of the plan the owner approved ("close the known fence holes"),
+  approved with "please proceed". BUILT IN A SPIKE FIRST: a scratch clone of
+  3b96e49; nothing here is touched until this lock is active. The run copies
+  the spike's 17 files in.
+
+  TERRITORY: the utterance names no code (the drafter says so: its anchors
+  are incidental words). The budget is the spike's diff, file by file.
+
+  THE HOLE (ROADMAP 0.4.6), reproduced on main 3b96e49 the same day: a lock
+  budgeting src/a.ts and denying .gitignore; a run that edits src/a.ts,
+  creates notes.txt and appends notes.txt to .gitignore. Result: exit 0,
+  "1 file(s) changed". Eval case 15 on main: 0 violations.
+
+  THE FIX
+  1 .gitignore is judged like any other file (classify, probe put-back,
+    checkpoint dirty state). cdir has not written it since IL-0020.
+  2 The baseline keeps the text of every ignore source (each .gitignore,
+    .git/info/exclude). When a run changes one, each path git now ignores is
+    checked against the old rules by git itself (check-ignore --no-index in
+    a scratch repo); what they did not ignore is a change ("!!"), counted
+    in the line total. Output the old rules already ignored stays out.
+  3 Small fixes from the review: the api-unchanged graph and the report's
+    findings use the run's domain registry; provenance ranks a resolved
+    import above a name guess (source tiers); with verification off,
+    package.json is compared by the same fingerprint the baseline took (it
+    always read as changed); a diagnostics check is given stderr too.
+
+  EVIDENCE FROM THE SPIKE
+  - npm test: 231 tests (220 before, 11 new), all pass.
+  - Each of the three small fixes: its test fails with the fix reverted.
+  - Eval 16/16 (2 new: the hole, and a legitimate rule change that must
+    stay clean). Case 15 fails on main.
+  - End-to-end output on a TypeScript and a Swift fixture is identical to
+    main after normalising times and hashes.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: Behaviour outside the ignore-rule fix and the four named fixes is unchanged (the whole suite passes; end-to-end output identical to main)
+  - kind: custom
+    text: No pull request is opened from here
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - src/lock/**
+  - src/mcp/**
+  - src/cli.ts
+  - .gitignore
+change: A run cannot hide files through ignore rules; the run's domain registry reaches every graph; provenance ranks syntax above guesses
+verifyCommand: npm test
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - docs/ROADMAP.md
+    - docs/adr/0001-domain-boundary.md
+    - eval/cases/15-gitignore-hides-file.yaml
+    - eval/cases/16-gitignore-rule-change-clean.yaml
+    - src/checkpoint/index.ts
+    - src/core/provenance.ts
+    - src/domain/types.ts
+    - src/domains/node/tsc.ts
+    - src/report/report.ts
+    - src/run/baseline.ts
+    - src/run/classify.ts
+    - src/run/ignored.ts
+    - src/run/run.ts
+    - src/run/tree.ts
+    - src/verify/verify.ts
+    - test/domains.test.ts
+    - test/ignored.test.ts
+  symbols: []
+  maxFiles: 17
+  maxLines: 700
+accept: []
+assumptions:
+  - text: 'low confidence — confirm territory with the human: every anchor matched only as a fragment of a symbol name ("level" in <toplevel>, "level" in <toplevel>, "review" in ImagePipeline.renderPreview, "review" in PreviewFrame, "review" in PreviewView) — an incidental word can do this'
+    source: system
+    confirmed: false
+  - text: Anchors defended — <toplevel> — eval/mcp-drive.ts (TypeScript); "level" only occurs inside "<toplevel>" · <toplevel> — eval/run.ts (TypeScript); "level" only occurs inside "<toplevel>" · ImagePipeline.renderPreview — examples/demo-repo/src/pipeline.ts (TypeScript); "review" only occurs inside "renderPreview" · PreviewFrame — examples/demo-repo/src/pipeline.ts (TypeScript); "review" only occurs inside "PreviewFrame" · PreviewView — examples/demo-repo/src/preview.ts (TypeScript); "review" only occurs inside "PreviewView"
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: <toplevel>, <toplevel>, ImagePipeline.renderPreview, PreviewFrame, PreviewView (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-26T13:54:46.290Z
+createdBy: Yasirdora

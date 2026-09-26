@@ -77,7 +77,8 @@ export const tscCheck: DiagnosticsCheck = {
   tool: "tsc",
   defaultTimeoutMs: 120_000,
   plan: planTsc,
-  parse: typecheckErrors,
+  // tsc writes its diagnostics to stdout.
+  parse: (stdout) => typecheckErrors(stdout),
   isErrorLine: (line) => line.includes("error TS"),
   legacyBaselineField: "typecheckErrors",
 };

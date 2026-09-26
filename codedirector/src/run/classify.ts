@@ -18,6 +18,7 @@ import { Baseline } from "./baseline";
 // Type-only, so nothing is imported at runtime and run.ts -> classify.ts
 // stays a one-way edge.
 import type { BudgetStats, RunRecord } from "./run";
+import { captureIgnoreRules, ignoreRulesChanged, newlyIgnoredPaths } from "./ignored";
 import {
   ABSENT,
   currentHead,
@@ -33,7 +34,7 @@ export type ChangeClass = "denied" | "out-of-budget" | "in-budget";
 
 export interface ClassifiedChange {
   path: string;
-  /** porcelain status letters, e.g. "M", "??", "A", "R" */
+  /** porcelain status letters, e.g. "M", "??", "A", "R"; "!!" for a file the run's ignore rules hid */
   status: string;
   class: ChangeClass;
   /** The deny pattern that matched, when class is "denied". */
@@ -80,7 +81,7 @@ function changedFilesVsHead(rootDir: string): Array<{ path: string; status: stri
     if (!line.trim()) continue;
     const status = line.slice(0, 2).trim();
     for (const p of porcelainLinePaths(line)) {
-      if (p.split("/").includes(".codedirector") || p === ".gitignore") continue;
+      if (p.split("/").includes(".codedirector")) continue;
       const rel = displayPath(rootDir, p);
       if (seen.has(rel)) continue;
       seen.add(rel);
@@ -95,9 +96,11 @@ function changedFilesSinceBaseline(
   baseline: Baseline,
 ): Array<{ path: string; status: string }> {
   const hits = new Map<string, string>(); // display path -> status
+  // .gitignore files are judged like any other file. They used to be
+  // skipped because cdir wrote its own block there; since IL-0020 it never
+  // does, and the skip let a run hide what it created (ROADMAP 0.4.6).
   const add = (gitPath: string, status: string) => {
-    if (gitPath.split("/").includes(".codedirector") || gitPath === ".gitignore" || gitPath.endsWith("/.gitignore"))
-      return;
+    if (gitPath.split("/").includes(".codedirector")) return;
     const rel = displayPath(rootDir, gitPath);
     if (!hits.has(rel)) hits.set(rel, status);
   };
@@ -139,6 +142,16 @@ function changedFilesSinceBaseline(
     if (!hiddenNow.some((h) => h.path === p)) {
       const now = hashGitPath(rootDir, p);
       if (now !== hash) add(p, "H");
+    }
+  }
+
+  // 5. Files the run's own ignore-rule changes hid from git ("!!", git's
+  //    mark for an ignored file). Only asked when a rule changed: a new file
+  //    matching a rule that already existed stays out of scope, as before.
+  if (baseline.ignoreRules) {
+    const now = captureIgnoreRules(rootDir);
+    if (now && ignoreRulesChanged(baseline.ignoreRules, now)) {
+      for (const p of newlyIgnoredPaths(rootDir, baseline.ignoreRules)) add(p, "!!");
     }
   }
 

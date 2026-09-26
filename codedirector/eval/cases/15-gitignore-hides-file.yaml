@@ -1,0 +1,23 @@
+name: gitignore-hides-file
+# A run that ignores the file it creates must not pass unseen: editing a
+# denied .gitignore is a DENY, and the hidden file is judged like any other
+# (ROADMAP 0.4.6; this case came out VERIFIED, "1 changed", before).
+files:
+  .gitignore: |
+    dist/
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: make math faster
+  goal: same behavior, faster
+  change: math internals only
+  deny: [".gitignore"]
+  budget:
+    files: ["src/math.js"]
+command: node -e 'const f=require("fs");f.appendFileSync("src/math.js","// faster\n");f.writeFileSync("notes.txt","hidden\n");f.appendFileSync(".gitignore","notes.txt\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "DENY: .gitignore"
+    - "OUT-OF-BUDGET: notes.txt"

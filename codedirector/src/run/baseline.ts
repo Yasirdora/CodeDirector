@@ -19,6 +19,7 @@ import { signatureHash } from "../lock/check";
 import { runShellProbe, sha256 } from "./probe";
 import { currentHead, listHidden, runIsolated, snapshotWorkTree, WorkTreeSnapshot } from "./tree";
 import { probeDiagnostics } from "./diagnostics";
+import { captureIgnoreRules, IgnoreRules } from "./ignored";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
 import { ProbePutBack } from "../verify/types";
 
@@ -81,6 +82,13 @@ export interface Baseline {
    * was, or the rung was switched off. An empty list means clean.
    */
   diagnostics?: Record<string, string[]>;
+  /**
+   * The text of every ignore source at capture (each .gitignore, and
+   * .git/info/exclude). A run that changes them is checked for files its
+   * new rules hide from git (run/ignored.ts). Absent outside git and in
+   * baselines captured before this existed.
+   */
+  ignoreRules?: IgnoreRules;
   /**
    * Written by releases before the domain split: tsc's errors. Read through
    * a check's `legacyBaselineField`; never written.
@@ -146,8 +154,9 @@ export function captureBaseline(
   checkpointTag?: string,
   opts: BaselineOptions = {},
 ): Baseline {
+  const domains = opts.domains ?? defaultDomains();
   const signatures: Record<string, string> = {};
-  const graph = buildGraph(index);
+  const graph = buildGraph(index, domains);
   for (const clause of lock.keep) {
     if (clause.kind !== "api-unchanged") continue;
     for (const id of clause.symbols ?? []) {
@@ -156,7 +165,6 @@ export function captureBaseline(
     }
   }
 
-  const domains = opts.domains ?? defaultDomains();
   const manifests: Record<string, string> = {};
   const wantsManifestDiff = lock.keep.some((c) => c.kind === "no-new-dependency");
   if (wantsManifestDiff) {
@@ -214,13 +222,14 @@ export function captureBaseline(
         onPutBack: (p) => opts.putBack?.push({ probe: `baseline · ${check.subject}`, ...p }),
       });
       if (tc.kind === "ran") {
-        diagnostics[check.id] = tc.probe.exitCode === 0 ? [] : check.parse(tc.probe.stdout).map((e) => e.key);
+        diagnostics[check.id] = tc.probe.exitCode === 0 ? [] : check.parse(tc.probe.stdout, tc.probe.stderr).map((e) => e.key);
       }
     }
   }
 
   const status = workTreeStatusPorcelain(rootDir);
   const snap = snapshotWorkTree(rootDir);
+  const ignoreRules = captureIgnoreRules(rootDir);
   const capturedAt = new Date().toISOString();
   const treeDir = writeBaselineTree(rootDir, lock.id, capturedAt, snap);
   return {
@@ -237,6 +246,7 @@ export function captureBaseline(
     hidden: listHidden(rootDir),
     ...(treeDir !== undefined ? { treeDir } : {}),
     ...(Object.keys(diagnostics).length > 0 ? { diagnostics } : {}),
+    ...(ignoreRules ? { ignoreRules } : {}),
   };
 }
 

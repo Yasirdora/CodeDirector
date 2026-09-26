@@ -145,8 +145,11 @@ export interface DiagnosticsCheck {
   /** Default timeout in ms, when the caller gives none. */
   defaultTimeoutMs: number;
   plan(rootDir: string): DiagnosticsPlan;
-  /** Diagnostics from the check's stdout. */
-  parse(stdout: string): Diagnostic[];
+  /**
+   * Diagnostics from the check's output. Both streams, because compilers
+   * disagree about where they write: tsc uses stdout, swiftc stderr.
+   */
+  parse(stdout: string, stderr: string): Diagnostic[];
   /** Whether an output line is an error line, for a short excerpt when nothing parses. */
   isErrorLine(line: string): boolean;
   /**
