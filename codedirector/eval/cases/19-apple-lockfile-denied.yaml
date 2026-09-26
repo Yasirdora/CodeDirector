@@ -1,0 +1,31 @@
+name: apple-lockfile-denied
+# What the apple profile denies: a run that re-resolves Swift packages
+# (Package.resolved) outside the lock is a DENY and a dependency change.
+files:
+  Package.swift: |
+    // swift-tools-version:5.9
+    import PackageDescription
+    let package = Package(name: "App", targets: [.target(name: "App")])
+  Package.resolved: |
+    {"pins":[],"version":2}
+  Sources/App/Model.swift: |
+    public struct Model { public init() {} }
+lock:
+  utterance: tidy the model
+  goal: model tidied
+  change: Model only
+  deny: ["Package.resolved"]
+  keep:
+    - kind: no-new-dependency
+  budget:
+    files: ["Sources/App/Model.swift"]
+command: >-
+  node -e 'const f=require("fs");f.appendFileSync("Sources/App/Model.swift","// tidy\n");f.writeFileSync("Package.resolved","{\"pins\":[{\"identity\":\"x\"}],\"version\":2}\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "DENY: Package.resolved"
+    - "KEEP no-new-dependency"
+  items:
+    - { match: no-new-dependency, class: proven, verdict: violated }

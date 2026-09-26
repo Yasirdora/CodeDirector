@@ -70,6 +70,32 @@ export interface FactProvenance {
 const EVIDENCE_RANK: Record<FactEvidence, number> = { proven: 3, measured: 2, asserted: 1 };
 
 /**
+ * Within one evidence class, what the fact rests on. Three evidence classes
+ * cannot tell "the import resolves to this file" from "only one symbol in
+ * the repo has that name" — both are asserted — and ranking them by name
+ * put the guess first. A compiler outranks a build system's description,
+ * which outranks syntax, which outranks history, which outranks a guess. A
+ * source a domain names itself ranks as syntax: it read something, and no
+ * more is known about it.
+ */
+const SOURCE_TIER: Record<string, number> = {
+  typescript: 5,
+  sourcekit: 5,
+  indexstore: 5,
+  "xcode-project": 4,
+  swiftpm: 4,
+  "tree-sitter": 3,
+  "file-system": 3,
+  git: 2,
+  inferred: 1,
+};
+const DOMAIN_SOURCE_TIER = 3;
+
+function sourceTier(source: FactSource): number {
+  return SOURCE_TIER[source] ?? DOMAIN_SOURCE_TIER;
+}
+
+/**
  * Whether a fact derived from `revision` still describes a file whose
  * content hash is now `currentRevision`. A fact that records no revision was
  * derived from the current tree by construction.
@@ -86,8 +112,9 @@ export function effectiveEvidence(p: FactProvenance): FactEvidence | null {
 
 /**
  * Order two provenances, strongest first: current before stale, then by
- * evidence. Deterministic ties by source and domain name. Ranking only —
- * nothing is dropped, so weaker facts stay visible below stronger ones.
+ * evidence, then by what the evidence rests on (SOURCE_TIER).
+ * Deterministic ties by source and domain name. Ranking only — nothing is
+ * dropped, so weaker facts stay visible below stronger ones.
  */
 export function compareProvenance(a: FactProvenance, b: FactProvenance): number {
   const ea = effectiveEvidence(a);
@@ -95,6 +122,9 @@ export function compareProvenance(a: FactProvenance, b: FactProvenance): number 
   const ra = ea === null ? 0 : EVIDENCE_RANK[ea];
   const rb = eb === null ? 0 : EVIDENCE_RANK[eb];
   if (ra !== rb) return rb - ra;
+  const ta = sourceTier(a.source);
+  const tb = sourceTier(b.source);
+  if (ta !== tb) return tb - ta;
   return a.source.localeCompare(b.source) || a.domain.localeCompare(b.domain);
 }
 

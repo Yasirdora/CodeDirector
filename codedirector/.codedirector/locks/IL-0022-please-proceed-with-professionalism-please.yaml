@@ -1,0 +1,85 @@
+schemaVersion: 1
+id: IL-0022
+status: verified
+utterance: please proceed with professionalism, please also keep in mind my goal is not to complicate the tool but get the most out of AI and be able to produce high quality production ready application that created with professionalism
+goal: "What the tool reports and what it costs can be trusted on Apple projects: no coverage finding that cannot be true, no 8-second stall after any command that parses Swift, and an eval gate that covers Swift and shows what each case costs."
+interpretation: |
+  STEP 2 of the plan ("measure, so every later change shows its numbers"),
+  kept small on the owner's word: nothing new for the user to learn, the
+  output gets more truthful and the tool faster. BUILT IN A SPIKE FIRST: a
+  scratch clone of ddc0299; the run copies the spike's 11 files in.
+
+  TERRITORY: the utterance names no code; the budget is the spike's diff.
+
+  1 THE STALL, found by timing the eval gate: Swift cases took 9s, JS ones
+    0.4s. The work took 0.1s; V8 optimises the Swift grammar's WebAssembly
+    in the background and Node waits for it before exiting (7.9s CPU;
+    process.exit() does not avoid it). An indexing pass that parses up to
+    3,000 Swift files uses V8's baseline WebAssembly compiler (about 45%
+    slower per file, nothing at exit); a pass with no Swift keeps V8's
+    defaults. The builder now decides what to parse before starting the
+    parser (paths only between passes, so memory does not grow).
+  2 THE FINDING: "no test file references its symbols" is no longer said of
+    files the index does not read (IL-0021's own report had five), and for
+    a language with no recognised test files (Swift today) it says that,
+    once, naming up to three files.
+  3 THE GATE: eval prints each case's cdir run time and the total. Three
+    Swift cases: a public signature change is a proven violation, a body
+    change is proven held, and Package.resolved under a deny + no-new-
+    dependency is refused.
+
+  EVIDENCE FROM THE SPIKE
+  - npm test: 235 tests (231 before, 4 new), all pass. Each new behaviour's
+    test fails with its fix reverted (the stall test: 8,219ms).
+  - Eval 19/19 in 9.9s (Swift cases 0.5s each, 9s before the fix).
+  - End-to-end on the TypeScript fixture: identical to ddc0299. On the Swift
+    fixture: only the coverage finding's wording differs.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: Nothing new to learn or configure — no new flag, command, clause or lock field
+  - kind: custom
+    text: No pull request is opened from here
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - src/lock/**
+  - src/mcp/**
+  - src/run/**
+  - src/verify/**
+  - src/cli.ts
+  - .gitignore
+change: Swift commands no longer stall 8s at exit; the coverage finding says only what can be true; the eval gate covers Swift and shows its cost
+verifyCommand: npm test
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - docs/ROADMAP.md
+    - eval/README.md
+    - eval/cases/17-swift-api-changed.yaml
+    - eval/cases/18-swift-api-held.yaml
+    - eval/cases/19-apple-lockfile-denied.yaml
+    - eval/run.ts
+    - src/core/builder.ts
+    - src/core/parser.ts
+    - src/report/report.ts
+    - test/findings.test.ts
+    - test/swift-exit.test.ts
+  symbols: []
+  maxFiles: 11
+  maxLines: 450
+accept: []
+assumptions:
+  - text: Anchors defended — DomainRegistry.get — src/domain/registry.ts (TypeScript); "get" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: DomainRegistry.get (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-26T14:36:48.253Z
+createdBy: Yasirdora

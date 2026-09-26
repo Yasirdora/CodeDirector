@@ -123,9 +123,8 @@ export function workTreeStatusPorcelain(rootDir: string): string {
     .split("\n")
     .filter((line) => {
       if (!line.trim()) return false;
-      return !dirtyPaths(line).some(
-        (p) => p.split("/").includes(".codedirector") || p === ".gitignore" || p.endsWith("/.gitignore"),
-      );
+      // A dirty .gitignore is the user's work: cdir never writes it (IL-0020).
+      return !dirtyPaths(line).some((p) => p.split("/").includes(".codedirector"));
     })
     .join("\n");
 }

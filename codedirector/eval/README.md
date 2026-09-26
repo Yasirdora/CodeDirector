@@ -33,6 +33,11 @@ expect:
   uncheckedMin: 0           # minimum size of the Unchecked bucket
 ```
 
+Each case prints how long its `cdir run` took, and the total is printed at
+the end: what the gate costs is part of what it measures (informational —
+machine speed varies, so time never fails a case). Timing is how the ~8s
+Swift exit stall was found.
+
 Cases run in filename order (prefix with `NN-` to control it). A failing case
 keeps its temp repo (the path is printed) for debugging; passing cases are
 cleaned up.

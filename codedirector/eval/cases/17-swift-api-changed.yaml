@@ -1,0 +1,33 @@
+name: swift-api-changed
+# A Swift public signature is part of the contract: changing it under an
+# api-unchanged clause is a proven violation (no Swift toolchain needed —
+# the signature comes from the syntax tree).
+files:
+  Package.swift: |
+    // swift-tools-version:5.9
+    import PackageDescription
+    let package = Package(name: "App", targets: [.target(name: "App")])
+  Sources/App/Model.swift: |
+    public struct Model {
+        public init() {}
+        public func refresh() -> Int { load() }
+    }
+    func load() -> Int { 1 }
+lock:
+  utterance: make refresh faster
+  goal: same API, faster
+  change: Model internals only
+  keep:
+    - kind: api-unchanged
+      symbols: ["Sources/App/Model.swift#Model.refresh"]
+  budget:
+    files: ["Sources/App/Model.swift"]
+command: >-
+  node -e 'const f=require("fs");const p="Sources/App/Model.swift";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("refresh() -> Int","refresh(force: Bool = false) -> Int"))'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "KEEP api-unchanged"
+  items:
+    - { match: api-unchanged, class: proven, verdict: violated }

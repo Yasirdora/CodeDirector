@@ -1,0 +1,176 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0022-20260926-143716.json",
+  "baselineSha256": "0395be09be8caf7bf632f463dcf154bb5a08ad03a374de7b478789b3d67f7b0c",
+  "budget": {
+    "filesChanged": 11,
+    "linesChanged": 338,
+    "maxFiles": 11,
+    "maxLines": 450
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/ROADMAP.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/cases/17-swift-api-changed.yaml",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/cases/18-swift-api-held.yaml",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/cases/19-apple-lockfile-denied.yaml",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/builder.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/parser.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/findings.test.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/swift-exit.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260926T143712401",
+    "createdAt": "2026-09-26T14:37:12.415Z",
+    "dirty": false,
+    "id": "ckpt-20260926T143712401",
+    "ref": "ddc0299dbc788f468c88d681162650be0b945cb5",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260926T143712401"
+  },
+  "command": [
+    "node",
+    "/tmp/claude-0/-home-user-mcp/03ffbd30-bffc-59ed-8e8b-79fea6c04402/scratchpad/apply-files.cjs",
+    "/tmp/claude-0/-home-user-mcp/03ffbd30-bffc-59ed-8e8b-79fea6c04402/scratchpad/spike2/codedirector",
+    "/tmp/claude-0/-home-user-mcp/03ffbd30-bffc-59ed-8e8b-79fea6c04402/scratchpad/il0022-files.txt"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-26T14:37:16.323Z",
+  "keepResults": [
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "Nothing new to learn or configure — no new flag, command, clause or lock field — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "No pull request is opened from here — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0022",
+  "startedAt": "2026-09-26T14:37:16.292Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0022-20260926-143716.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 2
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0022-20260926-143716.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0022-20260926-143716.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Nothing new to learn or configure — no new flag, command, clause or lock field",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · No pull request is opened from here",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0022",
+    "verifiedAt": "2026-09-26T14:38:47.291Z",
+    "violations": []
+  },
+  "violations": []
+}

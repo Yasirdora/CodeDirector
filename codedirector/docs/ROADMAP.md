@@ -6,7 +6,43 @@ can become a GitHub issue as it stands.
 
 ## 0.4.6 candidates
 
+### Every command that parses a Swift file waits ~8 seconds to exit
+
+**Status: landed (IL-0022).** Found by timing the eval gate: the three Swift
+cases took 9s each, the JavaScript ones 0.4s. The work took 0.1s. V8
+optimises the Swift grammar's WebAssembly in the background once a Swift
+file is parsed, and Node waits for that job before exiting (Node 22; 7.9s of
+CPU, `process.exit()` does not avoid it). An indexing pass that parses up to
+3,000 Swift files now uses V8's baseline WebAssembly compiler only (about
+45% slower per file, nothing at exit); a pass without Swift keeps V8's
+defaults. `cdir index` on one Swift file: 8.2s → 0.2s. Guarded by
+`test/swift-exit.test.ts`. In the long-lived MCP server the cost was a
+background compile, not a stall.
+
+### The coverage finding says things that cannot be true
+
+**Status: landed (IL-0022).** "X changed in-budget, but no test file
+references its symbols" was printed for Markdown and YAML (IL-0021's own
+report had five), and would be for every Swift file, because cdir
+recognises no Swift tests yet. It now skips files the index does not read,
+and for a language with no recognised test files says so once: "N Swift
+file(s) changed in-budget (…); cdir recognises no Swift test files here, so
+their test coverage is unknown".
+
 ### A run can hide a file from the fence by adding it to `.gitignore`
+
+**Status: landed (IL-0021).** `.gitignore` files are judged like any other
+file: cdir has not written the project's `.gitignore` since IL-0020, so the
+exemption only protected the hole. The baseline keeps the text of every
+ignore source (each `.gitignore`, and `.git/info/exclude`); when a run
+changes one, every path git now ignores is checked against the rules as
+they were, by git itself (`git check-ignore --no-index` in a scratch
+repository), and what the old rules did not ignore is judged as a change
+(status `!!`), counted in the line total. Output the old rules already
+ignored stays out of scope, as before. Eval cases 15 and 16 pin both sides.
+Known limit: a global excludes file (`core.excludesFile`) lives outside the
+repository, and a run that edits it is not seen. The evidence below is kept
+as the record.
 
 **Found:** 2026-09-24 — a run's three-line `.gitignore` change wasn't
 counted ("16 changed" for 17 files). Reproduced on

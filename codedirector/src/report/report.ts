@@ -23,7 +23,9 @@ import * as path from "node:path";
 import { RepoIndex } from "../core/types";
 import { buildIndex } from "../core/builder";
 import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
 import { VibeCheck } from "../lock/types";
+import { languageOf } from "../lock/draft";
 import { loadLock, saveLock } from "../lock/store";
 import { BudgetStats, RunRecord, runsDir } from "../run/run";
 import { ClassifiedChange, rejudgeRun } from "../run/classify";
@@ -98,16 +100,32 @@ export function latestRunRecord(rootDir: string, lockId: string): { record: RunR
  * Incidental observations (blueprint §12 "never perform, record and offer").
  * v1 rule: an in-budget file was modified but no test file references any of
  * its symbols — the change's behavioral coverage is unknown. Asserted.
+ *
+ * Said only where it can be true. A file the index does not read (Markdown,
+ * YAML, a plist) has no symbols to reference, so the sentence is noise
+ * there. And for a language whose tests cdir cannot recognise at all —
+ * Swift, until its test mapping exists — "no test references it" is false
+ * modesty: the truth is that cdir cannot tell, said once for the language.
  */
-function computeFindings(index: RepoIndex, changed: ClassifiedChange[]): Finding[] {
+function computeFindings(index: RepoIndex, changed: ClassifiedChange[], domains: DomainRegistry): Finding[] {
   const findings: Finding[] = [];
-  const graph = buildGraph(index);
+  const graph = buildGraph(index, domains);
+  const testedLanguages = new Set(
+    Object.keys(index.files).filter((f) => isTestFile(f, domains)).map(languageOf),
+  );
+  const unmapped = new Map<string, string[]>();
   for (const c of changed) {
-    if (c.class !== "in-budget" || isTestFile(c.path)) continue;
+    if (c.class !== "in-budget" || isTestFile(c.path, domains)) continue;
+    if (!index.files[c.path]) continue; // not source cdir reads: nothing to reference
+    const language = languageOf(c.path);
+    if (!testedLanguages.has(language)) {
+      unmapped.set(language, [...(unmapped.get(language) ?? []), c.path]);
+      continue;
+    }
     const covering = new Set<string>();
     for (const sym of graph.symbols.values()) {
       if (sym.file !== c.path) continue;
-      for (const t of testFilesFor(index, sym)) covering.add(t);
+      for (const t of testFilesFor(index, sym, domains)) covering.add(t);
     }
     if (covering.size === 0) {
       findings.push({
@@ -115,6 +133,13 @@ function computeFindings(index: RepoIndex, changed: ClassifiedChange[]): Finding
         evidenceClass: "asserted",
       });
     }
+  }
+  for (const [language, paths] of [...unmapped.entries()].sort()) {
+    const named = paths.length <= 3 ? ` (${paths.join(", ")})` : "";
+    findings.push({
+      text: `${paths.length} ${language} file(s) changed in-budget${named}; cdir recognises no ${language} test files here, so their test coverage is unknown`,
+      evidenceClass: "asserted",
+    });
   }
   return findings;
 }
@@ -179,8 +204,9 @@ export async function buildReport(
 
   let findings: Finding[] = [];
   if (opts.findings !== false && run && run.changed.length > 0) {
-    const index = opts.index ?? (await buildIndex(rootDir)).index;
-    findings = computeFindings(index, run.changed);
+    const domains = opts.domains ?? defaultDomains();
+    const index = opts.index ?? (await buildIndex(rootDir, { domains })).index;
+    findings = computeFindings(index, run.changed, domains);
   }
   // Always named, whatever else is: files were moved aside.
   findings.push(...(verification.putBack ?? []).map(putBackFinding));

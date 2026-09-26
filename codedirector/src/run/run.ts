@@ -19,7 +19,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { RepoIndex } from "../core/types";
-import { buildIndex, hashContent } from "../core/builder";
+import { buildIndex } from "../core/builder";
 import { buildGraph } from "../core/graph";
 import { ensureCodedirectorIgnore, indexDir, stableStringify } from "../core/store";
 import { createCheckpoint, Checkpoint } from "../checkpoint";
@@ -131,7 +131,10 @@ function checkKeepClauses(
             results.push({ kind: clause.kind, detail: `${m} deleted`, status: "violated" });
             continue;
           }
-          const after = hashContent(fs.readFileSync(p, "utf8"));
+          // The same fingerprint the baseline took (package.json's is its
+          // dependency maps): a raw hash here reported every package.json as
+          // changed whenever verification was switched off.
+          const after = domains.manifestFingerprint(m, fs.readFileSync(p, "utf8"));
           results.push(
             after === before
               ? { kind: clause.kind, detail: `${m} unchanged`, status: "ok" }
@@ -248,7 +251,7 @@ export async function runWithLock(
   // 4. classify changes against the Lock (delta vs pre-run baseline, not vs HEAD)
   const changed = classifyChanges(rootDir, lock, baseline);
   const untracked = changedFiles(rootDir, baseline)
-    .filter((c) => c.status === "??")
+    .filter((c) => c.status === "??" || c.status === "!!")
     .map((c) => c.path);
   const linesChanged = changedLineCount(rootDir, untracked, baseline);
   const budget: BudgetStats = {
