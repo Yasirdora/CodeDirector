@@ -6,12 +6,15 @@
 import { buildGraph, SymbolGraph } from "./graph";
 import { rankSymbols, RankedSymbol } from "./rank";
 import { RepoIndex, SymbolInfo } from "./types";
+import type { DomainRegistry } from "../domain/registry";
 
 export interface MapOptions {
   /** Max entries to print (default 30). */
   top?: number;
   /** Approximate token budget; 1 token ≈ 4 chars (default 1024). */
   maxTokens?: number;
+  /** Domains whose facts the graph is built from (default: the built-in ones). */
+  domains?: DomainRegistry;
 }
 
 export interface RepoMapResult {
@@ -151,7 +154,7 @@ export function resolveAnchors(graph: SymbolGraph, query: string): SymbolInfo[] 
 export function buildRepoMap(index: RepoIndex, query: string, opts: MapOptions = {}): RepoMapResult {
   const top = opts.top ?? 30;
   const maxTokens = opts.maxTokens ?? 1024;
-  const graph = buildGraph(index);
+  const graph = buildGraph(index, opts.domains);
   const anchors = resolveAnchors(graph, query);
   // Virtual "<toplevel>" nodes participate in the graph but not in the map.
   const ranked = rankSymbols(graph, anchors.map((a) => a.id)).filter(

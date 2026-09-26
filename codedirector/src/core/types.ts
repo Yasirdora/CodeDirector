@@ -8,6 +8,8 @@
  * behind.
  */
 
+import type { FactProvenance } from "./provenance";
+
 export const INDEX_SCHEMA_VERSION = 1;
 
 export type SymbolKind =
@@ -78,8 +80,14 @@ export interface RepoIndex {
 export interface CallEdge {
   fromId: string;
   toId: string;
-  /** How the edge was resolved. */
+  /** How the edge was first resolved (the syntactic resolution step that found it). */
   resolution: "same-file" | "import" | "unique-name" | "method-name";
+  /**
+   * Every source that established this edge, strongest first. One entry
+   * today; a compiler-backed source adds its own entry beside the syntactic
+   * one rather than replacing it (see core/provenance.ts).
+   */
+  provenance: FactProvenance[];
 }
 
 export interface BuildStats {

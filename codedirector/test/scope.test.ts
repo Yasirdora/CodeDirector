@@ -17,7 +17,7 @@ import { VibeCheck } from "../src/lock/types";
 import { runWithLock } from "../src/run/run";
 import { PutBack, runIsolated } from "../src/run/tree";
 import { CODEDIRECTOR_GITIGNORE, saveIndex } from "../src/core/store";
-import { dependencyFingerprint } from "../src/run/deps";
+import { dependencyFingerprint } from "../src/domains/node/deps";
 import { undo } from "../src/checkpoint";
 import { git, makeGitRepo } from "./helpers";
 

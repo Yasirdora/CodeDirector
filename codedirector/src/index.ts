@@ -7,6 +7,8 @@
  *   import { buildIndex, loadIndex, buildGraph, rankSymbols, blastRadius } from "codedirector";
  */
 
+import { defaultDomains } from "./domain/registry";
+
 export {
   INDEX_SCHEMA_VERSION,
   type SymbolKind,
@@ -26,7 +28,6 @@ export { loadIndex, saveIndex, indexPath, indexDir, stableStringify, emptyIndex 
 
 export {
   buildGraph,
-  resolveModule,
   directCallers,
   directCallees,
   transitiveCallers,
@@ -65,10 +66,51 @@ export {
 
 export { coChange, isGitRepo, type CoChangeResult } from "./core/git";
 
+// Domains — ecosystem knowledge the core consults (ADR 0001)
+export {
+  compareProvenance,
+  effectiveEvidence,
+  freshnessOf,
+  strongestProvenance,
+  type FactEvidence,
+  type FactProvenance,
+  type FactSource,
+  type Freshness,
+} from "./core/provenance";
+export { DomainRegistry, DomainRegistryError, defaultDomains } from "./domain/registry";
+export type {
+  ChangeCategory,
+  ChangeClassification,
+  ChangeClassifier,
+  ChangedFile,
+  CheckInvocation,
+  CheckProviders,
+  DependencyFactsProvider,
+  DependencyManifest,
+  Diagnostic,
+  DiagnosticsCheck,
+  DiagnosticsPlan,
+  Domain,
+  GeneratedByMarker,
+  GeneratedPathRules,
+  GraphFactsProvider,
+  ImportResolution,
+  ProfileDefaults,
+  ProfileRule,
+  ProjectFact,
+  ProjectFactsProvider,
+  TestMappingProvider,
+  TestRunnerDescription,
+  ToolchainReach,
+} from "./domain/types";
+export { probeDiagnostics, newDiagnostics, type DiagnosticsProbe } from "./run/diagnostics";
+// Kept for the public API; the implementations live in their domains.
+export { resolveModule } from "./domains/node/modules";
+export { APPLE_VERIFY_TIMEOUT_MS } from "./domains/apple";
+
 // Stage 2 — Vibe Check
 export {
   LOCK_SCHEMA_VERSION,
-  DEPENDENCY_MANIFESTS,
   clauseCheckability,
   CHECKABILITY_MARK,
   type LockStatus,
@@ -92,7 +134,9 @@ export {
 } from "./lock/store";
 export { draftLock, parseKeepClause, type DraftOptions, type DraftResult } from "./lock/draft";
 export { canonicalLockHash, sealLock, refreshSeal, sealViolation, readSeals } from "./lock/seal";
-export { getProfile, mergeDraftOptions, PROFILE_NAMES, APPLE_VERIFY_TIMEOUT_MS } from "./lock/profiles";
+export { getProfile, mergeDraftOptions, describeProfiles, PROFILE_NAMES } from "./lock/profiles";
+/** Every dependency manifest the built-in domains know, in registration order (kept for the public API). */
+export const DEPENDENCY_MANIFESTS: string[] = defaultDomains().dependencyManifests().map((m) => m.path);
 export {
   checkLock,
   signatureHash,

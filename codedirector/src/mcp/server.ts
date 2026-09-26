@@ -21,7 +21,7 @@ import { stableStringify } from "../core/store";
 import { buildRepoMap, formatRepoMap } from "../core/map";
 import { blastRadius, formatBlastRadius } from "../core/why";
 import { draftLock, type DraftOptions } from "../lock/draft";
-import { getProfile, mergeDraftOptions, PROFILE_NAMES } from "../lock/profiles";
+import { describeProfiles, getProfile, mergeDraftOptions, PROFILE_NAMES } from "../lock/profiles";
 import { checkLock } from "../lock/check";
 import { loadLock, saveLock } from "../lock/store";
 import { sealLock } from "../lock/seal";
@@ -170,10 +170,7 @@ const TOOLS: ToolDef[] = [
         goal: { type: "string", description: "What must be true when done (optional; defaults to the utterance)." },
         profile: {
           type: "string",
-          description:
-            `Optional draft preset (available: ${PROFILE_NAMES.join(", ")}). "apple" denies Pods/Carthage/lockfiles/` +
-            "signing assets/DerivedData (plus the generated .xcodeproj/.xcworkspace under XcodeGen or Tuist), " +
-            "keeps no-new-dependency, and sets verifyCommand to swift test with a 15-minute timeout when Package.swift exists.",
+          description: describeProfiles(),
         },
       },
       required: ["utterance"],

@@ -12,7 +12,9 @@ import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { RepoIndex } from "../core/types";
 import { buildGraph } from "../core/graph";
-import { VibeCheck, KeepClause, clauseCheckability, NODE_TEST_FILE } from "./types";
+import { VibeCheck, KeepClause, clauseCheckability } from "./types";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
+import type { ToolchainReach } from "../domain/types";
 import { validateGlob } from "./glob";
 // `languageOf` lives in draft.ts because IL-0001 needed it there first.
 // A fundamental module importing from the drafter is the wrong direction and
@@ -28,22 +30,12 @@ import { languageOf } from "./draft";
  * toolchain absent from it produces a warning, never a refusal, because
  * refusing every bespoke harness would be a worse failure than the one this
  * exists to prevent.
+ *
+ * Domains contribute the toolchains of their ecosystems (checkProviders
+ * .toolchains); this table holds only languages no domain claims yet, and a
+ * domain that claims one later takes its entry over.
  */
-const TOOLCHAIN_REACH: Array<{ name: string; pattern: RegExp; languages: string[] }> = [
-  { name: "swift", pattern: /\bswift\s+(test|build|run)\b/, languages: ["Swift"] },
-  {
-    name: "xcodebuild",
-    pattern: /\bxcodebuild\b/,
-    languages: ["Swift", "Objective-C", "Objective-C++"],
-  },
-  { name: "tsc", pattern: /\btsc\b/, languages: ["TypeScript"] },
-  { name: "node --test", pattern: /\bnode\s+--test\b/, languages: ["TypeScript", "JavaScript"] },
-  { name: "npm/yarn/pnpm", pattern: /\b(npm|yarn|pnpm)\b/, languages: ["TypeScript", "JavaScript"] },
-  {
-    name: "vitest/jest/mocha",
-    pattern: /\b(vitest|jest|mocha)\b/,
-    languages: ["TypeScript", "JavaScript"],
-  },
+const UNCLAIMED_TOOLCHAIN_REACH: ToolchainReach[] = [
   { name: "pytest", pattern: /\bpytest\b/, languages: ["Python"] },
   { name: "go", pattern: /\bgo\s+(test|build|vet)\b/, languages: ["Go"] },
   { name: "cargo", pattern: /\bcargo\s+(test|build|check|clippy)\b/, languages: ["Rust"] },
@@ -69,12 +61,13 @@ export interface VerifyCoverage {
  * the opposite of useful. A budget entry that is a glob likewise names no
  * language, so its coverage is not judged; that is a known blind spot.
  */
-export function verifyCoverage(lock: VibeCheck): VerifyCoverage {
+export function verifyCoverage(lock: VibeCheck, domains: DomainRegistry = defaultDomains()): VerifyCoverage {
   const budgetLanguages = [
     ...new Set(lock.budget.files.map(languageOf).filter((l) => l !== "other")),
   ].sort();
   const command = lock.verifyCommand ?? "";
-  const recognised = TOOLCHAIN_REACH.filter((t) => t.pattern.test(command));
+  const reach = [...domains.toolchains(), ...UNCLAIMED_TOOLCHAIN_REACH];
+  const recognised = reach.filter((t) => t.pattern.test(command));
   const reached = new Set<string>(lock.verifyCovers ?? []);
   for (const t of recognised) for (const l of t.languages) reached.add(l);
   return {
@@ -104,7 +97,7 @@ export interface LockCheckResult {
   clauses: ClauseCheck[];
 }
 
-function checkClause(clause: KeepClause, index: RepoIndex | null): ClauseCheck {
+function checkClause(clause: KeepClause, index: RepoIndex | null, domains: DomainRegistry): ClauseCheck {
   const checkability = clauseCheckability(clause);
   const errors: string[] = [];
   let note = "";
@@ -115,7 +108,7 @@ function checkClause(clause: KeepClause, index: RepoIndex | null): ClauseCheck {
         break;
       }
       if (index) {
-        const graph = buildGraph(index);
+        const graph = buildGraph(index, domains);
         for (const id of clause.symbols) {
           if (!graph.symbols.has(id)) errors.push(`symbol not in index: ${id}`);
         }
@@ -132,24 +125,28 @@ function checkClause(clause: KeepClause, index: RepoIndex | null): ClauseCheck {
     case "no-new-dependency":
       note = "manifest/lockfile diff — checkable against a captured baseline";
       break;
-    case "tests-pass":
+    case "tests-pass": {
+      const runner = domains.testRunner()?.runner ?? null;
       if (!clause.glob) {
         errors.push("tests-pass clause has no glob");
+      } else if (!runner) {
+        errors.push("no test runner is registered for tests-pass — put this suite in the lock's verifyCommand instead");
       } else {
         const g = validateGlob(clause.glob);
         if (g) errors.push(`tests-pass glob invalid: ${g}`);
         // A glob that names its file type can be judged here; one that does
         // not (`Tests/**`) is judged file by file when the verifier runs.
         const ext = /\.([A-Za-z0-9]+)$/.exec(clause.glob);
-        if (!g && ext && !NODE_TEST_FILE.test(clause.glob)) {
+        if (!g && ext && !runner.acceptsFile(clause.glob)) {
           errors.push(
-            `tests-pass runs \`node --test\`, which cannot run .${ext[1]} files (${clause.glob}) — ` +
+            `tests-pass runs \`${runner.label}\`, which cannot run .${ext[1]} files (${clause.glob}) — ` +
               `put that suite in the lock's verifyCommand instead`,
           );
         }
       }
-      if (errors.length === 0) note = "executed by the verifier via `node --test`";
+      if (errors.length === 0 && runner) note = `executed by the verifier via \`${runner.label}\``;
       break;
+    }
     case "custom":
       if (!clause.text) errors.push("custom clause has no text");
       note = "not machine-checkable — human judges";
@@ -176,7 +173,12 @@ function budgetPathProblem(rootDir: string, relPath: string): string | null {
   return null;
 }
 
-export function checkLock(rootDir: string, lock: VibeCheck, index: RepoIndex | null): LockCheckResult {
+export function checkLock(
+  rootDir: string,
+  lock: VibeCheck,
+  index: RepoIndex | null,
+  domains: DomainRegistry = defaultDomains(),
+): LockCheckResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -203,7 +205,7 @@ export function checkLock(rootDir: string, lock: VibeCheck, index: RepoIndex | n
 
   // budget symbols resolve
   if (index) {
-    const graph = buildGraph(index);
+    const graph = buildGraph(index, domains);
     for (const id of lock.budget.symbols) {
       if (!graph.symbols.has(id)) errors.push(`budget symbol not in index: ${id}`);
     }
@@ -228,9 +230,9 @@ export function checkLock(rootDir: string, lock: VibeCheck, index: RepoIndex | n
   // Verify coverage. A command that cannot exercise the languages the
   // budget touches is not verification of them, and a lock whose budget is
   // entirely Swift must not activate behind a TypeScript-only check. An
-  // unreadable command warns instead: see TOOLCHAIN_REACH.
+  // unreadable command warns instead: see verifyCoverage.
   if (lock.verifyCommand) {
-    const coverage = verifyCoverage(lock);
+    const coverage = verifyCoverage(lock, domains);
     // Nothing missing is nothing to say. Missing and unreadable is a
     // warning — this cannot be confident, and refusing every bespoke
     // harness would be worse than the hole. Missing and readable is a
@@ -255,7 +257,7 @@ export function checkLock(rootDir: string, lock: VibeCheck, index: RepoIndex | n
   }
 
   // KEEP clauses
-  const clauses = lock.keep.map((c) => checkClause(c, index));
+  const clauses = lock.keep.map((c) => checkClause(c, index, domains));
   let customCount = 0;
   for (const cc of clauses) {
     errors.push(...cc.errors);

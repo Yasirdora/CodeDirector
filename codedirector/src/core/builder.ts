@@ -14,10 +14,13 @@ import { StructuralParser, PARSER_VERSION } from "./parser";
 import { emptyIndex, loadIndex, saveIndex } from "./store";
 import { BuildStats, FileIndex, RepoIndex } from "./types";
 import { RepoWalker } from "./walk";
+import type { DomainRegistry } from "../domain/registry";
 
 export interface BuildOptions {
   /** Persist the result to .codedirector/index.json (default true). */
   persist?: boolean;
+  /** Domains whose never-source directories the walk skips (default: the built-in ones). */
+  domains?: DomainRegistry;
 }
 
 export interface BuildResult {
@@ -33,7 +36,7 @@ export async function buildIndex(rootDir: string, opts: BuildOptions = {}): Prom
   const started = Date.now();
   const persist = opts.persist !== false;
 
-  const walker = new RepoWalker(rootDir);
+  const walker = new RepoWalker(rootDir, opts.domains);
   const files = walker.walk();
 
   const previous = loadIndex(rootDir) ?? emptyIndex();

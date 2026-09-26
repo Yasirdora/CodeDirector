@@ -17,7 +17,8 @@ import { RepoIndex, SymbolInfo } from "../core/types";
 import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
 import { buildRepoMap, resolveAnchorsDetailed, type AnchorMatch, type AnchorStrength } from "../core/map";
 import { INDEXABLE_EXTENSIONS } from "../core/walk";
-import { VibeCheck, KeepClause, LOCK_SCHEMA_VERSION, DEPENDENCY_MANIFESTS } from "./types";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
+import { VibeCheck, KeepClause, LOCK_SCHEMA_VERSION } from "./types";
 import { nextLockId, saveLock } from "./store";
 
 export interface DraftOptions {
@@ -218,42 +219,6 @@ export function judgeConfidence(
   return { low: reasons.length > 0, reasons };
 }
 
-/**
- * Compress a long test-file list into directory globs: files under
- * `__tests__/` collapse to `<dir>/__tests__/**`; directories with ≥2 test
- * files collapse to `<dir>/**\/*.test.*` / `*.spec.*`. Falls back to
- * individual paths. Deterministic (sorted output).
- */
-export function compressTestPaths(testFiles: string[]): string[] {
-  const globs = new Set<string>();
-  const singles: string[] = [];
-  const byDir = new Map<string, string[]>();
-  for (const f of [...testFiles].sort()) {
-    const segs = f.split("/");
-    const tt = segs.indexOf("__tests__");
-    if (tt !== -1) {
-      globs.add(segs.slice(0, tt + 1).join("/") + "/**");
-      continue;
-    }
-    const dir = segs.slice(0, -1).join("/");
-    byDir.set(dir, [...(byDir.get(dir) ?? []), f]);
-  }
-  for (const [dir, files] of [...byDir.entries()].sort()) {
-    if (files.length < 2) {
-      singles.push(...files);
-      continue;
-    }
-    const hasTest = files.some((f) => f.includes(".test."));
-    const hasSpec = files.some((f) => f.includes(".spec."));
-    if (hasTest) globs.add(`${dir}/**/*.test.*`);
-    if (hasSpec) globs.add(`${dir}/**/*.spec.*`);
-    for (const f of files) {
-      if (!f.includes(".test.") && !f.includes(".spec.")) singles.push(f);
-    }
-  }
-  return [...[...globs].sort(), ...singles.sort()];
-}
-
 /** Parse a "--keep" flag value into a KeepClause. Throws on bad form. */
 export function parseKeepClause(value: string): KeepClause {
   const idx = value.indexOf(":");
@@ -305,13 +270,19 @@ function gitUserName(rootDir: string): string {
  * Draft a Lock from an utterance. Never throws for "no anchors" — the draft
  * is still written (with an empty proposed budget) so the human can edit it.
  */
-export function draftLock(rootDir: string, index: RepoIndex, utterance: string, opts: DraftOptions = {}): DraftResult {
-  const graph = buildGraph(index);
+export function draftLock(
+  rootDir: string,
+  index: RepoIndex,
+  utterance: string,
+  opts: DraftOptions = {},
+  domains: DomainRegistry = defaultDomains(),
+): DraftResult {
+  const graph = buildGraph(index, domains);
   const resolution = resolveAnchorsDetailed(graph, utterance);
   const anchors = resolution.anchors;
   const anchorDefense = defendAnchors(resolution.matches);
   const confidence = judgeConfidence(anchorDefense, pluralityLanguage(rootDir));
-  const map = buildRepoMap(index, utterance, { top: 30, maxTokens: 4096 });
+  const map = buildRepoMap(index, utterance, { top: 30, maxTokens: 4096, domains });
 
   // Weak anchors abstain: when nothing name-bearing matched, a proposed
   // budget would be confidently wrong (field-reported on Hono: asking about
@@ -325,7 +296,7 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
   if (!anchorsWeak) {
     for (const entry of map.entries) {
       const f = entry.symbol.file;
-      if (isTestFile(f)) continue;
+      if (isTestFile(f, domains)) continue;
       if (!proposedFiles.includes(f)) proposedFiles.push(f);
       if (proposedFiles.length >= cap) break;
     }
@@ -338,17 +309,17 @@ export function draftLock(rootDir: string, index: RepoIndex, utterance: string, 
   // files on one line). Omissions are noted in the assumptions, never silent.
   const relatedTests = new Set<string>();
   for (const a of anchors) {
-    for (const t of testFilesFor(index, a)) relatedTests.add(t);
+    for (const t of testFilesFor(index, a, domains)) relatedTests.add(t);
   }
   const manifestDeny: string[] = [];
-  for (const m of DEPENDENCY_MANIFESTS) {
+  for (const { path: m } of domains.dependencyManifests()) {
     if (fs.existsSync(path.join(rootDir, m))) manifestDeny.push(m);
   }
   const unrelatedTests: string[] = [];
   for (const f of Object.keys(index.files).sort()) {
-    if (isTestFile(f) && !relatedTests.has(f)) unrelatedTests.push(f);
+    if (isTestFile(f, domains) && !relatedTests.has(f)) unrelatedTests.push(f);
   }
-  const allDeny = [...manifestDeny, ...compressTestPaths(unrelatedTests)];
+  const allDeny = [...manifestDeny, ...domains.compressTestPaths(unrelatedTests)];
   const suggestedDeny = allDeny.slice(0, DENY_SUGGESTION_CAP);
   const denyOmitted = allDeny.length - suggestedDeny.length;
 

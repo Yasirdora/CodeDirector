@@ -3,50 +3,50 @@
  * DraftOptions defaults for a platform. Profile values are DEFAULTS —
  * explicit flags add to list values (deny / keep / budget files) and
  * override scalar ones (verifyCommand). See mergeDraftOptions.
+ *
+ * The mechanism is the core's; the presets are the domains'. A domain's
+ * ProfileRule says what to deny, keep and verify for a project with the
+ * facts it detects; this module looks the profile up, adds the paths the
+ * domain says a generator owns here, and merges the result with the
+ * human's flags.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { DraftOptions } from "./draft";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
 
-/** Apple test suites (xcodebuild, swift test) need minutes, not the 60s default. */
-export const APPLE_VERIFY_TIMEOUT_MS = 900_000;
-
-export const PROFILE_NAMES = ["apple"];
-
-const APPLE_DENY = [
-  "Pods/**",
-  "Carthage/**",
-  "Podfile.lock",
-  "Package.resolved",
-  "Cartfile.resolved",
-  "Gemfile.lock",
-  "*.p8",
-  "*.mobileprovision",
-  "*.cer",
-  "**/DerivedData/**",
-];
-
-/** XcodeGen (project.yml) and Tuist (Project.swift) generate the Xcode project — never hand-edit it. */
-const GENERATED_PROJECT_MARKERS = ["project.yml", "Project.swift"];
+/** Names of the profiles the built-in domains register. */
+export const PROFILE_NAMES: string[] = defaultDomains().profileNames();
 
 /** Resolve a profile to draft defaults for the repo at rootDir; null when the name is unknown. */
-export function getProfile(name: string, rootDir: string): DraftOptions | null {
-  if (name !== "apple") return null;
-  const deny = [...APPLE_DENY];
-  if (GENERATED_PROJECT_MARKERS.some((m) => fs.existsSync(path.join(rootDir, m)))) {
-    deny.push("*.xcodeproj/**", "*.xcworkspace/**");
+export function getProfile(
+  name: string,
+  rootDir: string,
+  domains: DomainRegistry = defaultDomains(),
+): DraftOptions | null {
+  const found = domains.profile(name);
+  if (!found) return null;
+  const { rule, domain } = found;
+  const defaults = rule.defaults(domains.projectFacts(rootDir));
+  const deny = [...(defaults.deny ?? [])];
+  if (rule.denyGeneratedPaths) {
+    for (const g of domain.generatedPathRules?.generatedByMarker ?? []) {
+      if (g.markers.some((m) => fs.existsSync(path.join(rootDir, m)))) deny.push(...g.paths);
+    }
   }
-  const profile: DraftOptions = {
-    deny,
-    keep: [{ kind: "no-new-dependency" }],
-  };
-  // Only SPM repos get a verifyCommand — never guess xcodebuild schemes.
-  if (fs.existsSync(path.join(rootDir, "Package.swift"))) {
-    profile.verifyCommand = "swift test";
-    profile.verifyTimeoutMs = APPLE_VERIFY_TIMEOUT_MS;
-  }
+  const profile: DraftOptions = { deny };
+  if (defaults.keep !== undefined) profile.keep = [...defaults.keep];
+  if (defaults.verifyCommand !== undefined) profile.verifyCommand = defaults.verifyCommand;
+  if (defaults.verifyTimeoutMs !== undefined) profile.verifyTimeoutMs = defaults.verifyTimeoutMs;
   return profile;
+}
+
+/** The MCP `profile` parameter's description: every registered profile, in its domain's words. */
+export function describeProfiles(domains: DomainRegistry = defaultDomains()): string {
+  const names = domains.profileNames();
+  const summaries = names.map((n) => `"${n}" ${domains.profile(n)!.rule.summary}`);
+  return [`Optional draft preset (available: ${names.join(", ")}).`, ...summaries].join(" ");
 }
 
 /**
