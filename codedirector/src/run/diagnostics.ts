@@ -34,6 +34,13 @@ export type DiagnosticsProbe =
  */
 const SHELL_COULD_NOT_RUN = new Set([126, 127]);
 
+/** The line of a tool's output that says why it could not run — for the Unchecked reason. */
+function tellingLine(stdout: string, stderr: string): string {
+  const lines = `${stderr}\n${stdout}`.split("\n").map((l) => l.trim()).filter(Boolean);
+  const telling = lines.find((l) => /^(error:|npm error|.*not found|.*could not)/i.test(l)) ?? lines[lines.length - 1] ?? "";
+  return telling.slice(0, 200);
+}
+
 export function probeDiagnostics(
   rootDir: string,
   check: DiagnosticsCheck,
@@ -54,13 +61,21 @@ export function probeDiagnostics(
   const shellCouldNotRun = "shell" in run && probe.exitCode !== null && SHELL_COULD_NOT_RUN.has(probe.exitCode);
   if (plan.unavailableReason !== undefined) {
     const out = `${probe.stdout}\n${probe.stderr}`;
-    if (probe.error || probe.timedOut || shellCouldNotRun || plan.unavailableOutput?.test(out)) {
-      return { kind: "unavailable", reason: plan.unavailableReason };
+    // Output that says "no tool here" counts only when the tool produced no
+    // diagnostics: a real compiler's findings can quote any text, and a
+    // finding must never be turned into "could not run".
+    const saysUnavailable =
+      probe.exitCode !== 0 &&
+      plan.unavailableOutput?.test(out) === true &&
+      check.parse(probe.stdout, probe.stderr).length === 0;
+    if (probe.error || probe.timedOut || shellCouldNotRun || saysUnavailable) {
+      const said = probe.error || probe.timedOut ? "" : tellingLine(probe.stdout, probe.stderr);
+      return { kind: "unavailable", reason: said ? `${plan.unavailableReason} — ${said}` : plan.unavailableReason };
     }
     return { kind: "ran", probe, how: plan.how };
   }
   if (shellCouldNotRun) {
-    const said = probe.stderr.trim().split("\n").pop() ?? "";
+    const said = tellingLine(probe.stdout, probe.stderr);
     return { kind: "unavailable", reason: `${check.tool} could not run: exit ${probe.exitCode}${said ? ` (${said.slice(0, 200)})` : ""}` };
   }
   if (probe.timedOut) return { kind: "unavailable", reason: `${check.label} timed out after ${timeout}ms` };

@@ -8,7 +8,20 @@ can become a GitHub issue as it stands.
 
 ### A missing compiler read as a broken one; the suite read the developer's git settings
 
-**Status: landed (IL-0026).** After IL-0025 the owner's Mac ran 246/248;
+**Status: landed (IL-0026), completed by IL-0027.** IL-0027: the owner's
+Mac then ran 248/249 — npx present (npm's shell shim beside node, in an app
+runtime folder), but reached through a link it cannot find npm's own
+scripts, and Node's loader fails with MODULE_NOT_FOUND, exit 1. Read as tsc
+failing: VIOLATED again. Reproduced with that layout: 248/249, the same
+test and message. npx failing to load itself now counts as "no compiler"
+(Unchecked, with the loader's own line as the reason). And every "no tool
+here" output pattern now counts only when the tool produced no diagnostic:
+without that guard, a real tsc finding such as TS2307 "Cannot find module
+'…'" would have been turned into "could not run" — shown by a test. The
+"no compiler" test runs three ways: npx linked, absent, and broken.
+250/250 in that layout, on Node 24.15 and on Node 22.22.
+
+After IL-0025 the owner's Mac ran 246/248;
 the two failures passed in the CI-like container. Reproduced here by
 rebuilding the Mac's differences: 246/248, the same two tests.
 

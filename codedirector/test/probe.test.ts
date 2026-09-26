@@ -145,3 +145,23 @@ test("diagnostics: a compiler the shell cannot find is unavailable — never a v
   const r2 = probeDiagnostics(dir, { ...check, plan: () => ({ kind: "run" as const, run: { shell: "./notexec" }, how: "./notexec" }) });
   assert.equal(r2.kind, "unavailable", JSON.stringify(r2));
 });
+
+test("diagnostics: npx that fails to load itself is 'no compiler'; tsc's own \"Cannot find module\" stays a finding", () => {
+  const { probeDiagnostics } = require("../src/run/diagnostics") as typeof import("../src/run/diagnostics");
+  const { tscCheck } = require("../src/domains/node/tsc") as typeof import("../src/domains/node/tsc");
+  // The real npx plan: a tsconfig and no local TypeScript.
+  const root = makeGitRepo({ "tsconfig.json": "{}\n" });
+  const npxPlan = tscCheck.plan(root);
+  assert.equal(npxPlan.kind, "run");
+  const withRun = (shell: string) => ({ ...tscCheck, plan: () => ({ ...(npxPlan as object), run: { shell } }) as typeof npxPlan });
+
+  // npx present but broken: Node's loader error, exit 1 — nothing checked the code.
+  const loader = probeDiagnostics(root, withRun(`${JSON.stringify(NODE)} -e 'require("/cdir-no-such/npm-prefix.js")'`));
+  assert.equal(loader.kind, "unavailable", JSON.stringify(loader));
+  assert.match((loader as { reason: string }).reason, /found no real compiler\) — Error: Cannot find module/);
+
+  // A real tsc run whose finding quotes the same words is a finding, not "no compiler".
+  const finding = "src/a.ts(1,20): error TS2307: Cannot find module 'left-pad' or its corresponding type declarations. MODULE_NOT_FOUND";
+  const real = probeDiagnostics(root, withRun(`echo ${JSON.stringify(finding)}; exit 2`));
+  assert.equal(real.kind, "ran", JSON.stringify(real));
+});

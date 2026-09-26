@@ -44,7 +44,13 @@ function planTsc(rootDir: string): DiagnosticsPlan {
     how: "npx --no-install tsc --noEmit",
     unavailableReason:
       "typescript compiler unavailable (no node_modules/typescript; `npx --no-install tsc` found no real compiler)",
-    unavailableOutput: /could not determine executable|npm error|not installed|not the tsc command/i,
+    // npx's ways of saying it produced no compiler — including npx itself
+    // failing to load (a shell shim that cannot find npm's own scripts:
+    // Node's loader error, exit 1; seen on a Mac whose runtime folder keeps
+    // npx beside node). The core counts these only when no diagnostic was
+    // parsed, so tsc's own "Cannot find module" (TS2307) stays a finding.
+    unavailableOutput:
+      /could not determine executable|npm error|not installed|not the tsc command|MODULE_NOT_FOUND|node:internal\/modules\//i,
   };
 }
 

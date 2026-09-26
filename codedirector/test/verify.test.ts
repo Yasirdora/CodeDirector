@@ -31,14 +31,19 @@ const NODE = process.execPath;
  * "no compiler" case has to establish that itself — it used to assume it,
  * and failed wherever a global tsc exists.
  */
-function envWithoutGlobalCompilers(opts: { npx: boolean }): NodeJS.ProcessEnv {
+function envWithoutGlobalCompilers(opts: { npx: "linked" | "absent" | "broken" }): NodeJS.ProcessEnv {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), "cdir-nobin-"));
   const nodeDir = path.dirname(process.execPath);
-  // Some installs have no npx beside node (process.execPath can resolve
-  // into a Homebrew Cellar); both cases are tested, not assumed.
-  for (const tool of opts.npx ? ["node", "npm", "npx"] : ["node"]) {
+  // npx is tested three ways, not assumed: the machine's own, none at all
+  // (process.execPath can resolve into a Homebrew Cellar), and one that is
+  // there but dies loading its own scripts — npm's shell shim reached through
+  // a link, as on a Mac whose app runtime keeps npx beside node.
+  for (const tool of opts.npx === "linked" ? ["node", "npm", "npx"] : ["node"]) {
     const target = tool === "node" ? process.execPath : path.join(nodeDir, tool);
     if (fs.existsSync(target)) fs.symlinkSync(target, path.join(bin, tool));
+  }
+  if (opts.npx === "broken") {
+    fs.writeFileSync(path.join(bin, "npx"), `#!/bin/sh\nexec node -e 'require("/cdir-test/node_modules/npm/bin/npm-prefix.js")'\n`, { mode: 0o755 });
   }
   return {
     ...process.env,
@@ -396,7 +401,7 @@ test("verify: typecheck proven-clean with a local compiler, unchecked without on
 
   // Repo with tsconfig but NO compiler → unchecked with a named reason,
   // whether or not npx is there to look for one.
-  for (const npx of [true, false]) {
+  for (const npx of ["linked", "absent", "broken"] as const) {
     const root2 = makeGitRepo({
       "tsconfig.json": '{"compilerOptions":{"strict":true},"include":["src"]}\n',
       "src/ok.ts": "export const x: number = 1;\n",
@@ -413,7 +418,7 @@ test("verify: typecheck proven-clean with a local compiler, unchecked without on
     });
     const tc3 = outcome2.record.verification!.items.find((i) => i.source === "typecheck");
     assert.ok(tc3, "typecheck item present");
-    assert.equal(tc3!.verdict, "unchecked", `npx ${npx ? "present" : "absent"}: ${tc3!.detail}`);
+    assert.equal(tc3!.verdict, "unchecked", `npx ${npx}: ${tc3!.detail}`);
     assert.ok(tc3!.reason!.length > 0, "unavailability reason named");
   }
 });
