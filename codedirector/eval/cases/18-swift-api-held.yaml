@@ -1,0 +1,31 @@
+name: swift-api-held
+# The other side of case 17: a body change keeps the Swift signature, the
+# clause is proven held, and the report says Swift test coverage is unknown
+# rather than inventing a claim about it.
+files:
+  Package.swift: |
+    // swift-tools-version:5.9
+    import PackageDescription
+    let package = Package(name: "App", targets: [.target(name: "App")])
+  Sources/App/Model.swift: |
+    public struct Model {
+        public init() {}
+        public func refresh() -> Int { load() }
+    }
+    func load() -> Int { 1 }
+lock:
+  utterance: make refresh faster
+  goal: same API, faster
+  change: Model internals only
+  keep:
+    - kind: api-unchanged
+      symbols: ["Sources/App/Model.swift#Model.refresh"]
+  budget:
+    files: ["Sources/App/Model.swift"]
+command: >-
+  node -e 'const f=require("fs");const p="Sources/App/Model.swift";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("{ load() }","{ return load() }"))'
+expect:
+  exitCode: 0
+  status: verified
+  items:
+    - { match: api-unchanged, class: proven, verdict: held }

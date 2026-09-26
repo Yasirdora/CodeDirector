@@ -17,6 +17,11 @@
  * The gate: any unmet expectation fails the case; any failed case exits
  * non-zero. Case directories are removed on PASS and kept (path printed) on
  * FAIL for debugging.
+ *
+ * Each case prints how long `cdir run` took (the whole run: checkpoint,
+ * baseline, command, checks, report) and the total is printed at the end —
+ * what the gate costs is part of what it measures. Informational: machine
+ * speed varies, so time never fails a case.
  */
 
 import * as fs from "node:fs";
@@ -128,11 +133,14 @@ interface CaseResult {
   passed: boolean;
   failures: string[];
   tmp: string;
+  /** Wall-clock seconds of the `cdir run` (or MCP drive) itself. */
+  seconds: number;
 }
 
 function runCase(cliPath: string, c: EvalCase): CaseResult {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cdir-eval-"));
   const failures: string[] = [];
+  let seconds = 0;
   try {
     for (const [rel, contents] of Object.entries(c.files)) {
       const p = path.join(tmp, rel);
@@ -147,6 +155,7 @@ function runCase(cliPath: string, c: EvalCase): CaseResult {
     saveLock(tmp, lock);
     if (lock.status === "active") sealLock(tmp, lock); // mirror the official approval path (fail-closed on missing seals)
 
+    const started = process.hrtime.bigint();
     const run = c.mcp
       ? spawnSync(process.execPath, [path.join(__dirname, "mcp-drive.js"), tmp, "IL-0001", c.command], {
           encoding: "utf8",
@@ -158,9 +167,10 @@ function runCase(cliPath: string, c: EvalCase): CaseResult {
           timeout: 180_000,
           stdio: ["ignore", "pipe", "pipe"],
         });
+    seconds = Number(process.hrtime.bigint() - started) / 1e9;
     if (run.error) {
       failures.push(`${c.mcp ? "mcp-drive" : "cdir run"} spawn failed: ${run.error.message}`);
-      return { name: c.name, passed: false, failures, tmp };
+      return { name: c.name, passed: false, failures, tmp, seconds };
     }
     if (run.status !== c.expect.exitCode) {
       failures.push(`exitCode: expected ${c.expect.exitCode}, got ${run.status}\n  run output tail: ${(run.stdout + run.stderr).split("\n").slice(-8).join(" | ")}`);
@@ -173,14 +183,14 @@ function runCase(cliPath: string, c: EvalCase): CaseResult {
     });
     if (rep.status !== 0 && rep.status !== 1) {
       failures.push(`cdir report failed (exit ${rep.status}): ${rep.stderr.slice(0, 300)}`);
-      return { name: c.name, passed: false, failures, tmp };
+      return { name: c.name, passed: false, failures, tmp, seconds };
     }
     let report: ChangeReport;
     try {
       report = JSON.parse(rep.stdout) as ChangeReport;
     } catch (e) {
       failures.push(`report --format=json did not parse: ${e instanceof Error ? e.message : e}`);
-      return { name: c.name, passed: false, failures, tmp };
+      return { name: c.name, passed: false, failures, tmp, seconds };
     }
 
     for (const sub of c.expect.violationsContaining ?? []) {
@@ -212,7 +222,7 @@ function runCase(cliPath: string, c: EvalCase): CaseResult {
   } catch (e) {
     failures.push(`harness error: ${e instanceof Error ? e.message : String(e)}`);
   }
-  return { name: c.name, passed: failures.length === 0, failures, tmp };
+  return { name: c.name, passed: failures.length === 0, failures, tmp, seconds };
 }
 
 function main(): number {
@@ -234,18 +244,20 @@ function main(): number {
     const c = validateCase(YAML.parse(fs.readFileSync(path.join(casesDir, f), "utf8")), f);
     const r = runCase(cliPath, c);
     results.push(r);
+    const time = `${r.seconds.toFixed(1)}s`.padStart(6);
     if (r.passed) {
-      process.stdout.write(`PASS  ${r.name}\n`);
+      process.stdout.write(`PASS  ${time}  ${r.name}\n`);
       fs.rmSync(r.tmp, { recursive: true, force: true });
     } else {
-      process.stdout.write(`FAIL  ${r.name}\n`);
+      process.stdout.write(`FAIL  ${time}  ${r.name}\n`);
       for (const failure of r.failures) process.stdout.write(`      - ${failure}\n`);
       process.stdout.write(`      repo kept at: ${r.tmp}\n`);
     }
   }
 
   const passed = results.filter((r) => r.passed).length;
-  process.stdout.write(`\neval: ${passed}/${results.length} cases passed\n`);
+  const total = results.reduce((sum, r) => sum + r.seconds, 0);
+  process.stdout.write(`\neval: ${passed}/${results.length} cases passed · cdir run time ${total.toFixed(1)}s in total\n`);
   if (passed !== results.length) {
     process.stdout.write(`GATE FAILED — ${results.length - passed} case(s) regressed\n`);
     return 1;

@@ -12,6 +12,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as v8 from "node:v8";
 import Parser from "web-tree-sitter";
 import { CallSite, FileIndex, ImportInfo, SymbolInfo, SymbolKind } from "./types";
 import { extractSwift } from "./swift";
@@ -51,12 +52,43 @@ const WASM_PATHS: Record<LangKey, string> = {
   swift: "tree-sitter-wasms/out/tree-sitter-swift.wasm",
 };
 
+/**
+ * Up to this many Swift files in one indexing pass, the grammar runs on
+ * V8's baseline WebAssembly compiler only (see chooseWasmTier).
+ */
+export const SWIFT_BASELINE_TIER_MAX_FILES = 3000;
+
+let tierChosen = false;
+
+/**
+ * The Swift grammar is a large WebAssembly module. Once a Swift file is
+ * parsed, V8 starts optimising that module in the background, and Node
+ * waits for the job before the process can exit: measured on Node 22, a
+ * `cdir run` that touched one Swift file took 8.4s, of which 0.1s was work.
+ * V8's baseline compiler alone parses about 45% slower per file and costs
+ * nothing at exit, so it wins until a single pass parses several thousand
+ * Swift files — which only a first index of a very large app does.
+ *
+ * Decided once per process, before any grammar is compiled (the flag has
+ * no effect on modules already compiled). A pass with no Swift files leaves
+ * V8's defaults alone, so JavaScript/TypeScript indexing is as before.
+ */
+function chooseWasmTier(filesToParse: string[] | undefined): void {
+  if (tierChosen) return;
+  tierChosen = true;
+  if (!filesToParse) return;
+  const swift = filesToParse.filter((f) => langForFile(f) === "swift").length;
+  if (swift > 0 && swift <= SWIFT_BASELINE_TIER_MAX_FILES) v8.setFlagsFromString("--liftoff-only");
+}
+
 export class StructuralParser {
   private parsers = new Map<LangKey, Parser>();
   private initialized = false;
 
-  async init(): Promise<void> {
+  /** `filesToParse`, when known, lets the WebAssembly tier be chosen for the work ahead. */
+  async init(filesToParse?: string[]): Promise<void> {
     if (this.initialized) return;
+    chooseWasmTier(filesToParse);
     await Parser.init();
     for (const key of Object.keys(WASM_PATHS) as LangKey[]) {
       const wasmPath = require.resolve(WASM_PATHS[key]);

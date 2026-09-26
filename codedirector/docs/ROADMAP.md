@@ -6,6 +6,29 @@ can become a GitHub issue as it stands.
 
 ## 0.4.6 candidates
 
+### Every command that parses a Swift file waits ~8 seconds to exit
+
+**Status: landed (IL-0022).** Found by timing the eval gate: the three Swift
+cases took 9s each, the JavaScript ones 0.4s. The work took 0.1s. V8
+optimises the Swift grammar's WebAssembly in the background once a Swift
+file is parsed, and Node waits for that job before exiting (Node 22; 7.9s of
+CPU, `process.exit()` does not avoid it). An indexing pass that parses up to
+3,000 Swift files now uses V8's baseline WebAssembly compiler only (about
+45% slower per file, nothing at exit); a pass without Swift keeps V8's
+defaults. `cdir index` on one Swift file: 8.2s → 0.2s. Guarded by
+`test/swift-exit.test.ts`. In the long-lived MCP server the cost was a
+background compile, not a stall.
+
+### The coverage finding says things that cannot be true
+
+**Status: landed (IL-0022).** "X changed in-budget, but no test file
+references its symbols" was printed for Markdown and YAML (IL-0021's own
+report had five), and would be for every Swift file, because cdir
+recognises no Swift tests yet. It now skips files the index does not read,
+and for a language with no recognised test files says so once: "N Swift
+file(s) changed in-budget (…); cdir recognises no Swift test files here, so
+their test coverage is unknown".
+
 ### A run can hide a file from the fence by adding it to `.gitignore`
 
 **Status: landed (IL-0021).** `.gitignore` files are judged like any other
