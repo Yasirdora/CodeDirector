@@ -1,0 +1,88 @@
+schemaVersion: 1
+id: IL-0025
+status: verified
+utterance: "the suite fails on my Mac — 5 test files, one root cause. When Swift is parsed, V8's background WASM tier-up crashes the process at exit (Fatal process out of memory: Zone, exit 133) on this Mac's Node v24.15, because --liftoff-only set mid-process via v8.setFlagsFromString doesn't take effect there. Set at process startup (node --liftoff-only …), it exits 0. Move the flag to process start; the proof is npm test green on this Mac, not just your container."
+goal: cdir and its test suite run with --liftoff-only from process start on every Node version, so parsing Swift never crashes the process at exit (Node 24) or stalls it (Node 22); npm test is green on Node 24.15.
+interpretation: |
+  Corrects IL-0022, whose mid-process v8.setFlagsFromString does not take
+  effect on Node 24. BUILT IN A SPIKE FIRST: a scratch clone of c950eda; the
+  run copies the spike's 8 files in (cli.ts's body moves to cli-main.ts, so
+  cli-main.ts arrives as a new file).
+
+  REPRODUCED IN THIS CONTAINER with Node v24.15.0 (Linux x64), on c950eda:
+  npm test exit 1 — 224 pass, 5 fail (findings, parser, profiles, verify
+  crash; the swift-exit test), each "Fatal process out of memory: Zone". A
+  one-file `cdir index` on Swift: exit 133 after 11s. With node
+  --liftoff-only at start: exit 0 in 195 ms.
+
+  THE FIX
+  1 src/cli.ts is now only the entry: started without the flag (node
+    cli.js, the npm bin, an MCP config) it relaunches the same command with
+    it before loading anything else, forwards SIGINT/SIGTERM/SIGHUP and
+    exits with the relaunched status. The guard variable is cleared in the
+    relaunched process, so a cdir started by a check decides for itself.
+  2 npm test (and npm run cdir) start node with the flag; the test runner
+    passes it to every test file (checked on Node 22 and 24).
+  3 IL-0022's mid-process flag, and the two-pass builder that fed it, are
+    removed. A program that embeds cdir and parses Swift without the flag
+    gets a one-line warning on stderr.
+  COST: one bare Node start per command (~35 ms); a first full index of a
+  JavaScript project is about a third slower (393 files: 1.16s -> 1.54s).
+
+  EVIDENCE FROM THE SPIKE
+  - npm test 248/248 on Node 24.15 and on Node 22.22; no "Fatal".
+  - eval 19/19 on both. End-to-end output identical to c950eda.
+  - test/launch.test.ts: without the launcher, 3 of its 6 tests fail on
+    Node 24 (the other three guard parts that hold either way).
+
+  THIS RUN: cdir and the verify command both on Node 24.15.
+  NOT PROVABLE HERE: green on the owner's Mac — a custom clause, so the
+  report leaves it Unchecked for the owner to judge.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: npm test is green on the owner's Mac (Node v24.15) — the proof the owner asked for; this container can only stand in for it
+deny:
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - src/lock/**
+  - src/mcp/**
+  - src/run/**
+  - src/verify/**
+  - .gitignore
+change: cdir relaunches itself with --liftoff-only when started without it, npm test starts with it, and the mid-process flag is removed
+verifyCommand: npm test
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - docs/ROADMAP.md
+    - package.json
+    - src/cli-main.ts
+    - src/cli.ts
+    - src/core/builder.ts
+    - src/core/parser.ts
+    - src/core/wasm-flags.ts
+    - test/launch.test.ts
+  symbols: []
+  maxFiles: 8
+  maxLines: 1400
+accept: []
+assumptions:
+  - text: "maxLines raised 950 -> 1400 after the first run (2026-09-26) failed only on it: 1332 lines. Moving cli.ts's body into cli-main.ts counts as 551 removed plus 551 added, which the first estimate treated as a rename. Same 8 files; every check passed on that run."
+    source: system
+    confirmed: false
+  - text: 'low confidence — confirm territory with the human: every anchor matched only as a fragment of a symbol name ("root" in blobRoot, "flag" in clearSkipFlags, "test" in latestCheckpoint, "root" in toRootRelative, "flag" in flagList) — an incidental word can do this'
+    source: system
+    confirmed: false
+  - text: Anchors defended — blobRoot — src/checkpoint/index.ts (TypeScript); "root" only occurs inside "blobRoot" · clearSkipFlags — src/checkpoint/index.ts (TypeScript); "flag" only occurs inside "clearSkipFlags" · latestCheckpoint — src/checkpoint/index.ts (TypeScript); "test" only occurs inside "latestCheckpoint" · toRootRelative — src/checkpoint/index.ts (TypeScript); "root" only occurs inside "toRootRelative" · flagList — src/cli.ts (TypeScript); "flag" only occurs inside "flagList"
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: blobRoot, clearSkipFlags, latestCheckpoint, toRootRelative, flagList (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-26T16:45:08.296Z
+createdBy: Yasirdora

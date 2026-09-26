@@ -45,7 +45,22 @@ either environment.
 
 ### Every command that parses a Swift file waits ~8 seconds to exit
 
-**Status: landed (IL-0022).** Found by timing the eval gate: the three Swift
+**Status: landed (IL-0022), corrected by IL-0025.** IL-0022 set V8's
+`--liftoff-only` mid-process (`v8.setFlagsFromString`). That holds on Node 22
+but not on Node 24: there the flag does not take effect, the background
+optimisation runs, and the process crashes at exit — "Fatal process out of
+memory: Zone", exit 133. Found on the owner's Mac (Node 24.15, five test
+files failing), reproduced on Linux with Node 24.15.0: `npm test` 224 pass,
+5 fail, each with that message. IL-0025 sets the flag where it always
+works, at process start: `src/cli.ts` relaunches cdir with it when started
+without it (one bare Node start, ~35 ms; signals and exit status pass
+through), and `npm test` starts node with it. Every command now runs
+this way, so a first full index of a JavaScript project is about a third
+slower (393 files: 1.16s → 1.54s); incremental runs parse only changed
+files. A program that embeds cdir and parses Swift without the flag gets
+a one-line warning instead of a silent crash. After: `npm test` 248/248 on
+Node 24.15 and on Node 22.22, eval 19/19 on both. Guarded by
+`test/launch.test.ts`. The IL-0022 record follows. Found by timing the eval gate: the three Swift
 cases took 9s each, the JavaScript ones 0.4s. The work took 0.1s. V8
 optimises the Swift grammar's WebAssembly in the background once a Swift
 file is parsed, and Node waits for that job before exiting (Node 22; 7.9s of
