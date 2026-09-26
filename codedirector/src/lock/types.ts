@@ -38,7 +38,8 @@ export const KEEP_CLAUSE_KINDS: KeepClauseKind[] = [
  *                       captured at baseline time and re-run at verify time)
  *  - api-unchanged:     symbols (symbol ids; signature hash, structural)
  *  - no-new-dependency: (no payload; manifest/lockfile sha256 diff)
- *  - tests-pass:        glob (test glob; executed via `node --test`)
+ *  - tests-pass:        glob (test glob; executed by the registered test
+ *                       runner — `node --test` today)
  *  - custom:            text (free text; never machine-checkable)
  */
 export interface KeepClause {
@@ -141,25 +142,6 @@ export const CHECKABILITY_MARK: Record<ClauseCheckability, string> = {
   custom: "?",
 };
 
-/**
- * Test files `node --test` can run: JavaScript, and TypeScript through type
- * stripping. A tests-pass glob that reaches anything else (a Swift, Python or
- * JSX file) cannot be measured by this clause — node reads it as a script,
- * fails, and the clause used to report a passing suite as failing (a Swift
- * test file, reproduced on 0.4.5). Such suites belong in verifyCommand.
- */
-export const NODE_TEST_FILE = /\.(?:[cm]?js|[cm]?ts)$/;
-
-/** Dependency manifests / lockfiles hashed for no-new-dependency checks. */
-export const DEPENDENCY_MANIFESTS = [
-  "package.json",
-  "package-lock.json",
-  "yarn.lock",
-  "pnpm-lock.yaml",
-  "Package.swift",
-  "Package.resolved",
-  "Podfile",
-  "Podfile.lock",
-  "Cartfile",
-  "Cartfile.resolved",
-];
+// Which manifests carry dependencies, and which test files the tests-pass
+// runner can execute, are domain facts: see src/domains/ and
+// DomainRegistry.dependencyManifests() / testRunner().

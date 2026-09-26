@@ -23,7 +23,8 @@ import { buildIndex, hashContent } from "../core/builder";
 import { buildGraph } from "../core/graph";
 import { ensureCodedirectorIgnore, indexDir, stableStringify } from "../core/store";
 import { createCheckpoint, Checkpoint } from "../checkpoint";
-import { VibeCheck, DEPENDENCY_MANIFESTS } from "../lock/types";
+import { VibeCheck } from "../lock/types";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
 import { loadLock, saveLock } from "../lock/store";
 import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
@@ -102,9 +103,10 @@ function checkKeepClauses(
   lock: VibeCheck,
   baseline: Baseline,
   indexAfter: RepoIndex,
+  domains: DomainRegistry,
 ): KeepResult[] {
   const results: KeepResult[] = [];
-  const graphAfter = buildGraph(indexAfter);
+  const graphAfter = buildGraph(indexAfter, domains);
   for (const clause of lock.keep) {
     switch (clause.kind) {
       case "api-unchanged": {
@@ -137,7 +139,7 @@ function checkKeepClauses(
           );
         }
         // a manifest that did not exist before but exists now is a new dependency surface
-        for (const m of DEPENDENCY_MANIFESTS) {
+        for (const { path: m } of domains.dependencyManifests()) {
           if (!(m in baseline.manifests) && fs.existsSync(path.join(rootDir, m))) {
             results.push({ kind: clause.kind, detail: `${m} appeared`, status: "violated" });
           }
@@ -214,7 +216,8 @@ export async function runWithLock(
   const checkpoint = createCheckpoint(rootDir);
 
   // 2. refresh index + capture baseline (outside the source tree)
-  const { index: indexBefore } = await buildIndex(rootDir);
+  const domains = opts.verifyOptions?.domains ?? defaultDomains();
+  const { index: indexBefore } = await buildIndex(rootDir, { domains });
   const vo = opts.verify === false ? { typecheck: false } : (opts.verifyOptions ?? {});
   // What any probe — before the command or after it — changed and had put back: the report names it.
   const putBack: ProbePutBack[] = [];
@@ -223,6 +226,7 @@ export async function runWithLock(
     typecheckTimeoutMs: vo.typecheckTimeoutMs,
     env: vo.env,
     putBack,
+    domains,
   });
   const baselinePath = saveBaseline(rootDir, baseline);
   // Hash the baseline at capture: the executed command could edit files under
@@ -258,7 +262,7 @@ export async function runWithLock(
   //    typecheck, tests, verifyCommand, output hashes, custom. keepResults on
   //    the record are derived from it; with verify disabled we fall back to
   //    the Stage 2 structural-only diff.
-  const { index: indexAfter } = await buildIndex(rootDir);
+  const { index: indexAfter } = await buildIndex(rootDir, { domains });
   const baselineRel = path.relative(rootDir, baselinePath).split(path.sep).join("/");
   const verification =
     opts.verify === false
@@ -270,7 +274,7 @@ export async function runWithLock(
         });
   const keepResults = verification
     ? keepResultsFromVerification(verification)
-    : checkKeepClauses(rootDir, lock, baseline, indexAfter);
+    : checkKeepClauses(rootDir, lock, baseline, indexAfter, domains);
 
   // One wording, one place: a standalone verify rebuilds these from the same
   // function when it judges this run against a Lock that has since changed.

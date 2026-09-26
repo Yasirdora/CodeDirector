@@ -2,10 +2,11 @@
  * Repository walker.
  *
  * Walks a root directory for indexable source files, always skipping
- * .git / node_modules / dist / .codedirector and the Xcode build-product
- * directories (DerivedData, .build, .swiftpm, Pods, Carthage), and honoring
- * the root .gitignore (plus .ignore). Nested .gitignore files are NOT honored
- * (documented MVP limitation); the common case — root-level ignore files —
+ * .git / dist / .codedirector plus every directory a registered domain says
+ * is never source (its generatedPathRules — node_modules, Xcode build
+ * products, vendored pods), and honoring the root .gitignore (plus
+ * .ignore). Nested .gitignore files are NOT honored (documented MVP
+ * limitation); the common case — root-level ignore files —
  * is covered. Because the walker prunes ignored directories, everything
  * under an ignored directory is skipped automatically.
  *
@@ -16,6 +17,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
 
 export const INDEXABLE_EXTENSIONS = new Set([
   ".ts",
@@ -27,18 +29,8 @@ export const INDEXABLE_EXTENSIONS = new Set([
   ".swift",
 ]);
 
-const ALWAYS_SKIP_DIRS = new Set([
-  ".git",
-  "node_modules",
-  "dist",
-  ".codedirector",
-  // Apple/Xcode build products — routinely gigabytes, never source
-  "DerivedData",
-  ".build",
-  ".swiftpm",
-  "Pods",
-  "Carthage",
-]);
+/** Directories the core itself never indexes, whatever the domains say. */
+export const CORE_SKIP_DIRS = [".git", "dist", ".codedirector"];
 
 interface IgnoreRule {
   negate: boolean;
@@ -102,8 +94,10 @@ function parseIgnoreFile(content: string): IgnoreRule[] {
 
 export class RepoWalker {
   private rules: IgnoreRule[] = [];
+  private skipDirs: Set<string>;
 
-  constructor(private rootDir: string) {
+  constructor(private rootDir: string, domains: DomainRegistry = defaultDomains()) {
+    this.skipDirs = new Set([...CORE_SKIP_DIRS, ...domains.neverSourceDirs()]);
     for (const name of [".gitignore", ".ignore"]) {
       const p = path.join(rootDir, name);
       if (fs.existsSync(p)) {
@@ -142,7 +136,7 @@ export class RepoWalker {
       for (const entry of entries) {
         const childRel = rel ? `${rel}/${entry.name}` : entry.name;
         if (entry.isDirectory()) {
-          if (ALWAYS_SKIP_DIRS.has(entry.name)) continue;
+          if (this.skipDirs.has(entry.name)) continue;
           if (this.isIgnored(childRel, true)) continue;
           visit(path.join(dir, entry.name), childRel);
         } else if (entry.isFile()) {

@@ -14,12 +14,12 @@ import { buildGraph } from "../core/graph";
 import { hashContent } from "../core/builder";
 import { indexDir, stableStringify } from "../core/store";
 import { workTreeStatusPorcelain } from "../checkpoint";
-import { VibeCheck, DEPENDENCY_MANIFESTS } from "../lock/types";
+import { VibeCheck } from "../lock/types";
 import { signatureHash } from "../lock/check";
 import { runShellProbe, sha256 } from "./probe";
 import { currentHead, listHidden, runIsolated, snapshotWorkTree, WorkTreeSnapshot } from "./tree";
-import { dependencyFingerprint } from "./deps";
-import { probeTypecheck, typecheckErrors } from "./typecheck";
+import { probeDiagnostics } from "./diagnostics";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
 import { ProbePutBack } from "../verify/types";
 
 /**
@@ -73,10 +73,17 @@ export interface Baseline {
    */
   treeDir?: string;
   /**
-   * `tsc --noEmit` errors at capture, one key per error (file, code, message —
-   * no position). The typecheck rung fails a run only for errors not in this
-   * list. Absent when no typecheck result was possible at capture (no
-   * tsconfig, no compiler, timeout) or it was switched off; empty when clean.
+   * Compiler diagnostics at capture, per diagnostics check id (e.g.
+   * "node.tsc"), one key per diagnostic (file, code, message — no position).
+   * The typecheck rung fails a run only for diagnostics not in its check's
+   * list. A check is absent when no result was possible at capture (not
+   * applicable, no compiler, timeout); the whole map is absent when none
+   * was, or the rung was switched off. An empty list means clean.
+   */
+  diagnostics?: Record<string, string[]>;
+  /**
+   * Written by releases before the domain split: tsc's errors. Read through
+   * a check's `legacyBaselineField`; never written.
    */
   typecheckErrors?: string[];
 }
@@ -91,6 +98,8 @@ export interface BaselineOptions {
   env?: NodeJS.ProcessEnv;
   /** Collects what the baseline's probes changed and had put back. */
   putBack?: ProbePutBack[];
+  /** Domains whose manifests and checks the baseline captures (default: the built-in ones). */
+  domains?: DomainRegistry;
 }
 
 export function baselinesDir(rootDir: string): string {
@@ -147,14 +156,14 @@ export function captureBaseline(
     }
   }
 
+  const domains = opts.domains ?? defaultDomains();
   const manifests: Record<string, string> = {};
   const wantsManifestDiff = lock.keep.some((c) => c.kind === "no-new-dependency");
   if (wantsManifestDiff) {
-    for (const m of DEPENDENCY_MANIFESTS) {
+    for (const { path: m } of domains.dependencyManifests()) {
       const p = path.join(rootDir, m);
       if (fs.existsSync(p)) {
-        const raw = fs.readFileSync(p, "utf8");
-        manifests[m] = m === "package.json" ? dependencyFingerprint(raw) : hashContent(raw);
+        manifests[m] = domains.manifestFingerprint(m, fs.readFileSync(p, "utf8"));
       }
     }
   }
@@ -195,15 +204,19 @@ export function captureBaseline(
     }
   }
 
-  // Pre-run type errors, so the run is judged only on the ones it adds.
-  let typecheckKeys: string[] | undefined;
+  // Pre-run compiler diagnostics, so the run is judged only on the ones it adds.
+  const diagnostics: Record<string, string[]> = {};
   if (opts.typecheck !== false) {
-    const tc = probeTypecheck(rootDir, {
-      timeoutMs: opts.typecheckTimeoutMs,
-      env: opts.env,
-      onPutBack: (p) => opts.putBack?.push({ probe: "baseline · typecheck · tsc --noEmit", ...p }),
-    });
-    if (tc.kind === "ran") typecheckKeys = tc.probe.exitCode === 0 ? [] : typecheckErrors(tc.probe.stdout).map((e) => e.key);
+    for (const check of domains.diagnosticsChecks()) {
+      const tc = probeDiagnostics(rootDir, check, {
+        timeoutMs: opts.typecheckTimeoutMs,
+        env: opts.env,
+        onPutBack: (p) => opts.putBack?.push({ probe: `baseline · ${check.subject}`, ...p }),
+      });
+      if (tc.kind === "ran") {
+        diagnostics[check.id] = tc.probe.exitCode === 0 ? [] : check.parse(tc.probe.stdout).map((e) => e.key);
+      }
+    }
   }
 
   const status = workTreeStatusPorcelain(rootDir);
@@ -223,7 +236,7 @@ export function captureBaseline(
     workTreeHashes: snap.hashes,
     hidden: listHidden(rootDir),
     ...(treeDir !== undefined ? { treeDir } : {}),
-    ...(typecheckKeys !== undefined ? { typecheckErrors: typecheckKeys } : {}),
+    ...(Object.keys(diagnostics).length > 0 ? { diagnostics } : {}),
   };
 }
 

@@ -4,17 +4,24 @@
  *   1. Structural (proven)   — api-unchanged signature hashes and
  *                              no-new-dependency manifest hashes diffed
  *                              against the pre-captured baseline.
- *   2. Typecheck (proven)    — `tsc --noEmit` when a tsconfig exists and a
- *                              compiler is available; otherwise Unchecked
- *                              with the reason named. Only errors absent
- *                              from the baseline are the run's.
- *   3. Tests (measured)      — each tests-pass glob run via `node --test`;
- *                              a Lock-level verifyCommand ("npm test", ...)
+ *   2. Typecheck (proven)    — every compiler-diagnostics check a domain
+ *                              describes (`tsc --noEmit` today) when it
+ *                              applies and its compiler is available;
+ *                              otherwise Unchecked with the reason named.
+ *                              Only diagnostics absent from the baseline are
+ *                              the run's.
+ *   3. Tests (measured)      — each tests-pass glob run through the
+ *                              registered test runner (`node --test`); a
+ *                              Lock-level verifyCommand ("npm test", ...)
  *                              executed the same way.
  *   4. Output (measured)     — output-unchanged commands re-run; stdout
  *                              sha256 compared to the baseline capture.
  *   5. Custom (unchecked)    — always "human judges". This honesty is the
  *                              feature, per the blueprint.
+ *
+ * Domains describe the checks (what to run, how to read it); this module
+ * runs every one of them — isolated, under timeouts, against the baseline —
+ * and assigns every evidence class.
  *
  * Read-only by construction: this module writes nothing to the repository
  * (the index refresh writes only .codedirector/, our own metadata area).
@@ -25,18 +32,20 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { RepoIndex } from "../core/types";
-import { buildIndex, hashContent } from "../core/builder";
+import { buildIndex } from "../core/builder";
 import { buildGraph } from "../core/graph";
-import { VibeCheck, DEPENDENCY_MANIFESTS, NODE_TEST_FILE } from "../lock/types";
+import { VibeCheck } from "../lock/types";
 import { loadLock } from "../lock/store";
 import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
 import { Baseline, baselineFileHash, latestBaselinePath, loadBaseline } from "../run/baseline";
-import { dependencyFingerprint } from "../run/deps";
 import { runArgvProbe, runShellProbe, sha256 } from "../run/probe";
 import { runIsolated } from "../run/tree";
-import { newTypecheckErrors, probeTypecheck, typecheckErrors } from "../run/typecheck";
+import { diagnosticsExcerpt, newDiagnostics, probeDiagnostics } from "../run/diagnostics";
+import { CORE_SKIP_DIRS } from "../core/walk";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
+import type { DiagnosticsCheck } from "../domain/types";
 import {
   countByClass,
   ProbePutBack,
@@ -51,7 +60,7 @@ export interface VerifyOptions {
   baselinePath?: string;
   /** Run the typecheck rung (default true). */
   typecheck?: boolean;
-  /** tsc --noEmit timeout (default 120s). */
+  /** Compiler-check timeout (default: each check's own — 120s for tsc). */
   typecheckTimeoutMs?: number;
   /** Per-test-run and verifyCommand timeout (default: lock.verifyTimeoutMs, else 60s). */
   testTimeoutMs?: number;
@@ -73,9 +82,9 @@ export interface VerifyOptions {
    * report names both.
    */
   putBack?: ProbePutBack[];
+  /** Domains whose checks and manifests are verified (default: the built-in ones). */
+  domains?: DomainRegistry;
 }
-
-const SKIP_DIRS = new Set([".git", "node_modules", "dist", ".codedirector"]);
 
 const TAMPER_REASON = "baseline modified during execution — run invalid";
 const BASELINE_DEPENDENT_KINDS = new Set(["api-unchanged", "no-new-dependency", "output-unchanged"]);
@@ -90,8 +99,8 @@ function baselineTampered(rootDir: string, baselineRel: string | undefined, opts
   }
 }
 
-/** Repo-relative files matching a glob, deterministic order. */
-function expandGlob(rootDir: string, glob: string): string[] {
+/** Repo-relative files matching a glob, deterministic order, never entering skipDirs. */
+function expandGlob(rootDir: string, glob: string, skipDirs: Set<string>): string[] {
   const out: string[] = [];
   const walk = (dir: string): void => {
     let entries: fs.Dirent[];
@@ -102,11 +111,11 @@ function expandGlob(rootDir: string, glob: string): string[] {
     }
     for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       if (e.name.startsWith(".") && e.name !== ".") {
-        if (SKIP_DIRS.has(e.name) || e.isDirectory()) continue;
+        if (skipDirs.has(e.name) || e.isDirectory()) continue;
       }
       const full = path.join(dir, e.name);
       if (e.isDirectory()) {
-        if (!SKIP_DIRS.has(e.name)) walk(full);
+        if (!skipDirs.has(e.name)) walk(full);
       } else {
         const rel = path.relative(rootDir, full).split(path.sep).join("/");
         if (matchPath(glob, rel)) out.push(rel);
@@ -169,6 +178,7 @@ function verifyNoNewDependency(
   lock: VibeCheck,
   baseline: Baseline | null,
   baselineRel: string | undefined,
+  domains: DomainRegistry,
 ): VerificationItem[] {
   const items: VerificationItem[] = [];
   if (!lock.keep.some((c) => c.kind === "no-new-dependency")) return items;
@@ -185,8 +195,7 @@ function verifyNoNewDependency(
       items.push({ source: "keep-clause", clauseKind: kind, subject, verdict: "violated", evidenceClass: "proven", detail: `${m} deleted`, artifactRef: artifactFor(m) });
       continue;
     }
-    const raw = fs.readFileSync(p, "utf8");
-    const after = m === "package.json" ? dependencyFingerprint(raw) : hashContent(raw);
+    const after = domains.manifestFingerprint(m, fs.readFileSync(p, "utf8"));
     items.push(
       after === before
         ? { source: "keep-clause", clauseKind: kind, subject, verdict: "held", evidenceClass: "proven", detail: `${m} unchanged`, artifactRef: artifactFor(m) }
@@ -194,7 +203,7 @@ function verifyNoNewDependency(
     );
   }
   // a manifest that did not exist before but exists now is a new dependency surface
-  for (const m of DEPENDENCY_MANIFESTS) {
+  for (const { path: m } of domains.dependencyManifests()) {
     if (!(m in baseline.manifests) && fs.existsSync(path.join(rootDir, m))) {
       items.push({ source: "keep-clause", clauseKind: kind, subject: `no-new-dependency · ${m}`, verdict: "violated", evidenceClass: "proven", detail: `${m} appeared`, artifactRef: artifactFor(m) });
     }
@@ -216,91 +225,107 @@ function verifyNoNewDependency(
 // ---------------------------------------------------------------------
 // Rung 2 — typecheck (proven when clean)
 
-/** First diagnostic lines from compiler output (error lines preferred). */
-function compilerDiagnostics(stdout: string, stderr: string): string {
-  const errorLines = stdout.split("\n").filter((l) => l.includes("error TS")).slice(0, 5);
-  if (errorLines.length > 0) return `: ${errorLines.join(" · ")}`;
-  const any = `${stdout}\n${stderr}`.split("\n").filter((l) => l.trim()).slice(0, 3);
-  return any.length > 0 ? ` — output: ${any.join(" · ").slice(0, 300)}` : "";
+/** A check's pre-run diagnostics, or undefined when the baseline has no record of them. */
+function baselineDiagnostics(baseline: Baseline | null, check: DiagnosticsCheck): string[] | undefined {
+  if (!baseline) return undefined;
+  if (baseline.diagnostics) return baseline.diagnostics[check.id];
+  if (check.legacyBaselineField) {
+    const legacy = (baseline as unknown as Record<string, unknown>)[check.legacyBaselineField];
+    if (Array.isArray(legacy)) return legacy as string[];
+  }
+  return undefined;
 }
 
 /**
- * `tsc --noEmit`, judged against the errors the baseline recorded before the
- * run: only errors the run added are its violation. A baseline without that
- * record (captured before it existed, tampered, or taken when the compiler
- * could not run) keeps the old strict reading — any error fails.
+ * Each domain's compiler check, judged against the diagnostics the baseline
+ * recorded before the run: only diagnostics the run added are its
+ * violation. A baseline without that record (captured before it existed,
+ * tampered, or taken when the compiler could not run) keeps the old strict
+ * reading — any error fails.
  */
-function verifyTypecheck(rootDir: string, opts: VerifyOptions, baseline: Baseline | null): VerificationItem[] {
+function verifyDiagnostics(
+  rootDir: string,
+  opts: VerifyOptions,
+  baseline: Baseline | null,
+  domains: DomainRegistry,
+): VerificationItem[] {
   if (opts.typecheck === false) return [];
-  const subject = "typecheck · tsc --noEmit";
-  const result = probeTypecheck(rootDir, {
+  return domains.diagnosticsChecks().map((check) => verifyOneDiagnosticsCheck(rootDir, opts, baseline, check));
+}
+
+function verifyOneDiagnosticsCheck(
+  rootDir: string,
+  opts: VerifyOptions,
+  baseline: Baseline | null,
+  check: DiagnosticsCheck,
+): VerificationItem {
+  const subject = check.subject;
+  const result = probeDiagnostics(rootDir, check, {
     timeoutMs: opts.typecheckTimeoutMs,
     env: opts.env,
     onPutBack: (p) => opts.putBack?.push({ probe: subject, ...p }),
   });
-  if (result.kind === "no-tsconfig") {
-    return [uncheckedItem("typecheck", subject, "no tsconfig.json — typecheck rung skipped")];
+  if (result.kind === "not-applicable" || result.kind === "unavailable") {
+    return uncheckedItem("typecheck", subject, result.reason);
   }
-  if (result.kind === "unavailable") return [uncheckedItem("typecheck", subject, result.reason)];
   const { probe, how } = result;
   const artifactRef = `${how} → exit ${probe.exitCode}`;
   if (probe.exitCode === 0) {
-    return [{ source: "typecheck", subject, verdict: "held", evidenceClass: "proven", detail: "tsc --noEmit clean", artifactRef }];
+    return { source: "typecheck", subject, verdict: "held", evidenceClass: "proven", detail: `${check.label} clean`, artifactRef };
   }
-  const before = baseline?.typecheckErrors;
-  const after = typecheckErrors(probe.stdout);
+  const before = baselineDiagnostics(baseline, check);
+  const after = check.parse(probe.stdout);
   if (before !== undefined && after.length > 0) {
-    const fresh = newTypecheckErrors(before, after);
+    const fresh = newDiagnostics(before, after);
     if (fresh.length === 0) {
-      return [{
+      return {
         source: "typecheck",
         subject,
         verdict: "held",
         evidenceClass: "measured",
-        detail: `tsc --noEmit: ${after.length} error(s), all present before the run — none new`,
+        detail: `${check.label}: ${after.length} error(s), all present before the run — none new`,
         artifactRef,
-      }];
+      };
     }
-    return [{
+    return {
       source: "typecheck",
       subject,
       verdict: "violated",
       evidenceClass: "measured",
-      detail: `tsc --noEmit: ${fresh.length} new error(s) since the baseline: ${fresh.slice(0, 5).map((e) => e.line).join(" · ")}`,
+      detail: `${check.label}: ${fresh.length} new error(s) since the baseline: ${fresh.slice(0, 5).map((e) => e.line).join(" · ")}`,
       artifactRef,
-    }];
+    };
   }
-  return [{
+  return {
     source: "typecheck",
     subject,
     verdict: "violated",
     evidenceClass: "measured",
-    detail: `tsc --noEmit failed (exit ${probe.exitCode})${compilerDiagnostics(probe.stdout, probe.stderr)}`,
+    detail: `${check.label} failed (exit ${probe.exitCode})${diagnosticsExcerpt(check, probe.stdout, probe.stderr)}`,
     artifactRef,
-  }];
+  };
 }
 
 // ---------------------------------------------------------------------
 // Rung 3 — tests (measured): tests-pass globs + Lock-level verifyCommand
 
-function failingTestNames(output: string): string[] {
-  const names: string[] = [];
-  for (const line of output.split("\n")) {
-    const m = /^\s*not ok \d+ - (.+)$/.exec(line);
-    if (m && !names.includes(m[1])) names.push(m[1].trim());
-    if (names.length >= 5) break;
-  }
-  return names;
-}
-
-function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions): VerificationItem[] {
+function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions, domains: DomainRegistry): VerificationItem[] {
   const items: VerificationItem[] = [];
   const timeout = opts.testTimeoutMs ?? lock.verifyTimeoutMs ?? 60_000;
+  const found = domains.testRunner();
+  // Expanding the glob skips what the core never reads plus what the
+  // runner's own domain says is never source (node_modules for node).
+  const skipDirs = new Set([...CORE_SKIP_DIRS, ...(found?.domain.generatedPathRules?.neverSourceDirs ?? [])]);
   for (const clause of lock.keep) {
     if (clause.kind !== "tests-pass") continue;
     const glob = clause.glob ?? "";
     const subject = `tests-pass · ${glob}`;
-    const files = expandGlob(rootDir, glob);
+    if (!found) {
+      items.push(uncheckedItem("keep-clause", subject, "no test runner is registered for tests-pass", clause.kind));
+      continue;
+    }
+    const { runner } = found;
+    const files = expandGlob(rootDir, glob, skipDirs);
     if (files.length === 0) {
       items.push({
         source: "keep-clause",
@@ -314,36 +339,31 @@ function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions):
       });
       continue;
     }
-    const foreign = files.filter((f) => !NODE_TEST_FILE.test(f));
+    const foreign = files.filter((f) => !runner.acceptsFile(f));
     if (foreign.length > 0) {
-      // Nothing is run: node would fail on these files whatever the tests say.
+      // Nothing is run: the runner would fail on these files whatever the tests say.
       items.push(
         uncheckedItem(
           "keep-clause",
           subject,
-          `node --test cannot run ${foreign.length} matched file(s) (${foreign.slice(0, 3).join(", ")}) — ` +
-            `tests-pass measures JavaScript/TypeScript suites only; put this suite in the lock's verifyCommand`,
+          `${runner.label} cannot run ${foreign.length} matched file(s) (${foreign.slice(0, 3).join(", ")}) — ` +
+            `tests-pass measures ${runner.covers} suites only; put this suite in the lock's verifyCommand`,
           clause.kind,
         ),
       );
       continue;
     }
-    const argv = [process.execPath];
-    const major = parseInt(process.versions.node, 10);
-    if (major >= 22 && files.some((f) => /\.[cm]?tsx?$/.test(f))) {
-      argv.push("--experimental-strip-types");
-    }
-    argv.push("--test", "--test-reporter=tap", ...files);
+    const argv = runner.argv(files);
     const probe = runIsolated(rootDir, () => runArgvProbe(rootDir, argv, timeout, opts.env), (p) => opts.putBack?.push({ probe: subject, ...p }));
-    const artifactRef = `node --test ${glob} (${files.length} file(s)) → exit ${probe.exitCode ?? "?"}`;
+    const artifactRef = `${runner.label} ${glob} (${files.length} file(s)) → exit ${probe.exitCode ?? "?"}`;
     if (probe.timedOut) {
       items.push(uncheckedItem("keep-clause", subject, `test run timed out after ${timeout}ms`, clause.kind));
     } else if (probe.error || probe.exitCode === null) {
       items.push(uncheckedItem("keep-clause", subject, `test runner could not run: ${probe.error ?? "spawn failed"}`, clause.kind));
     } else if (probe.exitCode === 0) {
-      items.push({ source: "keep-clause", clauseKind: clause.kind, subject, verdict: "held", evidenceClass: "measured", detail: `${files.length} test file(s) pass under node --test`, artifactRef });
+      items.push({ source: "keep-clause", clauseKind: clause.kind, subject, verdict: "held", evidenceClass: "measured", detail: `${files.length} test file(s) pass under ${runner.label}`, artifactRef });
     } else {
-      const names = failingTestNames(`${probe.stdout}\n${probe.stderr}`);
+      const names = runner.failures(`${probe.stdout}\n${probe.stderr}`);
       items.push({
         source: "keep-clause",
         clauseKind: clause.kind,
@@ -462,12 +482,13 @@ export function verifyWithBaseline(
 ): VerificationReport {
   const putBack = given.putBack ?? [];
   const opts: VerifyOptions = { ...given, putBack };
+  const domains = given.domains ?? defaultDomains();
   const tampered = baselineTampered(rootDir, baselineRel, opts);
   let items: VerificationItem[] = [
     ...verifyApiUnchanged(lock, baseline, baselineRel, indexAfter),
-    ...verifyNoNewDependency(rootDir, lock, baseline, baselineRel),
-    ...verifyTypecheck(rootDir, opts, tampered ? null : baseline),
-    ...verifyTestsPass(rootDir, lock, opts),
+    ...verifyNoNewDependency(rootDir, lock, baseline, baselineRel, domains),
+    ...verifyDiagnostics(rootDir, opts, tampered ? null : baseline, domains),
+    ...verifyTestsPass(rootDir, lock, opts, domains),
     ...verifyCommand(rootDir, lock, opts),
     ...verifyOutputUnchanged(rootDir, lock, baseline, baselineRel, opts),
     ...verifyCustom(lock),
@@ -522,6 +543,6 @@ export async function verifyLock(rootDir: string, lockId: string, opts: VerifyOp
     }
   }
   const baselineRel = baselinePath ? path.relative(rootDir, baselinePath).split(path.sep).join("/") : undefined;
-  const { index } = await buildIndex(rootDir);
+  const { index } = await buildIndex(rootDir, { domains: opts.domains });
   return verifyWithBaseline(rootDir, lock, baseline, baselineRel, index, opts);
 }

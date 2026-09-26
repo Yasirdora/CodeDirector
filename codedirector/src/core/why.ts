@@ -15,6 +15,7 @@ import {
   transitiveCallers,
 } from "./graph";
 import { RepoIndex, SymbolInfo } from "./types";
+import type { DomainRegistry } from "../domain/registry";
 
 export interface BlastRadiusReport {
   query: string;
@@ -49,8 +50,9 @@ export function blastRadius(
   index: RepoIndex,
   query: string,
   maxDepth = MAX_TRANSITIVE_DEPTH,
+  domains?: DomainRegistry,
 ): BlastRadiusReport {
-  const graph = buildGraph(index);
+  const graph = buildGraph(index, domains);
   const matches = findSymbols(graph, query);
 
   const reports = matches.map((symbol) => {
@@ -65,7 +67,7 @@ export function blastRadius(
         ids,
       })),
       transitiveTotal: trans.total,
-      testFiles: testFilesFor(index, symbol),
+      testFiles: testFilesFor(index, symbol, domains),
     };
   });
 

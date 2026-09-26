@@ -6,16 +6,24 @@
  * Call resolution policy (documented, deterministic, best-effort):
  *   1. same-file    — a symbol with this name exists in the caller's file
  *   2. import       — the name is imported from a module that resolves to an
- *                     indexed file exporting a symbol of that name
+ *                     indexed file exporting a symbol of that name (the
+ *                     registered domains resolve module specifiers)
  *   3. unique-name  — exactly one symbol in the whole index has that name
  *   4. method-name  — method calls (obj.m()) match methods named "m" using
  *                     the same steps; ambiguous matches are dropped
  * Unresolvable call sites are ignored (counted nowhere). This is heuristic
  * structural analysis, not type checking — the README states this plainly.
+ *
+ * Every edge says where it came from (core/provenance.ts): steps 1 and 2
+ * are read from syntax ("tree-sitter"), steps 3 and 4 are a name heuristic
+ * ("inferred"); all of them are asserted, never proven. The algorithms here
+ * are shared by every domain — a domain contributes facts (how its imports
+ * resolve, which files are its tests), never its own traversal.
  */
 
-import * as path from "node:path";
 import { CallEdge, RepoIndex, SymbolInfo } from "./types";
+import { compareProvenance, FactProvenance } from "./provenance";
+import { defaultDomains, DomainRegistry } from "../domain/registry";
 
 export interface SymbolGraph {
   symbols: Map<string, SymbolInfo>;
@@ -30,7 +38,6 @@ export interface SymbolGraph {
   filesOf: Map<string, SymbolInfo[]>;
 }
 
-/** Normalize a module specifier + importing file to an indexed relpath, or null. */
 /** `default:Foo` | `real as alias` | `name` → local binding and exported name. */
 function parseImportName(n: string): { local: string; exported: string } {
   if (n.startsWith("default:")) return { local: n.slice("default:".length), exported: "default" };
@@ -39,27 +46,16 @@ function parseImportName(n: string): { local: string; exported: string } {
   return { local: n, exported: n };
 }
 
-export function resolveModule(fromFile: string, specifier: string, index: RepoIndex): string | null {
-  if (!specifier.startsWith(".")) return null; // external/bare imports are not indexed
-  const fromDir = path.posix.dirname(fromFile);
-  const base = path.posix.normalize(path.posix.join(fromDir, specifier));
-  const candidates = [
-    base,
-    `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.mjs`, `${base}.cjs`,
-    `${base}/index.ts`, `${base}/index.tsx`, `${base}/index.js`, `${base}/index.jsx`,
-  ];
-  // specifier "./x.js" may refer to x.ts on disk (NodeNext style)
-  const stripped = base.replace(/\.(js|jsx|mjs|cjs)$/, "");
-  if (stripped !== base) {
-    candidates.push(`${stripped}.ts`, `${stripped}.tsx`);
-  }
-  for (const c of candidates) {
-    if (index.files[c]) return c;
-  }
-  return null;
+/** Syntax-derived facts from the shared extractor. */
+const SYNTAX: FactProvenance = { source: "tree-sitter", domain: "core", evidence: "asserted", freshness: "current" };
+/** The unique-name / method-name heuristic. */
+const INFERRED: FactProvenance = { source: "inferred", domain: "core", evidence: "asserted", freshness: "current" };
+
+function sameProvenance(a: FactProvenance, b: FactProvenance): boolean {
+  return a.source === b.source && a.domain === b.domain && a.evidence === b.evidence && a.freshness === b.freshness;
 }
 
-export function buildGraph(index: RepoIndex): SymbolGraph {
+export function buildGraph(index: RepoIndex, domains: DomainRegistry = defaultDomains()): SymbolGraph {
   const symbols = new Map<string, SymbolInfo>();
   const byName = new Map<string, string[]>();
   const filesOf = new Map<string, SymbolInfo[]>();
@@ -80,7 +76,7 @@ export function buildGraph(index: RepoIndex): SymbolGraph {
   const edges: CallEdge[] = [];
   const outgoing = new Map<string, Set<string>>();
   const incoming = new Map<string, Set<string>>();
-  const edgeKeys = new Set<string>();
+  const edgeByKey = new Map<string, CallEdge>();
 
   /** Top-level call sites get a virtual symbol so callers/transitive agree. */
   const ensureToplevel = (id: string) => {
@@ -100,14 +96,29 @@ export function buildGraph(index: RepoIndex): SymbolGraph {
     symbols.set(id, pseudo);
   };
 
-  const addEdge = (fromId: string, toId: string, resolution: CallEdge["resolution"]) => {
+  const addEdge = (
+    fromId: string,
+    toId: string,
+    resolution: CallEdge["resolution"],
+    provenance: FactProvenance,
+  ) => {
     if (fromId === toId) return;
     if (!symbols.has(toId)) return;
     ensureToplevel(fromId);
     const key = `${fromId} >${toId}`;
-    if (edgeKeys.has(key)) return;
-    edgeKeys.add(key);
-    edges.push({ fromId, toId, resolution });
+    const existing = edgeByKey.get(key);
+    if (existing) {
+      // A second source for the same edge is kept beside the first, never
+      // instead of it: stronger evidence ranks above, weaker stays visible.
+      if (!existing.provenance.some((p) => sameProvenance(p, provenance))) {
+        existing.provenance.push(provenance);
+        existing.provenance.sort(compareProvenance);
+      }
+      return;
+    }
+    const edge: CallEdge = { fromId, toId, resolution, provenance: [provenance] };
+    edgeByKey.set(key, edge);
+    edges.push(edge);
     const out = outgoing.get(fromId) ?? new Set<string>();
     out.add(toId);
     outgoing.set(fromId, out);
@@ -116,13 +127,14 @@ export function buildGraph(index: RepoIndex): SymbolGraph {
     incoming.set(toId, inc);
   };
 
+  const hasFile = (relPath: string) => index.files[relPath] !== undefined;
   for (const file of Object.keys(index.files).sort()) {
     const fi = index.files[file];
     // Map imported names -> resolved target file, for this file.
-    const importTargets: Array<{ names: string[]; targetFile: string }> = [];
+    const importTargets: Array<{ names: string[]; targetFile: string; provenance: FactProvenance }> = [];
     for (const imp of fi.imports) {
-      const targetFile = resolveModule(file, imp.module, index);
-      if (targetFile) importTargets.push({ names: imp.names, targetFile });
+      const resolved = domains.resolveImport(file, imp.module, hasFile);
+      if (resolved) importTargets.push({ names: imp.names, targetFile: resolved.target, provenance: resolved.provenance });
     }
 
     for (const call of fi.calls) {
@@ -131,7 +143,7 @@ export function buildGraph(index: RepoIndex): SymbolGraph {
       // 1. same-file
       const sameFile = candidates.filter((id) => symbols.get(id)!.file === file);
       if (sameFile.length > 0) {
-        for (const id of sameFile) addEdge(call.callerId, id, "same-file");
+        for (const id of sameFile) addEdge(call.callerId, id, "same-file", SYNTAX);
         continue;
       }
       // 2. via imports (including `import { realName as alias }`)
@@ -154,14 +166,14 @@ export function buildGraph(index: RepoIndex): SymbolGraph {
           ids = named.length > 0 ? named : targetIds.length === 1 ? targetIds : [];
         }
         for (const id of ids) {
-          addEdge(call.callerId, id, "import");
+          addEdge(call.callerId, id, "import", imp.provenance);
           matched = true;
         }
       }
       if (matched) continue;
       // 3. unique name anywhere
       if (candidates.length === 1) {
-        addEdge(call.callerId, candidates[0], call.isMethod ? "method-name" : "unique-name");
+        addEdge(call.callerId, candidates[0], call.isMethod ? "method-name" : "unique-name", INFERRED);
       }
     }
   }
@@ -219,10 +231,9 @@ export function transitiveCallers(
   return { byDepth, total };
 }
 
-const TEST_FILE_RE = /(__tests__\/|\.(test|spec)\.[cm]?[tj]sx?$)/;
-
-export function isTestFile(relPath: string): boolean {
-  return TEST_FILE_RE.test(relPath);
+/** Whether any registered domain's conventions make this path a test file. */
+export function isTestFile(relPath: string, domains: DomainRegistry = defaultDomains()): boolean {
+  return domains.isTestFile(relPath);
 }
 
 /**
@@ -230,13 +241,18 @@ export function isTestFile(relPath: string): boolean {
  * defining module, or the symbol's name literally appears in that file's
  * extracted facts (calls or imports). Heuristic, documented as such.
  */
-export function testFilesFor(index: RepoIndex, symbol: SymbolInfo): string[] {
+export function testFilesFor(
+  index: RepoIndex,
+  symbol: SymbolInfo,
+  domains: DomainRegistry = defaultDomains(),
+): string[] {
   const out: string[] = [];
+  const hasFile = (relPath: string) => index.files[relPath] !== undefined;
   for (const file of Object.keys(index.files).sort()) {
-    if (!isTestFile(file)) continue;
+    if (!domains.isTestFile(file)) continue;
     const fi = index.files[file];
     const importsDefiningModule = fi.imports.some((imp) => {
-      const target = resolveModule(file, imp.module, index);
+      const target = domains.resolveImport(file, imp.module, hasFile)?.target ?? null;
       return target === symbol.file;
     });
     const namesSymbol = fi.imports.some((imp) =>

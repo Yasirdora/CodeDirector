@@ -4,7 +4,7 @@
  * new dependencies).
  */
 
-import { hashContent } from "../core/builder";
+import { hashContent } from "../../core/builder";
 
 const DEP_KEYS = [
   "dependencies",

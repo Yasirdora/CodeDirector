@@ -58,7 +58,7 @@ Usage:
           [--profile NAME]                  tests-pass:<glob>, output-unchanged:<cmd>,
                                             no-new-dependency, custom:<text>
                                             --profile applies a preset bundle of draft
-                                            defaults (available: apple); explicit
+                                            defaults (available: ${PROFILE_NAMES.join(", ")}); explicit
                                             --deny/--keep/--budget-files ADD to the
                                             profile's values, --verify-command
                                             overrides it
