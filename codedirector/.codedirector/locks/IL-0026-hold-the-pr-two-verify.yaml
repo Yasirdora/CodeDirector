@@ -1,0 +1,92 @@
+schemaVersion: 1
+id: IL-0026
+status: verified
+utterance: |-
+  Hold the PR: two verify tests still fail here (my Mac has NO global tsc; your container has one — both failures smell like that assumption):
+
+  1. `verify: every probe that changes the tree is named` — the after-phase `typecheck · tsc --noEmit` probe entry is missing from actual; only `baseline · typecheck` is there. Expected 4 probe entries, got 3.
+  2. `verify: typecheck proven-clean with a local compiler, unchecked without one` — actual `violated`, expected `unchecked`. Without a compiler on PATH, the typecheck apparently ran and failed instead of reporting unchecked.
+
+  Both pass in your container, both fail on the real machine — same class of environment assumption as the tsc test you fixed in step 3. New lock, fix the assumption, and the gate is: 248/248 on my Mac. Then I merge PR #3.
+goal: A compiler the shell cannot find is reported Unchecked, never as a violation of the code; the test suite does not depend on the developer's git configuration or on npx sitting beside node; npm test is green on the owner's Mac.
+interpretation: |
+  BUILT IN A SPIKE FIRST: a scratch clone of f26e01c (the branch rebased
+  onto main 79dbf96); the run copies the spike's 5 files in.
+
+  REPRODUCED by rebuilding the Mac's differences in this container: Node
+  24.15 with no npx beside node, no global tsc, a symlinked temp directory,
+  a global git excludes file listing *.tsbuildinfo. On f26e01c: npm test
+  246/248, the same two tests as the Mac.
+
+  ROOT CAUSES
+  1 PRODUCT BUG, not only a test: with no local TypeScript the typecheck
+    runs `npx --no-install tsc`; with no npx on the PATH the shell exits
+    127 ("npx: not found") and that was read as tsc failing — VIOLATED.
+    Test 2's envWithoutGlobalCompilers links npx from node's own directory,
+    so it passes where npx sits beside node and fails where it does not.
+  2 TEST ASSUMPTION: a global excludes file hiding *.tsbuildinfo hides the
+    file the typecheck probe writes, so test 1 cannot see it put back.
+    Honest gap: the reproduction loses both typecheck entries; the Mac
+    report named only the after-phase one. Isolation covers the whole
+    class (ignores, caches, fsmonitor), but the Mac run is the proof.
+
+  THE FIX
+  1 run/diagnostics.ts: a shell's 127/126 means the check could not run
+    (Unchecked, the shell's words as the reason).
+  2 test/helpers.ts: every test process runs git with an empty global
+    config and no system config.
+  3 test 2 runs its no-compiler case with and without npx; a direct test of
+    the 127/126 rule with a synthetic check.
+
+  EVIDENCE FROM THE SPIKE
+  - npm test 249/249 (1 new) in the Mac-like composite, on Node 24.15
+    default and on Node 22.22 default.
+  - Mutations: without fix 1, the new test and test 2 fail ("tsc --noEmit
+    failed (exit 127) — npx: not found"); without fix 2, test 1 fails under
+    a global excludes file and passes with it.
+
+  THE GATE the owner set is his Mac: 249/249 now (one new test). Kept as a
+  custom clause, Unchecked here on purpose.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: npm test is green on the owner's Mac — the gate the owner set; this container can only stand in for it
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - src/lock/**
+  - src/mcp/**
+  - src/core/**
+  - src/domain/**
+  - src/domains/**
+  - src/cli.ts
+  - src/cli-main.ts
+  - .gitignore
+change: A compiler the shell cannot find is Unchecked, not a violation; the test suite runs git with an empty global config
+verifyCommand: npm test
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - docs/ROADMAP.md
+    - src/run/diagnostics.ts
+    - test/helpers.ts
+    - test/probe.test.ts
+    - test/verify.test.ts
+  symbols: []
+  maxFiles: 5
+  maxLines: 250
+accept: []
+assumptions:
+  - text: Anchors defended — fail — src/cli-main.ts (TypeScript); "fail" is its whole name · named — src/core/map.ts (TypeScript); "named" is its whole name · fail — src/mcp/server.ts (TypeScript); "fail" is its whole name · Baseline — src/run/baseline.ts (TypeScript); "baseline" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: fail, named, fail, Baseline (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-26T17:48:38.112Z
+createdBy: Yasirdora

@@ -6,6 +6,36 @@ can become a GitHub issue as it stands.
 
 ## 0.4.6 candidates
 
+### A missing compiler read as a broken one; the suite read the developer's git settings
+
+**Status: landed (IL-0026).** After IL-0025 the owner's Mac ran 246/248;
+the two failures passed in the CI-like container. Reproduced here by
+rebuilding the Mac's differences: 246/248, the same two tests.
+
+- **Product bug.** With no local TypeScript, the typecheck asks
+  `npx --no-install tsc`. Where npx is not on the PATH the shell answers
+  "npx: not found", exit 127 — and that was read as tsc failing: the
+  typecheck was reported VIOLATED. A false violation on any machine without
+  npx whose project has a tsconfig.json. A shell's 127 ("not found") or 126
+  ("not executable") now means the check could not run: Unchecked, with the
+  shell's words as the reason. The "no compiler" test runs with and
+  without npx.
+- **Test assumption.** A global git excludes file listing `*.tsbuildinfo`
+  hides the file a typecheck probe writes, so the test that names every
+  probe's leftovers failed wherever such a file exists. The suite now runs
+  git with an empty global configuration and no system one
+  (`test/helpers.ts`), so no global ignore, cache, fsmonitor, hook or
+  signing setting reaches a test. cdir itself is unchanged here: a file the
+  user's own ignore rules hide is outside the fence by design, so a probe's
+  ignored leftovers are not moved aside.
+
+In a composite of the Mac's differences — Node 24.15, no npx beside node,
+no global tsc, a symlinked temp directory, a global excludes file with
+`*.tsbuildinfo` — `npm test` passes 249/249; so it does on Node 24.15 and
+Node 22.22 in their default environments. On the owner's Mac the IL-0025
+report named only the after-phase typecheck entry as missing, while the
+reproduction loses both; green on the Mac is the proof that counts.
+
 ### A check's timeout did not stop what the check started
 
 **Status: landed (IL-0023).** Checks (verifyCommand, tests, typecheck,

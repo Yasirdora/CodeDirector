@@ -24,6 +24,16 @@ export type DiagnosticsProbe =
   | { kind: "unavailable"; reason: string }
   | { kind: "ran"; probe: ProbeResult; how: string };
 
+/**
+ * The shell's own answer that the command was never run: 127 "command not
+ * found", 126 "found but not executable". Not a compiler's verdict on the
+ * code — no compiler ran. Reproduced: with no `npx` on the PATH, `npx
+ * --no-install tsc` exits 127 ("npx: not found"), and the typecheck was
+ * reported as VIOLATED — a false violation, on any machine without npx
+ * where the project has a tsconfig.json but no local TypeScript.
+ */
+const SHELL_COULD_NOT_RUN = new Set([126, 127]);
+
 export function probeDiagnostics(
   rootDir: string,
   check: DiagnosticsCheck,
@@ -41,12 +51,17 @@ export function probeDiagnostics(
         : runShellProbe(rootDir, run.shell, timeout, opts.env),
     opts.onPutBack,
   );
+  const shellCouldNotRun = "shell" in run && probe.exitCode !== null && SHELL_COULD_NOT_RUN.has(probe.exitCode);
   if (plan.unavailableReason !== undefined) {
     const out = `${probe.stdout}\n${probe.stderr}`;
-    if (probe.error || probe.timedOut || plan.unavailableOutput?.test(out)) {
+    if (probe.error || probe.timedOut || shellCouldNotRun || plan.unavailableOutput?.test(out)) {
       return { kind: "unavailable", reason: plan.unavailableReason };
     }
     return { kind: "ran", probe, how: plan.how };
+  }
+  if (shellCouldNotRun) {
+    const said = probe.stderr.trim().split("\n").pop() ?? "";
+    return { kind: "unavailable", reason: `${check.tool} could not run: exit ${probe.exitCode}${said ? ` (${said.slice(0, 200)})` : ""}` };
   }
   if (probe.timedOut) return { kind: "unavailable", reason: `${check.label} timed out after ${timeout}ms` };
   if (probe.error || probe.exitCode === null) {

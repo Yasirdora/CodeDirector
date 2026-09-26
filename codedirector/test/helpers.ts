@@ -5,6 +5,20 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 
+/**
+ * Every test process runs git with an empty global configuration and no
+ * system one, so what a developer's machine has set cannot change what the
+ * tests observe. Found on a Mac: a global excludes file listing
+ * `*.tsbuildinfo` hid the file a typecheck probe writes, and the test that
+ * names every probe's leftovers failed there and nowhere else. Global
+ * ignores, an untracked cache, fsmonitor, hooks, signing — none of it
+ * reaches a test, or anything a test starts (cdir, its checks, git).
+ */
+const EMPTY_GIT_CONFIG = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cdir-gitconfig-")), "config");
+fs.writeFileSync(EMPTY_GIT_CONFIG, "");
+process.env.GIT_CONFIG_GLOBAL = EMPTY_GIT_CONFIG;
+process.env.GIT_CONFIG_NOSYSTEM = "1";
+
 export const FIXTURE_REPO = path.join(__dirname, "..", "..", "test", "fixtures", "basic-repo");
 export const DEMO_REPO = path.join(__dirname, "..", "..", "examples", "demo-repo");
 

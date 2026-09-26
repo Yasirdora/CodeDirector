@@ -124,3 +124,24 @@ test("probe: a missing program is a spawn error, not a timeout", () => {
   assert.equal(r.timedOut, false);
   assert.match(r.error ?? "", /ENOENT/);
 });
+
+test("diagnostics: a compiler the shell cannot find is unavailable — never a violation of the code", () => {
+  const { probeDiagnostics } = require("../src/run/diagnostics") as typeof import("../src/run/diagnostics");
+  const check = {
+    id: "test.missing",
+    subject: "typecheck · missing",
+    label: "missing --check",
+    tool: "missing",
+    defaultTimeoutMs: 10_000,
+    plan: () => ({ kind: "run" as const, run: { shell: "cdir-no-such-compiler --check" }, how: "cdir-no-such-compiler --check" }),
+    parse: () => [],
+    isErrorLine: () => false,
+  };
+  const r = probeDiagnostics(makeGitRepo(), check);
+  assert.equal(r.kind, "unavailable", JSON.stringify(r));
+  assert.match((r as { reason: string }).reason, /^missing could not run: exit 127/);
+  // Found but not executable: 126.
+  const dir = makeGitRepo({ notexec: "#!/bin/sh\n" });
+  const r2 = probeDiagnostics(dir, { ...check, plan: () => ({ kind: "run" as const, run: { shell: "./notexec" }, how: "./notexec" }) });
+  assert.equal(r2.kind, "unavailable", JSON.stringify(r2));
+});

@@ -31,10 +31,12 @@ const NODE = process.execPath;
  * "no compiler" case has to establish that itself — it used to assume it,
  * and failed wherever a global tsc exists.
  */
-function envWithoutGlobalCompilers(): NodeJS.ProcessEnv {
+function envWithoutGlobalCompilers(opts: { npx: boolean }): NodeJS.ProcessEnv {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), "cdir-nobin-"));
   const nodeDir = path.dirname(process.execPath);
-  for (const tool of ["node", "npm", "npx"]) {
+  // Some installs have no npx beside node (process.execPath can resolve
+  // into a Homebrew Cellar); both cases are tested, not assumed.
+  for (const tool of opts.npx ? ["node", "npm", "npx"] : ["node"]) {
     const target = tool === "node" ? process.execPath : path.join(nodeDir, tool);
     if (fs.existsSync(target)) fs.symlinkSync(target, path.join(bin, tool));
   }
@@ -392,25 +394,28 @@ test("verify: typecheck proven-clean with a local compiler, unchecked without on
   assert.equal(tc2!.evidenceClass, "measured");
   assert.ok(broken.record.violations.some((v) => v.includes("VERIFY typecheck")));
 
-  // Repo with tsconfig but NO compiler → unchecked with a named reason.
-  const root2 = makeGitRepo({
-    "tsconfig.json": '{"compilerOptions":{"strict":true},"include":["src"]}\n',
-    "src/ok.ts": "export const x: number = 1;\n",
-  });
-  const { index: index2 } = await buildIndex(root2);
-  const d2 = draftLock(root2, index2, "tidy types", { now: "2026-09-11T00:00:00.000Z", createdBy: "test" });
-  d2.lock.budget = { files: ["src/ok.ts"], symbols: [], maxFiles: 1, maxLines: 100 };
-  d2.lock.status = "active";
-  saveLock(root2, d2.lock);
-  sealLock(root2, d2.lock);
-  const outcome2 = await runWithLock(root2, d2.lock.id, [NODE, "-e", append("src/ok.ts", "// ok\n")], {
-    stdio: "pipe",
-    verifyOptions: { env: envWithoutGlobalCompilers() },
-  });
-  const tc3 = outcome2.record.verification!.items.find((i) => i.source === "typecheck");
-  assert.ok(tc3, "typecheck item present");
-  assert.equal(tc3!.verdict, "unchecked");
-  assert.ok(tc3!.reason!.length > 0, "unavailability reason named");
+  // Repo with tsconfig but NO compiler → unchecked with a named reason,
+  // whether or not npx is there to look for one.
+  for (const npx of [true, false]) {
+    const root2 = makeGitRepo({
+      "tsconfig.json": '{"compilerOptions":{"strict":true},"include":["src"]}\n',
+      "src/ok.ts": "export const x: number = 1;\n",
+    });
+    const { index: index2 } = await buildIndex(root2);
+    const d2 = draftLock(root2, index2, "tidy types", { now: "2026-09-11T00:00:00.000Z", createdBy: "test" });
+    d2.lock.budget = { files: ["src/ok.ts"], symbols: [], maxFiles: 1, maxLines: 100 };
+    d2.lock.status = "active";
+    saveLock(root2, d2.lock);
+    sealLock(root2, d2.lock);
+    const outcome2 = await runWithLock(root2, d2.lock.id, [NODE, "-e", append("src/ok.ts", "// ok\n")], {
+      stdio: "pipe",
+      verifyOptions: { env: envWithoutGlobalCompilers({ npx }) },
+    });
+    const tc3 = outcome2.record.verification!.items.find((i) => i.source === "typecheck");
+    assert.ok(tc3, "typecheck item present");
+    assert.equal(tc3!.verdict, "unchecked", `npx ${npx ? "present" : "absent"}: ${tc3!.detail}`);
+    assert.ok(tc3!.reason!.length > 0, "unavailability reason named");
+  }
 });
 
 test("verify: no tsconfig surfaces typecheck as Unchecked, not omitted", async () => {
