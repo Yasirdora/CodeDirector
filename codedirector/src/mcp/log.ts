@@ -1,7 +1,7 @@
 /**
  * Flight recorder for the MCP server.
  *
- * Every tool call leaves one JSON line at `.codedirector/mcp.log`: when it
+ * Every tool call leaves one JSON line at `.codedirector/runs/mcp.log`: when it
  * started, which tool, which root, how long it took, and how it ended. The
  * need is not analytics — it is that a call which appears to hang can be
  * reconstructed afterwards instead of guessed at.
@@ -23,10 +23,16 @@
  *     returned. Writing a start line and an end line would close the gap at
  *     the cost of doubling the file and complicating rotation; if a hang ever
  *     needs more than this, that is the trade to revisit.
+ *
+ * It lives in `.codedirector/runs/`, which git ignores in every setup — the
+ * ignore block older versions wrote to a project's .gitignore, and
+ * `.codedirector/.gitignore` since. At `.codedirector/mcp.log` it showed up
+ * as a new file in every project. A log still there is moved on the next write.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { ensureCodedirectorIgnore } from "../core/store";
 
 /** Roll the log past this size, keeping exactly one previous file. */
 export const ROTATE_BYTES = 5 * 1024 * 1024;
@@ -50,6 +56,11 @@ export interface CallRecord {
 }
 
 export function logPath(rootDir: string): string {
+  return path.join(rootDir, ".codedirector", "runs", "mcp.log");
+}
+
+/** Where older versions wrote it — in sight of git. */
+export function oldLogPath(rootDir: string): string {
   return path.join(rootDir, ".codedirector", "mcp.log");
 }
 
@@ -64,10 +75,24 @@ export function recordCall(rootDir: string, record: CallRecord): void {
   try {
     const file = logPath(rootDir);
     fs.mkdirSync(path.dirname(file), { recursive: true });
+    ensureCodedirectorIgnore(rootDir);
+    moveOldLog(rootDir, file);
     rotateIfFull(file);
     fs.appendFileSync(file, JSON.stringify(record) + "\n", "utf8");
   } catch {
     /* see property 1 above */
+  }
+}
+
+/** A log (and its previous file) at the old place, moved in — unless one is already here. */
+function moveOldLog(rootDir: string, file: string): void {
+  for (const suffix of ["", ".1"]) {
+    const old = oldLogPath(rootDir) + suffix;
+    try {
+      if (fs.existsSync(old) && !fs.existsSync(file + suffix)) fs.renameSync(old, file + suffix);
+    } catch {
+      /* another process moved it first — either is fine */
+    }
   }
 }
 

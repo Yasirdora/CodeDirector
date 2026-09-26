@@ -106,7 +106,7 @@ best):
 **1. MCP — the toolbox.** Run `cdir mcp` as an MCP server in your agent's
 config. The agent gains eight tools (`repo_map`, `blast_radius`, `lock_draft`,
 `lock_check`, `lock_activate`, `run_locked`, `report`, `undo`). Every call
-leaves a line in `.codedirector/mcp.log` — when it started, which tool, which
+leaves a line in `.codedirector/runs/mcp.log` — when it started, which tool, which
 root, how long it took, and how it ended — so a call that appears to hang can
 be read about afterwards instead of guessed at. Arguments are not recorded.
 The log rotates at 5 MB, keeping one previous file. Example for a

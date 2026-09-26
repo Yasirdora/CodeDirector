@@ -12,8 +12,8 @@ import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import * as fs from "node:fs";
-import { makeGitRepo } from "./helpers";
-import { logPath, recordCall, ROTATE_BYTES, type CallRecord } from "../src/mcp/log";
+import { git, makeGitRepo } from "./helpers";
+import { logPath, oldLogPath, recordCall, ROTATE_BYTES, type CallRecord } from "../src/mcp/log";
 
 const CLI = path.join(__dirname, "..", "src", "cli.js");
 const NODE = process.execPath;
@@ -343,6 +343,41 @@ test("flight recorder: rotates at the cap, keeping one previous file", () => {
   recordCall(root, { at: "2026-01-01T00:00:02.000Z", tool: "t", root, durationMs: 3, outcome: "ok" });
   const siblings = fs.readdirSync(path.dirname(file)).filter((f) => f.startsWith("mcp.log"));
   assert.deepEqual(siblings.sort(), ["mcp.log", "mcp.log.1"], "exactly one previous file is kept");
+});
+
+test("flight recorder: the log is in .codedirector/runs/, which git ignores — in a new setup and an older one", () => {
+  const line = (durationMs: number): CallRecord => ({ at: "2026-01-01T00:00:00.000Z", tool: "t", root: "r", durationMs, outcome: "ok" });
+  const fresh = makeGitRepo();
+  recordCall(fresh, line(1));
+  assert.equal(logPath(fresh), path.join(fresh, ".codedirector", "runs", "mcp.log"));
+  assert.equal(readLog(fresh).length, 1);
+  git(fresh, ["check-ignore", "-q", ".codedirector/runs/mcp.log"]); // throws when not ignored
+  // A project set up by an older version keeps its block in .gitignore: that block covers runs/, nothing new is written.
+  const OLD = "# BEGIN cdir\n.codedirector/index.json\n.codedirector/baselines/\n.codedirector/runs/\n.codedirector/ckpt-blobs/\n.codedirector/checkpoints.json\n# END cdir\n";
+  const older = makeGitRepo({ "README.md": "# tmp\n", ".gitignore": OLD });
+  recordCall(older, line(2));
+  git(older, ["check-ignore", "-q", ".codedirector/runs/mcp.log"]);
+  assert.equal(fs.existsSync(path.join(older, ".codedirector", ".gitignore")), false);
+});
+
+test("flight recorder: a log at the old place, in sight of git, is moved on the next write — with its previous file", () => {
+  const root = makeGitRepo();
+  fs.mkdirSync(path.join(root, ".codedirector"));
+  fs.writeFileSync(oldLogPath(root), JSON.stringify({ at: "2026-01-01T00:00:00.000Z", tool: "old", root, durationMs: 5, outcome: "ok" }) + "\n");
+  fs.writeFileSync(`${oldLogPath(root)}.1`, "older\n");
+  assert.match(git(root, ["status", "--porcelain", "--untracked-files=all"]), /\.codedirector\/mcp\.log/, "before: git sees it");
+
+  recordCall(root, { at: "2026-01-01T00:00:01.000Z", tool: "new", root, durationMs: 7, outcome: "ok" });
+  assert.equal(fs.existsSync(oldLogPath(root)), false);
+  assert.equal(fs.existsSync(`${oldLogPath(root)}.1`), false);
+  assert.deepEqual(readLog(root).map((r) => r.tool), ["old", "new"], "the old lines are kept, the new one follows");
+  assert.equal(fs.readFileSync(`${logPath(root)}.1`, "utf8"), "older\n");
+  assert.doesNotMatch(git(root, ["status", "--porcelain", "--untracked-files=all"]), /mcp\.log/, "after: git doesn't");
+
+  // An older server still running writes the old place again: that never replaces the log that's here.
+  fs.writeFileSync(oldLogPath(root), "from an older server\n");
+  recordCall(root, { at: "2026-01-01T00:00:02.000Z", tool: "newer", root, durationMs: 8, outcome: "ok" });
+  assert.deepEqual(readLog(root).map((r) => r.tool), ["old", "new", "newer"]);
 });
 
 test("flight recorder: an unwritable destination costs a line, never a throw", () => {

@@ -1,0 +1,66 @@
+schemaVersion: 1
+id: IL-0024
+status: verified
+utterance: yes to both
+goal: "Code Director's log stops showing up as a new file in every project: it's written to .codedirector/runs/mcp.log, which git ignores in every setup (the older .gitignore block and .codedirector/.gitignore), and a log at the old place is moved there on the next write."
+interpretation: |
+  BUILT IN A SPIKE FIRST: a scratch clone of 91968d3; nothing here is touched
+  until this lock is active. The run copies the spike's 3 files in.
+
+  The owner was asked: "The Code Director log-file fix: git ignores
+  .codedirector/mcp.log, so it stops showing up as a new file in every
+  project." Answer: "yes to both" (the other yes is a test folder in another
+  project, not this repo).
+
+  HOW, and why not an ignore rule: projects set up by older versions (the
+  "# BEGIN cdir" block in their own .gitignore) would need their .gitignore
+  edited to add a rule, and cdir no longer edits it (IL-0020). Both setups
+  already ignore .codedirector/runs/, so the log moves there:
+  - logPath → .codedirector/runs/mcp.log; oldLogPath names the old place.
+  - recordCall makes sure the ignore rules exist (ensureCodedirectorIgnore,
+    a no-op where the old block is), and moves mcp.log and mcp.log.1 from the
+    old place when nothing is at the new one — a log is never overwritten.
+  - README: the log's path.
+
+  EVIDENCE FROM THE SPIKE
+  - npm test: 203 tests (201 before, 2 new), all pass.
+  - 5 planted bugs (old path, no ignore rules, no move, .1 not moved, a move
+    overwriting the log): all caught.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: Nothing is published or pushed
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - node_modules/**
+  - .gitignore
+  - src/run/**
+  - src/verify/**
+  - src/lock/**
+  - src/core/**
+change: The MCP log moves to .codedirector/runs/mcp.log, ignored in every setup; an old log is moved there
+verifyCommand: npm test
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - README.md
+    - src/mcp/log.ts
+    - test/mcp.test.ts
+  symbols: []
+  maxFiles: 3
+  maxLines: 120
+accept:
+  - npm test passes, including the 2 new tests
+  - Every planted bug in the move is caught
+  - In a project set up by an older version, the log no longer shows in git status
+assumptions:
+  - text: "Owner's words, 2026-09-26: \"yes to both\" — to \"The Code Director log-file fix: git ignores .codedirector/mcp.log, so it stops showing up as a new file in every project.\""
+    source: user
+    confirmed: true
+  - text: Built as a move to runs/ rather than an ignore rule, so older setups are covered without editing their .gitignore — the owner is told in the report.
+    source: system
+    confirmed: false
+createdAt: 2026-09-26T07:42:40.420Z
+createdBy: Yasirdora
