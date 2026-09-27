@@ -1,0 +1,90 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0028-20260927-212037.json",
+  "baselineSha256": "8bfd90b5e5de79f5d4982735c6571646e8695ebeed02f92e8f9549dd0eedd5cb",
+  "budget": {
+    "filesChanged": 7,
+    "linesChanged": 473,
+    "maxFiles": 8,
+    "maxLines": 1500
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/specs/00-index.md",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "docs/specs/01-retry-task-baseline.md",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "docs/specs/02-verdict-required-checks.md",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "docs/specs/03-receipt-snapshot-bound.md",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "docs/specs/04-signature-surface.md",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "docs/specs/05-record-identity-atomicity.md",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "docs/specs/06-mcp-keep-parity.md",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260927T212033459",
+    "createdAt": "2026-09-27T21:20:33.487Z",
+    "dirty": false,
+    "id": "ckpt-20260927T212033459",
+    "ref": "bb4b0cdb85b1a28f0402de04f196293756b1b8fe",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260927T212033459"
+  },
+  "command": [
+    "bash",
+    "-lc",
+    "mkdir -p docs/specs && cp /tmp/codedirector-specs/*.md docs/specs/ && ls docs/specs"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-27T21:20:37.932Z",
+  "keepResults": [],
+  "lockId": "IL-0028",
+  "startedAt": "2026-09-27T21:20:37.917Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0028-20260927-212037.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 0,
+      "proven": 1,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0028",
+    "verifiedAt": "2026-09-27T21:20:40.708Z",
+    "violations": []
+  },
+  "violations": []
+}

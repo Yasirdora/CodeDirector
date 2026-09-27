@@ -1,0 +1,41 @@
+schemaVersion: 1
+id: IL-0028
+status: verified
+utterance: commit the specs into docs/specs/ through a lock
+goal: Six approved fix specs (findings 1-4, 7, and the MCP keeps gap) land as markdown under docs/specs/, with the two approved amendments applied; nothing else changes.
+interpretation: Six approved fix specs (findings
+keep: []
+deny:
+  - src/**
+  - test/**
+  - package.json
+  - package-lock.json
+change: Add seven markdown files under docs/specs/ (index + six specs); no other paths change.
+budget:
+  files:
+    - docs/specs/00-index.md
+    - docs/specs/01-retry-task-baseline.md
+    - docs/specs/02-verdict-required-checks.md
+    - docs/specs/03-receipt-snapshot-bound.md
+    - docs/specs/04-signature-surface.md
+    - docs/specs/05-record-identity-atomicity.md
+    - docs/specs/06-mcp-keep-parity.md
+  symbols: []
+  maxFiles: 8
+  maxLines: 1500
+accept: []
+assumptions:
+  - text: 'low confidence — confirm territory with the human: every anchor matched only as a fragment of a symbol name ("lock" in composeLock, "lock" in lockCommand, "lock" in activeLock, "lock" in isActiveLockFile, "lock" in checkLock) — an incidental word can do this'
+    source: system
+    confirmed: false
+  - text: Anchors defended — composeLock — eval/run.ts (TypeScript); "lock" only occurs inside "composeLock" · lockCommand — src/cli-main.ts (TypeScript); "lock" only occurs inside "lockCommand" · activeLock — src/hook/index.ts (TypeScript); "lock" only occurs inside "activeLock" · isActiveLockFile — src/hook/index.ts (TypeScript); "lock" only occurs inside "isActiveLockFile" · checkLock — src/lock/check.ts (TypeScript); "lock" only occurs inside "checkLock"
+    source: system
+    confirmed: false
+  - text: Budget set explicitly when drafting (seven files under docs/specs/); the anchor-proposed files were overridden and are not in scope.
+    source: system
+    confirmed: false
+  - text: "Deny list set explicitly when drafting: src/**, test/**, package.json, package-lock.json."
+    source: system
+    confirmed: false
+createdAt: 2026-09-27T21:20:06.611Z
+createdBy: Yasirdora
