@@ -1,0 +1,1 @@
+per-record ids, atomic writes, exclusive id allocation with no repo-wide lock

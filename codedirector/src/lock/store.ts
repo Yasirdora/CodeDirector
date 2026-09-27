@@ -3,7 +3,10 @@
  *
  * Locks are data, versioned in-repo (note: .codedirector is gitignored by
  * default; teams that want Locks in git can un-ignore the locks/ subdir).
- * Ids are sequential (IL-0001, IL-0002, ...) per repo.
+ * Ids are sequential (IL-0001, IL-0002, ...) per repo, allocated
+ * exclusively: a create-or-fail reservation (see nextLockId), not
+ * read-max-then-write, so two sessions drafting at once cannot pick the
+ * same id. Writes go through writeFileAtomic.
  */
 
 import * as fs from "node:fs";
@@ -11,6 +14,7 @@ import * as path from "node:path";
 import { VibeCheck } from "./types";
 import { lockFromYaml, lockToYaml } from "./yaml";
 import { refreshSeal } from "./seal";
+import { writeFileAtomic } from "../core/ids";
 
 export function locksDir(rootDir: string): string {
   return path.join(rootDir, ".codedirector", "locks");
@@ -45,11 +49,39 @@ function scanLockFiles(rootDir: string): LockFileEntry[] {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/** Next sequential lock id: IL-0001, IL-0002, ... */
+/** Reservation files (`.reserve-IL-XXXX`) never match LOCK_FILE_RE; they only hold an id. */
+function reservePath(rootDir: string, id: string): string {
+  return path.join(locksDir(rootDir), `.reserve-${id}`);
+}
+
+/**
+ * Allocate the next sequential lock id — EXCLUSIVELY.
+ *
+ * Read-max-then-write raced: two sessions drafting at the same moment both
+ * computed IL-0032 and both wrote locks under it. Allocation is a
+ * create-or-fail loop over a per-id reservation file; a loser advances to
+ * the next id. saveLock removes the reservation once the lock file carries
+ * the id; the post-reservation check covers the one remaining window — a
+ * previous holder that finished (lock written, reservation released)
+ * between our scan and our reservation. A crashed reservation costs one
+ * skipped id, never a duplicate.
+ */
 export function nextLockId(rootDir: string): string {
-  const existing = scanLockFiles(rootDir);
-  const max = existing.reduce((acc, e) => Math.max(acc, parseInt(e.id.slice(3), 10)), 0);
-  return `IL-${String(max + 1).padStart(4, "0")}`;
+  fs.mkdirSync(locksDir(rootDir), { recursive: true });
+  let n = scanLockFiles(rootDir).reduce((acc, e) => Math.max(acc, parseInt(e.id.slice(3), 10)), 0) + 1;
+  for (;;) {
+    const id = `IL-${String(n).padStart(4, "0")}`;
+    try {
+      fs.closeSync(fs.openSync(reservePath(rootDir, id), "wx"));
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      n++;
+      continue;
+    }
+    if (!scanLockFiles(rootDir).some((e) => e.id === id)) return id;
+    fs.rmSync(reservePath(rootDir, id), { force: true });
+    n++;
+  }
 }
 
 export function lockPathFor(rootDir: string, id: string): string | null {
@@ -72,7 +104,7 @@ function readSealedUtterance(rootDir: string, id: string): string | null {
 
 function writeSealedUtterance(rootDir: string, id: string, utterance: string): void {
   fs.mkdirSync(path.dirname(sealPath(rootDir, id)), { recursive: true });
-  fs.writeFileSync(sealPath(rootDir, id), utterance, "utf8");
+  writeFileAtomic(sealPath(rootDir, id), utterance);
 }
 
 /** Load a Lock by id ("IL-0001"). Returns null when not found; throws LockParseError on bad YAML. */
@@ -107,8 +139,11 @@ export function saveLock(rootDir: string, lock: VibeCheck): string {
   const fileName = `${lock.id}-${slugify(lock.utterance)}.yaml`;
   const target = path.join(locksDir(rootDir), fileName);
   const prev = lockPathFor(rootDir, lock.id);
-  fs.writeFileSync(target, lockToYaml(lock), "utf8");
+  writeFileAtomic(target, lockToYaml(lock));
   if (prev && prev !== target) fs.rmSync(prev);
+  // The reservation from nextLockId has done its job: the lock file carries
+  // the id now. (No-op for locks saved without an allocation.)
+  fs.rmSync(reservePath(rootDir, lock.id), { force: true });
   // Internal writes (activation, run status transitions) re-pin the seal so
   // the approved contract stays valid; status is outside the sealed hash.
   refreshSeal(rootDir, lock);

@@ -22,6 +22,7 @@ import { RepoIndex } from "../core/types";
 import { buildIndex } from "../core/builder";
 import { buildGraph } from "../core/graph";
 import { ensureCodedirectorIgnore, indexDir, stableStringify } from "../core/store";
+import { newRecordId, writeFileAtomic } from "../core/ids";
 import { createCheckpoint, Checkpoint } from "../checkpoint";
 import { VibeCheck } from "../lock/types";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
@@ -310,9 +311,10 @@ export async function runWithLock(
     ...(verification ? { verification } : {}),
   };
   fs.mkdirSync(runsDir(rootDir), { recursive: true });
-  const ts = startedAt.replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
-  const recordPath = path.join(runsDir(rootDir), `${lock.id}-${ts}.json`);
-  fs.writeFileSync(recordPath, stableStringify(record), "utf8");
+  // The record id is millisecond-stamped and process-unique: two runs in the
+  // same second are two records, and the name still sorts in run order.
+  const recordPath = path.join(runsDir(rootDir), `${lock.id}-${newRecordId(new Date(startedAt))}.json`);
+  writeFileAtomic(recordPath, stableStringify(record));
 
   const exitCode = commandExit === 0 && violations.length === 0 ? 0 : 1;
 

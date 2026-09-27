@@ -16,6 +16,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { isGitRepo } from "../core/git";
 import { indexDir, stableStringify } from "../core/store";
+import { writeFileAtomic } from "../core/ids";
 
 export interface Checkpoint {
   /** "ckpt-<yyyymmddThhmmssmmm>" */
@@ -64,7 +65,7 @@ function loadStore(rootDir: string): CheckpointStore {
 
 function saveStore(rootDir: string, store: CheckpointStore): void {
   fs.mkdirSync(indexDir(rootDir), { recursive: true });
-  fs.writeFileSync(checkpointsPath(rootDir), stableStringify(store), "utf8");
+  writeFileAtomic(checkpointsPath(rootDir), stableStringify(store));
 }
 
 function git(rootDir: string, args: string[]): string {
@@ -237,7 +238,7 @@ function writeCheckpointBlobs(rootDir: string, id: string): string {
   }
 
   const meta: BlobMeta = { hidden, untracked: [...new Set(untracked)].sort(), files: [...new Set(files)].sort() };
-  fs.writeFileSync(path.join(dir, "meta.json"), stableStringify(meta));
+  writeFileAtomic(path.join(dir, "meta.json"), stableStringify(meta));
   return path.relative(indexDir(rootDir), dir).split(path.sep).join("/");
 }
 

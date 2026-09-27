@@ -28,6 +28,19 @@ test("checkpoint/undo round-trip restores a modified tracked file", () => {
   assert.equal(fs.readFileSync(path.join(root, "src", "a.ts"), "utf8"), "export const v = 1;\n");
 });
 
+test("checkpoint store writes are atomic: no temp files survive, the store parses", () => {
+  const root = makeGitRepo({ "src/a.ts": "export const v = 1;\n" });
+  createCheckpoint(root);
+  fs.writeFileSync(path.join(root, "src", "a.ts"), "export const v = 2;\n");
+  createCheckpoint(root);
+  const state = fs.readdirSync(path.join(root, ".codedirector"));
+  assert.ok(!state.some((f) => f.includes(".tmp-")), `temp files left: ${state.join(", ")}`);
+  const parsed = JSON.parse(fs.readFileSync(path.join(root, ".codedirector", "checkpoints.json"), "utf8")) as {
+    checkpoints: unknown[];
+  };
+  assert.equal(parsed.checkpoints.length, 2);
+});
+
 test(".codedirector tool state does not count as a dirty tree", () => {
   const root = makeGitRepo();
   fs.mkdirSync(path.join(root, ".codedirector", "locks"), { recursive: true });

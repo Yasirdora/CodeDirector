@@ -394,3 +394,26 @@ in a new folder counted as 0) pass under the ceiling unmeasured.
 - **Git root:** the same. The report counts 9.
 - **New folder:** a run that creates a 127-line file in a new folder counts
   127.
+
+### Record identity: same-second collisions and non-atomic writes
+
+**Status: landed (IL-0030).** Baselines and run records were named by a
+second-truncated timestamp, so two captures inside one second overwrote each
+other; every state file was written in place, so a crash could leave a
+half-record; lock ids were allocated read-max-then-write, so two parallel
+drafts could pick the same id; and the whole seal registry lived in one
+shared seals.json that concurrent sessions rewrote wholesale.
+
+- **Fix:** `src/core/ids.ts` — `newRecordId()` (millisecond stamp + pid +
+  per-process sequence + random tail: sortable, collision-proof) and
+  `writeFileAtomic()` (temp + rename). Baselines, run records, lock YAML and
+  the checkpoint store are written atomically; seal entries are per-record
+  files under `.codedirector/seals/<id>.json` (the legacy seals.json is
+  still read, never rewritten); lock ids are allocated by a create-or-fail
+  reservation loop, released once the lock file carries the id.
+- **No repo-wide state lock:** parallel sessions are the supported reality;
+  uniqueness is per record, not by serializing the repository.
+- **Tests:** `test/ids.test.ts` (in-process and cross-process uniqueness;
+  atomic round-trip; no temp leftovers; two same-second baselines);
+  `test/lock.test.ts` (four parallel processes allocate twelve distinct
+  ids); `test/run.test.ts` (a lost per-record seal refuses fail-closed).

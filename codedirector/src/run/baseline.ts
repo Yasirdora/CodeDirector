@@ -13,6 +13,7 @@ import { RepoIndex } from "../core/types";
 import { buildGraph } from "../core/graph";
 import { hashContent } from "../core/builder";
 import { indexDir, stableStringify } from "../core/store";
+import { newRecordId, writeFileAtomic } from "../core/ids";
 import { workTreeStatusPorcelain } from "../checkpoint";
 import { VibeCheck } from "../lock/types";
 import { signatureHash } from "../lock/check";
@@ -49,6 +50,8 @@ export interface HiddenHash {
 export interface Baseline {
   lockId: string;
   capturedAt: string;
+  /** Unique record stamp naming the baseline file and its tree directory (IL-0030). */
+  stamp?: string;
   /** Checkpoint tag taken just before this baseline, when run via `cdir run`. */
   checkpointTag?: string;
   /** HEAD sha at capture — classification diffs against this, not "current HEAD". */
@@ -114,9 +117,9 @@ export function baselinesDir(rootDir: string): string {
   return path.join(indexDir(rootDir), "baselines");
 }
 
-/** Timestamp slug shared by the baseline JSON file and its tree directory. */
+/** Unique, sortable stamp shared by the baseline JSON file and its tree directory. */
 function baselineStamp(capturedAt: string): string {
-  return capturedAt.replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
+  return newRecordId(new Date(capturedAt));
 }
 
 /**
@@ -129,11 +132,11 @@ function baselineStamp(capturedAt: string): string {
 function writeBaselineTree(
   rootDir: string,
   lockId: string,
-  capturedAt: string,
+  stamp: string,
   snap: WorkTreeSnapshot,
 ): string | undefined {
   const untracked = new Set(snap.untracked);
-  const dir = path.join(baselinesDir(rootDir), `${lockId}-${baselineStamp(capturedAt)}`, "tree");
+  const dir = path.join(baselinesDir(rootDir), `${lockId}-${stamp}`, "tree");
   let wrote = 0;
   for (const [p, bytes] of Object.entries(snap.contents)) {
     if (untracked.has(p)) continue;
@@ -232,10 +235,14 @@ export function captureBaseline(
   const snap = snapshotWorkTree(rootDir);
   const ignoreRules = captureIgnoreRules(rootDir);
   const capturedAt = new Date().toISOString();
-  const treeDir = writeBaselineTree(rootDir, lock.id, capturedAt, snap);
+  // One stamp names both the JSON file and its tree directory, so they pair
+  // by construction; two captures in the same second get two stamps.
+  const stamp = baselineStamp(capturedAt);
+  const treeDir = writeBaselineTree(rootDir, lock.id, stamp, snap);
   return {
     lockId: lock.id,
     capturedAt,
+    stamp,
     checkpointTag,
     head: currentHead(rootDir) ?? undefined,
     signatures,
@@ -253,8 +260,9 @@ export function captureBaseline(
 
 export function saveBaseline(rootDir: string, baseline: Baseline): string {
   fs.mkdirSync(baselinesDir(rootDir), { recursive: true });
-  const p = path.join(baselinesDir(rootDir), `${baseline.lockId}-${baselineStamp(baseline.capturedAt)}.json`);
-  fs.writeFileSync(p, stableStringify(baseline), "utf8");
+  const stamp = baseline.stamp ?? baselineStamp(baseline.capturedAt);
+  const p = path.join(baselinesDir(rootDir), `${baseline.lockId}-${stamp}.json`);
+  writeFileAtomic(p, stableStringify(baseline));
   return p;
 }
 
@@ -269,8 +277,8 @@ export function loadBaseline(baselinePath: string): Baseline {
 }
 
 /**
- * Latest baseline file for a lock (by filename, which embeds the capture
- * timestamp), or null when the lock has never been run/baselined.
+ * Latest baseline file for a lock (by filename, whose leading stamp sorts in
+ * capture order), or null when the lock has never been run/baselined.
  */
 export function latestBaselinePath(rootDir: string, lockId: string): string | null {
   const dir = baselinesDir(rootDir);

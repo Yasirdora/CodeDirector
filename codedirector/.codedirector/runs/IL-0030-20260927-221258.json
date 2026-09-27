@@ -1,0 +1,166 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0030-20260927-221258.json",
+  "baselineSha256": "83811e44cbbf3c59fb5c310f836a741d2b955e58484fd778bdb2c67a7268d1a2",
+  "budget": {
+    "filesChanged": 12,
+    "linesChanged": 451,
+    "maxFiles": 14,
+    "maxLines": 800
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/ROADMAP.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/checkpoint/index.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/ids.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/index.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/seal.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/store.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/baseline.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/checkpoint.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/ids.test.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/lock.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/run.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260927T221253745",
+    "createdAt": "2026-09-27T22:12:53.773Z",
+    "dirty": false,
+    "id": "ckpt-20260927T221253745",
+    "ref": "d1a37c0bd9aebe033addbb471377642c540a5a52",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260927T221253745"
+  },
+  "command": [
+    "bash",
+    "-lc",
+    "set -e; cp -R /tmp/spec5/work/. .; npm test; npm run eval"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-27T22:14:02.080Z",
+  "keepResults": [
+    {
+      "detail": "signature unchanged: src/lock/seal.ts#sealViolation",
+      "kind": "api-unchanged",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0030",
+  "startedAt": "2026-09-27T22:12:58.385Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0030-20260927-221258.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 4,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0030-20260927-221258.json#signatures[src/lock/seal.ts#sealViolation]",
+        "clauseKind": "api-unchanged",
+        "detail": "signature unchanged: src/lock/seal.ts#sealViolation",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "api-unchanged · src/lock/seal.ts#sealViolation",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0030-20260927-221258.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0030-20260927-221258.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0030",
+    "verifiedAt": "2026-09-27T22:14:56.870Z",
+    "violations": []
+  },
+  "violations": []
+}

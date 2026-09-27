@@ -4,6 +4,9 @@
  */
 
 import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { spawn } from "node:child_process";
 import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { VibeCheck, LOCK_SCHEMA_VERSION } from "../src/lock/types";
@@ -23,6 +26,7 @@ import { resolveAnchorsDetailed } from "../src/core/map";
 import { buildGraph } from "../src/core/graph";
 import { checkLock, verifyCoverage } from "../src/lock/check";
 import { listLocks, loadLock } from "../src/lock/store";
+import { canonicalLockHash, readSeals, refreshSeal, sealLock } from "../src/lock/seal";
 import { matchPath, validateGlob } from "../src/lock/glob";
 import { copyDemoRepo, copyFixture, makeGitRepo } from "./helpers";
 
@@ -619,4 +623,68 @@ test("budget proposal prefers exact anchors; weak anchors abstain (field-reporte
     vague.lock.assumptions.some((a) => a.text.includes("budget left empty")),
     "guidance recorded in assumptions",
   );
+});
+
+test("lock ids allocate exclusively under parallel processes", async () => {
+  const root = makeGitRepo({ "src/a.ts": "export const v = 1;\n" });
+  const storeJs = path.join(__dirname, "..", "src", "lock", "store.js");
+  const script =
+    `const { nextLockId, saveLock } = require(${JSON.stringify(storeJs)});` +
+    `const root = process.argv[1];` +
+    `for (let i = 0; i < 3; i++) {` +
+    `  const id = nextLockId(root);` +
+    `  saveLock(root, { schemaVersion: 1, id, status: "draft", utterance: "child " + process.pid + "-" + i,` +
+    `    goal: "g", interpretation: "i", keep: [], deny: [], change: "c",` +
+    `    budget: { files: [], symbols: [], maxFiles: 1, maxLines: 400 }, accept: [], assumptions: [],` +
+    `    createdAt: new Date().toISOString(), createdBy: "test" });` +
+    `  console.log(id);` +
+    `}`;
+  const children = [0, 1, 2, 3].map(
+    () =>
+      new Promise<string>((resolve, reject) => {
+        const child = spawn(process.execPath, ["-e", script, root], { stdio: ["ignore", "pipe", "pipe"] });
+        let out = "";
+        let err = "";
+        child.stdout.on("data", (d) => (out += d));
+        child.stderr.on("data", (d) => (err += d));
+        child.on("close", (code) =>
+          code === 0 ? resolve(out.trim()) : reject(new Error(`child exited ${code}: ${err}`)),
+        );
+      }),
+  );
+  const outputs = await Promise.all(children);
+  const ids = outputs.flatMap((o) => o.split("\n").filter(Boolean));
+  assert.equal(ids.length, 12, "three ids from each of four children");
+  assert.equal(new Set(ids).size, 12, `duplicate id allocated: ${ids.join(", ")}`);
+  assert.deepEqual(listLocks(root).map((l) => l.id).sort(), [...ids].sort(), "every id has its lock file");
+  const leftovers = fs.readdirSync(path.join(root, ".codedirector", "locks")).filter((f) => f.startsWith(".reserve-"));
+  assert.deepEqual(leftovers, [], "reservations are released once the lock is written");
+});
+
+test("seals are per-record; the legacy registry is read, never rewritten", () => {
+  const root = makeGitRepo({ "src/a.ts": "export const v = 1;\n" });
+  fs.mkdirSync(path.join(root, ".codedirector"), { recursive: true });
+  const legacyPath = path.join(root, ".codedirector", "seals.json");
+  const legacyText = JSON.stringify({ "IL-0001": "legacy-hash" }) + "\n";
+  fs.writeFileSync(legacyPath, legacyText);
+  const lock = sampleLock(); // id IL-0001
+  assert.equal(readSeals(root)["IL-0001"], "legacy-hash", "legacy entries are read for old locks");
+
+  sealLock(root, lock);
+  const recordPath = path.join(root, ".codedirector", "seals", `${lock.id}.json`);
+  assert.ok(fs.existsSync(recordPath), "the approval pin is a per-record file");
+  const record = JSON.parse(fs.readFileSync(recordPath, "utf8")) as { id: string; hash: string };
+  assert.equal(record.id, lock.id);
+  assert.equal(record.hash, canonicalLockHash(lock));
+  assert.equal(readSeals(root)[lock.id], canonicalLockHash(lock), "the record wins over the legacy entry");
+  assert.equal(fs.readFileSync(legacyPath, "utf8"), legacyText, "the legacy registry is untouched");
+
+  lock.goal = "moved the goal";
+  refreshSeal(root, lock);
+  assert.equal(
+    (JSON.parse(fs.readFileSync(recordPath, "utf8")) as { hash: string }).hash,
+    canonicalLockHash(lock),
+    "refresh rewrites the record, not the registry",
+  );
+  assert.equal(fs.readFileSync(legacyPath, "utf8"), legacyText);
 });

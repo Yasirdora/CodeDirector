@@ -25,6 +25,7 @@ export { RepoWalker, INDEXABLE_EXTENSIONS } from "./core/walk";
 export { StructuralParser, langForFile, type LangKey } from "./core/parser";
 export { buildIndex, hashContent, type BuildOptions, type BuildResult } from "./core/builder";
 export { loadIndex, saveIndex, indexPath, indexDir, stableStringify, emptyIndex } from "./core/store";
+export { newRecordId, writeFileAtomic } from "./core/ids";
 
 export {
   buildGraph,

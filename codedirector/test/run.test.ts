@@ -342,10 +342,15 @@ test("run: an unchanged verified lock keeps running — multi-run work is not bl
 test("run: a finished lock with no seal is refused (fail-closed)", async () => {
   const { root, lock } = await setup();
   await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// faster\n")], { stdio: "pipe" });
+  // The seal is a per-record file now; clear both storages so the lock is
+  // genuinely unsealed (an older release may have left a legacy entry).
+  fs.rmSync(path.join(root, ".codedirector", "seals", `${lock.id}.json`), { force: true });
   const sealsFile = path.join(root, ".codedirector", "seals.json");
-  const seals = JSON.parse(fs.readFileSync(sealsFile, "utf8")) as Record<string, string>;
-  delete seals[lock.id];
-  fs.writeFileSync(sealsFile, JSON.stringify(seals));
+  if (fs.existsSync(sealsFile)) {
+    const seals = JSON.parse(fs.readFileSync(sealsFile, "utf8")) as Record<string, string>;
+    delete seals[lock.id];
+    fs.writeFileSync(sealsFile, JSON.stringify(seals));
+  }
   await assert.rejects(
     () => runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" }),
     (e: unknown) =>
@@ -557,4 +562,21 @@ test("run: a run that deletes a denied file is still caught", async () => {
     outcome.record.violations.some((v) => v.startsWith("DENY: src/export.ts")),
     outcome.record.violations.join("; "),
   );
+});
+
+test("run: two runs in the same second keep two distinct records", async () => {
+  const { root, lock } = await setup();
+  const first = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// one\n")], {
+    stdio: "pipe",
+  });
+  const second = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// two\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(first.exitCode, 0, first.record.violations.join("; "));
+  assert.equal(second.exitCode, 0, second.record.violations.join("; "));
+  assert.notEqual(first.recordPath, second.recordPath, "a second run overwrote the first record's name");
+  const records = fs
+    .readdirSync(path.join(root, ".codedirector", "runs"))
+    .filter((f) => f.startsWith(`${lock.id}-`) && f.endsWith(".json"));
+  assert.equal(records.length, 2, `expected two run records, got: ${records.join(", ")}`);
 });

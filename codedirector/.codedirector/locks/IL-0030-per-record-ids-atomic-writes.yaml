@@ -1,0 +1,53 @@
+schemaVersion: 1
+id: IL-0030
+status: verified
+utterance: per-record ids, atomic writes, exclusive id allocation with no repo-wide lock
+goal: "Spec 05: every baseline, run record and seal entry is unique by construction and written atomically; lock ids allocate exclusively; concurrent sessions on one repo never overwrite each other's records; no repo-wide state lock."
+interpretation: "Spec 05 — record identity and atomicity: one src/core/ids.ts (newRecordId + writeFileAtomic) used by baselines, run records, locks and seals; per-record seal files with legacy seals.json still read; exclusive lock-id allocation; no repo-wide state lock — concurrency carries via per-record files."
+keep:
+  - kind: no-new-dependency
+  - kind: api-unchanged
+    symbols:
+      - src/lock/seal.ts#sealViolation
+deny:
+  - docs/specs/**
+  - package.json
+  - package-lock.json
+  - src/mcp/server.ts
+  - test/mcp.test.ts
+change: Records get collision-proof ids and atomic writes; seal state moves to per-record files; lock ids allocate exclusively.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/core/ids.ts
+    - src/run/baseline.ts
+    - src/run/run.ts
+    - src/lock/store.ts
+    - src/lock/seal.ts
+    - src/checkpoint/index.ts
+    - src/index.ts
+    - test/ids.test.ts
+    - test/lock.test.ts
+    - test/run.test.ts
+    - test/checkpoint.test.ts
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 14
+  maxLines: 800
+accept: []
+assumptions:
+  - text: 'low confidence — confirm territory with the human: every anchor matched only as a fragment of a symbol name ("lock" in composeLock, "record" in UndoRecord, "lock" in lockCommand, "repo" in renderReport, "repo" in isGitRepo) — an incidental word can do this'
+    source: system
+    confirmed: false
+  - text: Anchors defended — composeLock — eval/run.ts (TypeScript); "lock" only occurs inside "composeLock" · UndoRecord — src/checkpoint/index.ts (TypeScript); "record" only occurs inside "UndoRecord" · lockCommand — src/cli-main.ts (TypeScript); "lock" only occurs inside "lockCommand" · renderReport — src/cli-main.ts (TypeScript); "repo" only occurs inside "renderReport" · isGitRepo — src/core/git.ts (TypeScript); "repo" only occurs inside "isGitRepo"
+    source: system
+    confirmed: false
+  - text: Budget set explicitly when drafting (twelve files); the anchor-proposed files were overridden and are not in scope.
+    source: system
+    confirmed: false
+  - text: "Deny list set explicitly when drafting: docs/specs/**, package.json, package-lock.json, src/mcp/server.ts, test/mcp.test.ts."
+    source: system
+    confirmed: false
+createdAt: 2026-09-27T21:55:59.341Z
+createdBy: Yasirdora
