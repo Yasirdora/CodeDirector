@@ -47,7 +47,7 @@ function isError(r: unknown): boolean {
   return (r as { isError?: boolean }).isError === true;
 }
 
-test("mcp: lists the eight workflow tools with schemas and descriptions", async () => {
+test("mcp: lists the nine workflow tools with schemas and descriptions", async () => {
   const root = makeGitRepo(FILES);
   const { client, close } = await connect(root);
   try {
@@ -56,6 +56,7 @@ test("mcp: lists the eight workflow tools with schemas and descriptions", async 
     assert.deepEqual(names, [
       "blast_radius",
       "lock_activate",
+      "lock_amend",
       "lock_check",
       "lock_draft",
       "repo_map",
@@ -63,6 +64,8 @@ test("mcp: lists the eight workflow tools with schemas and descriptions", async 
       "run_locked",
       "undo",
     ]);
+    const amend = tools.find((t) => t.name === "lock_amend")!;
+    assert.ok(amend.description!.includes("draft"), "lock_amend explains the draft-only rule");
     for (const t of tools) {
       assert.ok(t.description && t.description.length > 40, `${t.name} has a real description`);
       assert.ok(t.inputSchema && typeof t.inputSchema === "object", `${t.name} has an input schema`);
@@ -400,6 +403,136 @@ test("mcp: tool schemas advertise the optional root override", async () => {
       const props = (t.inputSchema as { properties?: Record<string, unknown> }).properties ?? {};
       assert.ok("root" in props, `${t.name} exposes the root override`);
     }
+  } finally {
+    await close();
+  }
+});
+
+test("mcp: lock_draft carries KEEP clauses, verifyCommand, accept, and ceilings into the YAML", async () => {
+  const root = makeGitRepo({
+    "package.json": '{"name":"mcp-keeps","type":"module"}\n',
+    "src/math.js": "export function add(a, b) { return a + b; }\n",
+    "test/math.test.js":
+      'import test from "node:test";\n' +
+      'import assert from "node:assert/strict";\n' +
+      'import { add } from "../src/math.js";\n' +
+      'test("adds", () => assert.equal(add(1, 2), 3));\n',
+  });
+  const { client, close } = await connect(root);
+  try {
+    const draft = await client.callTool({
+      name: "lock_draft",
+      arguments: {
+        utterance: "document math without behavior change",
+        goal: "the suite still passes",
+        keep: [
+          { kind: "tests-pass", glob: "test/*.test.js" },
+          { kind: "output-unchanged", command: "node -e \"console.log('mcp-keeps')\"" },
+          { kind: "no-new-dependency" },
+          { kind: "api-unchanged", symbols: ["src/math.js#add"] },
+          { kind: "custom", text: "the diff stays small" },
+        ],
+        verifyCommand: "node --test test/*.test.js",
+        accept: ["add still returns a number"],
+        budgetFiles: ["src/math.js"],
+        maxFiles: 2,
+        maxLines: 50,
+      },
+    });
+    assert.ok(!isError(draft), resultText(draft));
+    const info = JSON.parse(resultText(draft));
+    assert.equal(info.keep.length, 5, "every clause is echoed back");
+    assert.equal(info.verifyCommand, "node --test test/*.test.js");
+    assert.deepEqual(info.budget.files, ["src/math.js"]);
+    assert.equal(info.budget.maxFiles, 2);
+    assert.equal(info.budget.maxLines, 50);
+    assert.deepEqual(info.accept, ["add still returns a number"]);
+
+    const lockDir = path.join(root, ".codedirector", "locks");
+    const file = fs.readdirSync(lockDir).find((n) => n.startsWith(info.lockId))!;
+    const yaml = fs.readFileSync(path.join(lockDir, file), "utf8");
+    for (const needle of [
+      "kind: tests-pass",
+      "kind: output-unchanged",
+      "kind: no-new-dependency",
+      "kind: api-unchanged",
+      "kind: custom",
+      "verifyCommand: node --test test/*.test.js",
+      "maxFiles: 2",
+      "add still returns a number",
+    ]) {
+      assert.ok(yaml.includes(needle), `${needle} is in the drafted YAML:\n${yaml}`);
+    }
+
+    const check = await client.callTool({ name: "lock_check", arguments: { lockId: info.lockId } });
+    assert.equal(JSON.parse(resultText(check)).ok, true, resultText(check));
+    assert.ok(!isError(await client.callTool({ name: "lock_activate", arguments: { lockId: info.lockId } })));
+
+    const run = await client.callTool({
+      name: "run_locked",
+      arguments: { lockId: info.lockId, command: [NODE, "-e", 'require("fs").appendFileSync("src/math.js","// noted\\n")'] },
+    });
+    assert.ok(!isError(run), resultText(run));
+    assert.ok(resultText(run).includes("tests-pass"), resultText(run).slice(0, 800));
+
+    const repJson = await client.callTool({ name: "report", arguments: { lockId: info.lockId, format: "json" } });
+    const report = JSON.parse(resultText(repJson)) as {
+      items: Array<{ clauseKind?: string; evidenceClass: string; verdict: string }>;
+    };
+    const tests = report.items.find((i) => i.clauseKind === "tests-pass");
+    assert.equal(tests?.evidenceClass, "measured");
+    assert.equal(tests?.verdict, "held");
+  } finally {
+    await close();
+  }
+});
+
+test("mcp: lock_amend patches a draft, re-validates, and refuses anything not a draft", async () => {
+  const root = makeGitRepo(FILES);
+  const { client, close } = await connect(root);
+  try {
+    const draft = await client.callTool({ name: "lock_draft", arguments: { utterance: "make math faster" } });
+    const lockId = JSON.parse(resultText(draft)).lockId as string;
+
+    const amend = await client.callTool({
+      name: "lock_amend",
+      arguments: {
+        lockId,
+        goal: "same answers, faster",
+        keep: [{ kind: "custom", text: "numbers still add up" }],
+        budgetFiles: ["src/math.js"],
+        deny: ["src/secret.js"],
+        maxFiles: 2,
+        maxLines: 60,
+      },
+    });
+    assert.ok(!isError(amend), resultText(amend));
+    const info = JSON.parse(resultText(amend));
+    assert.equal(info.ok, true, `check errors: ${info.errors}`);
+    assert.deepEqual(info.budget.files, ["src/math.js"]);
+    assert.equal(info.budget.maxFiles, 2);
+    assert.equal(info.budget.maxLines, 60);
+    assert.equal(info.keep.length, 1);
+
+    const lockDir = path.join(root, ".codedirector", "locks");
+    const file = fs.readdirSync(lockDir).find((n) => n.startsWith(lockId))!;
+    const yaml = fs.readFileSync(path.join(lockDir, file), "utf8");
+    assert.ok(yaml.includes("numbers still add up"), yaml);
+    assert.ok(yaml.includes("maxLines: 60"), yaml);
+
+    // an invalid clause is refused, naming the shape it wants
+    const bad = await client.callTool({
+      name: "lock_amend",
+      arguments: { lockId, keep: [{ kind: "api-unchanged" }] },
+    });
+    assert.ok(isError(bad), "a malformed clause is an error-level result");
+    assert.match(resultText(bad), /api-unchanged.*symbols/i);
+
+    // an approved lock is not amendable by a tool — re-approval stays the human's
+    assert.ok(!isError(await client.callTool({ name: "lock_activate", arguments: { lockId } })));
+    const frozen = await client.callTool({ name: "lock_amend", arguments: { lockId, maxLines: 99 } });
+    assert.ok(isError(frozen), "an active lock cannot be amended");
+    assert.match(resultText(frozen), /draft/);
   } finally {
     await close();
   }

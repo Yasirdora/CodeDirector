@@ -49,10 +49,16 @@ export function describeProfiles(domains: DomainRegistry = defaultDomains()): st
   return [`Optional draft preset (available: ${names.join(", ")}).`, ...summaries].join(" ");
 }
 
+/** Concatenate optional lists; undefined stays undefined (an absent list is not written into a draft). */
+function mergeOptionalList(a: string[] | undefined, b: string[] | undefined): string[] | undefined {
+  if (a === undefined && b === undefined) return undefined;
+  return [...(a ?? []), ...(b ?? [])];
+}
+
 /**
  * Merge explicit draft options over profile defaults: deny / keep /
- * budgetFiles concatenate (profile first), scalars from the explicit side
- * win when set.
+ * budgetFiles / accept / verifyCovers concatenate (profile first), scalars
+ * (goal, verifyCommand, ceilings, …) from the explicit side win when set.
  */
 export function mergeDraftOptions(profile: DraftOptions, explicit: DraftOptions): DraftOptions {
   return {
@@ -62,6 +68,10 @@ export function mergeDraftOptions(profile: DraftOptions, explicit: DraftOptions)
     budgetFiles: [...(profile.budgetFiles ?? []), ...(explicit.budgetFiles ?? [])],
     verifyCommand: explicit.verifyCommand ?? profile.verifyCommand,
     verifyTimeoutMs: explicit.verifyTimeoutMs ?? profile.verifyTimeoutMs,
+    verifyCovers: mergeOptionalList(profile.verifyCovers, explicit.verifyCovers),
+    accept: [...(profile.accept ?? []), ...(explicit.accept ?? [])],
+    maxFiles: explicit.maxFiles ?? profile.maxFiles,
+    maxLines: explicit.maxLines ?? profile.maxLines,
     maxProposedFiles: explicit.maxProposedFiles ?? profile.maxProposedFiles,
     now: explicit.now ?? profile.now,
     createdBy: explicit.createdBy ?? profile.createdBy,

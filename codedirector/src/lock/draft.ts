@@ -33,6 +33,13 @@ export interface DraftOptions {
   verifyCommand?: string;
   /** Optional timeout (ms) for tests-pass runs and verifyCommand. */
   verifyTimeoutMs?: number;
+  /** Languages verifyCommand is asserted to exercise (the coverage escape hatch). */
+  verifyCovers?: string[];
+  /** Acceptance criteria (text; human-judged in v1). */
+  accept?: string[];
+  /** Budget ceilings; default maxFiles = budgetFiles length (floor 1), maxLines = 400. */
+  maxFiles?: number;
+  maxLines?: number;
   /** Cap on auto-proposed budget files (default 6). */
   maxProposedFiles?: number;
   /** For tests: override createdAt / createdBy. */
@@ -389,13 +396,14 @@ export function draftLock(
     change: "TODO — one-line scope description",
     ...(opts.verifyCommand !== undefined ? { verifyCommand: opts.verifyCommand } : {}),
     ...(opts.verifyTimeoutMs !== undefined ? { verifyTimeoutMs: opts.verifyTimeoutMs } : {}),
+    ...(opts.verifyCovers !== undefined ? { verifyCovers: opts.verifyCovers } : {}),
     budget: {
       files: budgetFiles,
       symbols: [],
-      maxFiles: Math.max(budgetFiles.length, 1),
-      maxLines: 400,
+      maxFiles: opts.maxFiles ?? Math.max(budgetFiles.length, 1),
+      maxLines: opts.maxLines ?? 400,
     },
-    accept: [],
+    accept: opts.accept ?? [],
     assumptions,
     createdAt: opts.now ?? new Date().toISOString(),
     createdBy: opts.createdBy ?? gitUserName(rootDir),

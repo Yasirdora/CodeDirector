@@ -104,8 +104,11 @@ contain, so you must attach one of these hooks (any one works; together is
 best):
 
 **1. MCP — the toolbox.** Run `cdir mcp` as an MCP server in your agent's
-config. The agent gains eight tools (`repo_map`, `blast_radius`, `lock_draft`,
-`lock_check`, `lock_activate`, `run_locked`, `report`, `undo`). Every call
+config. The agent gains nine tools (`repo_map`, `blast_radius`, `lock_draft`,
+`lock_amend`, `lock_check`, `lock_activate`, `run_locked`, `report`, `undo`).
+`lock_draft` and `lock_amend` take the promises with the scope — KEEP clauses,
+`verifyCommand`, `accept`, budget and deny — so an MCP-driven task carries the
+same contract as the CLI. Every call
 leaves a line in `.codedirector/runs/mcp.log` — when it started, which tool, which
 root, how long it took, and how it ended — so a call that appears to hang can
 be read about afterwards instead of guessed at. Arguments are not recorded.

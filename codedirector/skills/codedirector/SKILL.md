@@ -34,7 +34,10 @@ gets questions and options FIRST — not research:
    `cdir why <symbol>`.
 2. **Draft, then mirror**: `cdir lock new "<exact words>" --goal "<what
    done means>"` FIRST — never propose a scope in chat that does not exist
-   as a draft lock. Then show the user, in plain words: goal, budget, deny
+   as a draft lock. Name the promises the work must keep — tests still
+   pass, this API unchanged — and put them in the draft (CLI `--keep` /
+   `--verify-command`; MCP `keep` / `verifyCommand`): a lock with no keeps
+   verifies little. Then show the user, in plain words: goal, budget, deny
    list, assumptions. No lock ids, no command names, no file paths they
    didn't already see — the user approves intent, not machinery. Any clear
    yes / ok / go-ahead immediately triggers
@@ -73,6 +76,8 @@ skipped — only the ceremony shrinks.
 
 ## MCP mapping
 
-`repo_map` → 1 · `lock_draft` / `lock_check` / `lock_activate` → 2 ·
-`run_locked` → 3 · `report` / `undo` → 4 · `blast_radius` for "what would
-this touch".
+`repo_map` → 1 · `lock_draft` / `lock_amend` / `lock_check` / `lock_activate`
+→ 2 · `run_locked` → 3 · `report` / `undo` → 4 · `blast_radius` for "what
+would this touch". `lock_amend` reshapes a draft (budget, keeps,
+`verifyCommand`) after the human adjusts the scope; approved locks change
+only through re-approval.

@@ -1,0 +1,30 @@
+name: mcp-keeps-verified
+# An MCP-driven run (lock_check → lock_activate → run_locked) whose lock
+# carries a KEEP clause: the suite must stay green and the report must show
+# it as measured evidence.
+mcp: true
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module"}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+  test/math.test.js: |
+    import test from "node:test";
+    import assert from "node:assert/strict";
+    import { add } from "../src/math.js";
+    test("adds", () => assert.equal(add(1, 2), 3));
+lock:
+  utterance: document math without behavior change
+  goal: the suite still passes
+  change: comment only
+  keep:
+    - kind: tests-pass
+      glob: test/*.test.js
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").appendFileSync("src/math.js","// noted\n")'
+expect:
+  exitCode: 0
+  status: verified
+  items:
+    - { match: tests-pass, class: measured, verdict: held }

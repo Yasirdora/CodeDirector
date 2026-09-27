@@ -1,0 +1,43 @@
+schemaVersion: 1
+id: IL-0029
+status: verified
+utterance: "then implement in this order: 6, then 5+1+3 as one arc, then 4, then 2"
+goal: "Spec 6 only: the MCP surface can declare KEEP clauses, verifyCommand, verifyCovers, accept, budget and deny on a draft (lock_draft fields + a new lock_amend tool), with tests, an eval case, and docs; nothing else changes."
+interpretation: "Spec 6 — MCP parity for KEEP clauses and verifyCommand: lock_draft takes typed keep/verifyCommand/verifyCovers/accept/deny/budgetFiles/ceilings; lock_amend patches a draft and re-validates; only drafts are amendable."
+keep: []
+deny:
+  - docs/specs/**
+  - package.json
+  - package-lock.json
+change: The MCP surface gains typed KEEP/verifyCommand/accept/ceiling arguments and a lock_amend tool, with tests, an eval case, and doc updates.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/lock/draft.ts
+    - src/lock/profiles.ts
+    - src/mcp/server.ts
+    - test/mcp.test.ts
+    - README.md
+    - skills/codedirector/SKILL.md
+    - integrations/gemini/README.md
+    - eval/cases/20-mcp-keeps-verified.yaml
+  symbols: []
+  maxFiles: 10
+  maxLines: 600
+accept: []
+assumptions:
+  - text: 'low confidence — confirm territory with the human: every anchor matched only as a fragment of a symbol name ("order" in orderedChecked) — an incidental word can do this'
+    source: system
+    confirmed: false
+  - text: Anchors defended — orderedChecked — src/report/format.ts (TypeScript); "order" only occurs inside "orderedChecked"
+    source: system
+    confirmed: false
+  - text: Budget set explicitly when drafting (nine files); the anchor-proposed files were overridden and are not in scope.
+    source: system
+    confirmed: false
+  - text: "Deny list set explicitly when drafting: docs/specs/**, package.json, package-lock.json."
+    source: system
+    confirmed: false
+createdAt: 2026-09-27T21:25:03.748Z
+createdBy: Yasirdora

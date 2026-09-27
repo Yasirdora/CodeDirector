@@ -1,0 +1,103 @@
+{
+  "allowExpand": false,
+  "baselinePath": ".codedirector/baselines/IL-0029-20260927-212542.json",
+  "baselineSha256": "05a3029ab2b7376602989daf8b9472d29bf252adf7d589cabe66a4f60d1850ce",
+  "budget": {
+    "filesChanged": 9,
+    "linesChanged": 429,
+    "maxFiles": 10,
+    "maxLines": 600
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "eval/cases/20-mcp-keeps-verified.yaml",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "integrations/gemini/README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "skills/codedirector/SKILL.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/draft.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/profiles.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/server.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/mcp.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260927T212537922",
+    "createdAt": "2026-09-27T21:25:38.006Z",
+    "dirty": true,
+    "id": "ckpt-20260927T212537922",
+    "ref": "bb4b0cdb85b1a28f0402de04f196293756b1b8fe",
+    "statusHash": "861a9dd0002659b1a7b543a32e8506d0552f62903de92b6217de518a82ae3347",
+    "tag": "cdir/ckpt-20260927T212537922"
+  },
+  "command": [
+    "bash",
+    "-lc",
+    "set -e; cp -R /tmp/spec6/work/. .; npm test; npm run eval"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-27T21:26:43.903Z",
+  "keepResults": [],
+  "lockId": "IL-0029",
+  "startedAt": "2026-09-27T21:25:42.415Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0029-20260927-212542.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 1,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test\" → exit 0",
+        "detail": "verifyCommand passed: npm test",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0029",
+    "verifiedAt": "2026-09-27T21:27:36.878Z",
+    "violations": []
+  },
+  "violations": []
+}

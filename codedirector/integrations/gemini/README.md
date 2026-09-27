@@ -19,8 +19,8 @@ gemini mcp add codedirector -s user cdir -- mcp
 ```
 
 Verify inside a Gemini session with `/mcp` — `codedirector` should appear
-with its eight tools (`repo_map`, `blast_radius`, `lock_draft`, `lock_check`,
-`lock_activate`, `run_locked`, `report`, `undo`).
+with its nine tools (`repo_map`, `blast_radius`, `lock_draft`, `lock_amend`,
+`lock_check`, `lock_activate`, `run_locked`, `report`, `undo`).
 
 Notes:
 

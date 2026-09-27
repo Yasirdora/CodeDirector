@@ -21,6 +21,7 @@ import { stableStringify } from "../core/store";
 import { buildRepoMap, formatRepoMap } from "../core/map";
 import { blastRadius, formatBlastRadius } from "../core/why";
 import { draftLock, type DraftOptions } from "../lock/draft";
+import { KEEP_CLAUSE_KINDS, type KeepClause } from "../lock/types";
 import { describeProfiles, getProfile, mergeDraftOptions, PROFILE_NAMES } from "../lock/profiles";
 import { checkLock } from "../lock/check";
 import { loadLock, saveLock } from "../lock/store";
@@ -61,6 +62,121 @@ function strArray(p: Record<string, unknown>, k: string): string[] {
   const v = p[k];
   if (Array.isArray(v) && v.every((x) => typeof x === "string" && x)) return v as string[];
   throw new Error(`missing required argument: ${k} (array of non-empty strings)`);
+}
+
+// ---------------------------------------------------------------------
+// Draft/amend arguments shared by lock_draft and lock_amend. Every field is
+// validated here with the rules `lock check` will apply later, so a draft
+// cannot be born invalid.
+
+const KEEP_ARG_SCHEMA: Record<string, unknown> = {
+  type: "array",
+  description:
+    "KEEP clauses the change must preserve. Propose them from the task: tests-pass when the repo has " +
+    "runnable tests, api-unchanged for exported symbols the change touches, no-new-dependency when the " +
+    "change should not touch manifests. Kinds: api-unchanged {symbols:[\"<file>#<symbol>\"]}, tests-pass " +
+    "{glob}, output-unchanged {command}, no-new-dependency {}, custom {text} (human-judged).",
+  items: {
+    type: "object",
+    properties: {
+      kind: { type: "string", enum: KEEP_CLAUSE_KINDS },
+      symbols: { type: "array", items: { type: "string" }, description: "api-unchanged: \"<file>#<symbol>\" ids." },
+      glob: { type: "string", description: "tests-pass: the test-file glob that must keep passing." },
+      command: { type: "string", description: "output-unchanged: the command whose output must not change." },
+      fixtures: { type: "array", items: { type: "string" }, description: "output-unchanged: fixture paths." },
+      text: { type: "string", description: "custom: free text — always human-judged." },
+    },
+    required: ["kind"],
+  },
+};
+
+const STRING_ARRAY = (description: string): Record<string, unknown> => ({
+  type: "array",
+  items: { type: "string" },
+  description,
+});
+
+/** The fields lock_draft and lock_amend share; a provided value replaces what is there. */
+const AMENDABLE_PROPS: Record<string, unknown> = {
+  keep: KEEP_ARG_SCHEMA,
+  deny: STRING_ARRAY("Paths/globs the change must not touch."),
+  budgetFiles: STRING_ARRAY("Files (or globs) the change may touch — replaces the anchor-proposed budget."),
+  accept: STRING_ARRAY("Acceptance criteria in words; shown in reports, human-judged."),
+  verifyCommand: { type: "string", description: "Optional harness executed as measured evidence, e.g. \"npm test\"." },
+  verifyCovers: STRING_ARRAY("Languages the harness exercises when its text cannot say (the coverage escape hatch)."),
+  maxFiles: { type: "number", description: "Ceiling on changed files (default: budgetFiles length)." },
+  maxLines: { type: "number", description: "Ceiling on changed lines (default 400)." },
+};
+
+function optionalStringArray(v: unknown, where: string): string[] | undefined {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && x)) {
+    throw new Error(`${where} must be an array of non-empty strings`);
+  }
+  return v as string[];
+}
+
+function parseKeepArg(raw: unknown, where: string): KeepClause {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error(`${where} must be an object with a "kind"`);
+  }
+  const c = raw as Record<string, unknown>;
+  if (typeof c.kind !== "string" || !(KEEP_CLAUSE_KINDS as readonly string[]).includes(c.kind)) {
+    throw new Error(
+      `${where}.kind must be one of: ${KEEP_CLAUSE_KINDS.join(", ")} — api-unchanged needs symbols[], ` +
+        `tests-pass needs glob, output-unchanged needs command, custom needs text`,
+    );
+  }
+  const kind = c.kind as KeepClause["kind"];
+  switch (kind) {
+    case "api-unchanged": {
+      const symbols = optionalStringArray(c.symbols, `${where}.symbols`);
+      if (!symbols || symbols.length === 0) {
+        throw new Error(`${where} (api-unchanged) needs a non-empty symbols[] of "<file>#<symbol>" ids`);
+      }
+      return { kind, symbols };
+    }
+    case "tests-pass": {
+      if (typeof c.glob !== "string" || !c.glob) throw new Error(`${where} (tests-pass) needs a glob string`);
+      return { kind, glob: c.glob };
+    }
+    case "output-unchanged": {
+      if (typeof c.command !== "string" || !c.command) throw new Error(`${where} (output-unchanged) needs a command string`);
+      const fixtures = optionalStringArray(c.fixtures, `${where}.fixtures`);
+      return { kind, command: c.command, ...(fixtures !== undefined ? { fixtures } : {}) };
+    }
+    case "custom": {
+      if (typeof c.text !== "string" || !c.text) throw new Error(`${where} (custom) needs non-empty text`);
+      return { kind, text: c.text };
+    }
+    case "no-new-dependency":
+      return { kind };
+  }
+}
+
+function keepClauses(v: unknown): KeepClause[] | undefined {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v)) throw new Error("keep must be an array of clause objects");
+  return v.map((c, i) => parseKeepArg(c, `keep[${i}]`));
+}
+
+/** Draft/amend arguments as DraftOptions; fields left out stay undefined. */
+function draftArgsFrom(p: Record<string, unknown>): DraftOptions {
+  const out: DraftOptions = {};
+  const keep = keepClauses(p.keep);
+  if (keep !== undefined) out.keep = keep;
+  const deny = optionalStringArray(p.deny, "deny");
+  if (deny !== undefined) out.deny = deny;
+  const budgetFiles = optionalStringArray(p.budgetFiles, "budgetFiles");
+  if (budgetFiles !== undefined) out.budgetFiles = budgetFiles;
+  const accept = optionalStringArray(p.accept, "accept");
+  if (accept !== undefined) out.accept = accept;
+  if (typeof p.verifyCommand === "string" && p.verifyCommand) out.verifyCommand = p.verifyCommand;
+  const verifyCovers = optionalStringArray(p.verifyCovers, "verifyCovers");
+  if (verifyCovers !== undefined) out.verifyCovers = verifyCovers;
+  if (typeof p.maxFiles === "number" && Number.isFinite(p.maxFiles) && p.maxFiles > 0) out.maxFiles = Math.floor(p.maxFiles);
+  if (typeof p.maxLines === "number" && Number.isFinite(p.maxLines) && p.maxLines > 0) out.maxLines = Math.floor(p.maxLines);
+  return out;
 }
 
 /** Load the index, building it on demand when missing (quiet — stdio is protocol). */
@@ -158,10 +274,11 @@ const TOOLS: ToolDef[] = [
     name: "lock_draft",
     description:
       "Draft an Intent Lock from the human's request (their words, verbatim). Returns the lock id, the YAML path, " +
-      "and the proposed budget/deny scope. Every anchor comes back defended — the file it came from and the " +
-      "word that put it there — and a draft whose anchors are only name fragments, or which all land outside " +
-      "the repo's own language, comes back with confidence \"low\": confirm the territory with the human before " +
-      "you trust the budget. ALWAYS show the proposal to the human before activating. " +
+      "and the proposed scope. Every anchor comes back defended — the file it came from and the word that put it " +
+      "there — and a draft whose anchors are only name fragments, or which all land outside the repo's own " +
+      "language, comes back with confidence \"low\": confirm the territory with the human before you trust the " +
+      "budget. Pass the promises with the draft — keep clauses, verifyCommand, accept, budget, deny — so the " +
+      "report can verify something. ALWAYS show the proposal to the human before activating. " +
       WORKFLOW,
     inputSchema: {
       type: "object",
@@ -172,6 +289,7 @@ const TOOLS: ToolDef[] = [
           type: "string",
           description: describeProfiles(),
         },
+        ...AMENDABLE_PROPS,
       },
       required: ["utterance"],
     },
@@ -185,7 +303,9 @@ const TOOLS: ToolDef[] = [
         if (!profile) return fail(`unknown profile "${profileName}" (available: ${PROFILE_NAMES.join(", ")})`);
         base = profile;
       }
-      const result = draftLock(root, index, str(a, "utterance"), mergeDraftOptions(base, goal ? { goal } : {}));
+      const explicit = draftArgsFrom(a);
+      if (goal) explicit.goal = goal;
+      const result = draftLock(root, index, str(a, "utterance"), mergeDraftOptions(base, explicit));
       return json({
         ...(result.confidence.low
           ? { confidence: "low", confirmTerritory: result.confidence.reasons }
@@ -193,12 +313,81 @@ const TOOLS: ToolDef[] = [
         lockId: result.lock.id,
         path: path.relative(root, result.path),
         status: result.lock.status,
+        keep: result.lock.keep,
+        ...(result.lock.verifyCommand ? { verifyCommand: result.lock.verifyCommand } : {}),
+        ...(result.lock.verifyCovers ? { verifyCovers: result.lock.verifyCovers } : {}),
+        accept: result.lock.accept,
+        budget: result.lock.budget,
+        deny: result.lock.deny,
         anchors: result.anchors.map((x) => x.qualifiedName),
         anchorDefense: result.anchorDefense.map((d) => d.line),
         anchorStrength: result.anchorStrength,
         proposedBudget: result.proposedFiles,
         suggestedDeny: result.suggestedDeny,
         next: `show this scope to the human, then lock_check ${result.lock.id} and lock_activate ${result.lock.id}`,
+      });
+    },
+  },
+  {
+    name: "lock_amend",
+    description:
+      "Patch a DRAFT Lock — budget, deny, KEEP clauses, verifyCommand, accept, ceilings — and re-validate it. " +
+      "Refuses any Lock that is not a draft: an approved contract changes only through the user's re-approval. " +
+      "Provided fields replace what is there; fields left out are untouched. Show the updated scope to the human " +
+      "before activating. " + WORKFLOW,
+    inputSchema: {
+      type: "object",
+      properties: {
+        lockId: { type: "string", description: "e.g. IL-0001 (must be a draft)" },
+        goal: { type: "string", description: "Optional replacement for the draft's goal." },
+        interpretation: { type: "string", description: "Optional replacement for the draft's interpretation." },
+        ...AMENDABLE_PROPS,
+      },
+      required: ["lockId"],
+    },
+    handler: async (root, a) => {
+      const lockId = str(a, "lockId");
+      const lock = loadLock(root, lockId);
+      if (!lock) return fail(`no such lock: ${lockId}`);
+      if (lock.status !== "draft") {
+        return fail(
+          `lock ${lockId} has status "${lock.status}" — only a draft can be amended with a tool. ` +
+            `Changing an approved contract is the user's call: they edit it, then ` +
+            `\`cdir lock check ${lockId}\` and \`cdir lock activate ${lockId}\` re-seal the new scope.`,
+        );
+      }
+      const args = draftArgsFrom(a);
+      if (args.keep !== undefined) lock.keep = args.keep;
+      if (args.deny !== undefined) lock.deny = args.deny;
+      if (args.budgetFiles !== undefined) lock.budget.files = args.budgetFiles;
+      if (args.accept !== undefined) lock.accept = args.accept;
+      if (args.verifyCommand !== undefined) lock.verifyCommand = args.verifyCommand;
+      if (args.verifyCovers !== undefined) lock.verifyCovers = args.verifyCovers;
+      if (args.maxFiles !== undefined) lock.budget.maxFiles = args.maxFiles;
+      if (args.maxLines !== undefined) lock.budget.maxLines = args.maxLines;
+      const goal = str(a, "goal", false);
+      if (goal) lock.goal = goal;
+      const interpretation = str(a, "interpretation", false);
+      if (interpretation) lock.interpretation = interpretation;
+
+      const saved = saveLock(root, lock);
+      const index = await indexFor(root);
+      const result = checkLock(root, lock, index);
+      return json({
+        lockId,
+        path: path.relative(root, saved),
+        ok: result.ok,
+        errors: result.errors,
+        warnings: result.warnings,
+        keep: lock.keep,
+        ...(lock.verifyCommand ? { verifyCommand: lock.verifyCommand } : {}),
+        ...(lock.verifyCovers ? { verifyCovers: lock.verifyCovers } : {}),
+        accept: lock.accept,
+        budget: lock.budget,
+        deny: lock.deny,
+        next: result.ok
+          ? `show the updated scope to the human, then lock_activate ${lockId}`
+          : `fix the errors, then lock_check ${lockId}`,
       });
     },
   },
