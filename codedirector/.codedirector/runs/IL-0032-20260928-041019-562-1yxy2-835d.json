@@ -1,0 +1,114 @@
+{
+  "allowExpand": false,
+  "attemptId": "20260928-041019-562-1yxy1-835d",
+  "baselinePath": ".codedirector/baselines/IL-0032-task.json",
+  "baselineSha256": "37aa332b1b489aa03f7f3e9d40b33e90f0ba615056639171bc26e7db39b06dec",
+  "budget": {
+    "filesChanged": 4,
+    "linesChanged": 77,
+    "maxFiles": 6,
+    "maxLines": 200
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/ROADMAP.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/cases/22-verify-current-delta.yaml",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/run.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260928T041014261",
+    "createdAt": "2026-09-28T04:10:14.293Z",
+    "dirty": false,
+    "id": "ckpt-20260928T041014261",
+    "ref": "96df3f55b8146baa673572ce1a1a91c1517cf999",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20260928T041014261"
+  },
+  "command": [
+    "bash",
+    "-lc",
+    "set -e; cp -R /tmp/spec32/work/. .; npm test; npm run eval"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-28T04:11:29.921Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0032",
+  "startedAt": "2026-09-28T04:10:19.562Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0032-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0032-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0032-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm run eval\" → exit 0",
+        "detail": "verifyCommand passed: npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm run eval",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0032",
+    "verifiedAt": "2026-09-28T04:12:01.784Z",
+    "violations": []
+  },
+  "violations": []
+}

@@ -21,9 +21,12 @@ lock:                       # Vibe Check fragment; the harness fills in
   budget:
     files: ["src/math.js"]
 command: node -e '...'      # the change, run via `cdir run IL-0001 -- <command>`
+postRun: node -e '...'      # optional: after the run, before the report is
+                            # scored — where a case edits the tree the way a
+                            # human (or another session) would, outside cdir
 expect:
   exitCode: 1               # process exit code of `cdir run`
-  status: failed            # lock status afterwards (verified/failed)
+  status: failed            # lock status afterwards (verified/failed/incomplete)
   violationsContaining:     # substrings that must appear in report violations
     - "KEEP tests-pass"
   items:                    # {match, class, verdict}: some report item whose

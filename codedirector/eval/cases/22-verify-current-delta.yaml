@@ -1,0 +1,27 @@
+name: verify-current-delta
+# A direct edit made after the run — outside cdir — must still appear in the
+# receipt: the report recomputes the scope delta against the task baseline
+# instead of reprinting the run's recorded file list (finding #3, IL-0031).
+# The postRun hook is what makes this expressible: it runs between the
+# guarded run and the scored report.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+  src/secret.js: |
+    export const SECRET = 1;
+lock:
+  utterance: document math without behavior change
+  goal: the suite still passes
+  change: comment only
+  deny: ["src/secret.js"]
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").appendFileSync("src/math.js","// ok\n")'
+postRun: node -e 'require("fs").appendFileSync("src/secret.js","// direct edit\n")'
+expect:
+  exitCode: 0
+  status: failed
+  violationsContaining:
+    - "DENY: src/secret.js"

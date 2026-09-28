@@ -442,3 +442,18 @@ list.
   (a direct post-run edit is caught; attempt view labeled; missing baseline
   = incomplete); `test/checkpoint.test.ts` (checkpoint with a lock captures
   the task baseline once); eval case `21-retry-no-rebaseline`.
+
+### The eval harness could not express a step between run and report
+
+**Status: landed (IL-0032).** Every eval case was one `cdir run` plus one
+scored `cdir report` — a case could not make a DIRECT edit (outside cdir)
+between the two, so the IL-0031 fresh-delta behavior (a post-run edit must
+appear in the receipt) had no eval case.
+
+- **Fix:** an optional `postRun` shell hook runs in the temp repo after the
+  guarded run and before the report is scored; it is validated, and its own
+  failure fails the case with its output named. Case
+  `22-verify-current-delta` uses it: a clean run, then a direct edit of a
+  denied file, and the scored report must come back failed with
+  `DENY: src/secret.js`.
+- **Tests:** the case IS the test (the gate now covers it); suite unchanged.

@@ -7,12 +7,14 @@
  * and scores the run against the expectations:
  *
  *   expect.exitCode               process exit code of `cdir run`
- *   expect.status                 lock status after the run (verified/failed)
+ *   expect.status                 lock status after the run (verified/failed/incomplete)
  *   expect.violationsContaining[] substrings that must appear in violations
  *   expect.items[]                {match, class, verdict} — some report item whose
  *                                 subject/clauseKind contains `match` must carry
  *                                 exactly this evidence class and verdict
  *   expect.uncheckedMin           minimum size of the Unchecked bucket
+ *   postRun                       optional shell hook after the run, before the
+ *                                 report is scored (a direct edit outside cdir)
  *
  * The gate: any unmet expectation fails the case; any failed case exits
  * non-zero. Case directories are removed on PASS and kept (path printed) on
@@ -65,6 +67,8 @@ interface EvalCase {
     budget: { files: string[]; maxFiles?: number; maxLines?: number };
   };
   command: string;
+  /** Optional shell hook run after the guarded run and before the report is scored. */
+  postRun?: string;
   expect: EvalExpect;
 }
 
@@ -86,6 +90,9 @@ function validateCase(raw: unknown, file: string): EvalCase {
     if (!CLAUSES.has(k?.kind)) bad(`unknown keep kind: ${JSON.stringify(k?.kind)}`);
   }
   if (typeof c.command !== "string" || !c.command) bad("missing command");
+  if (c.postRun !== undefined && (typeof c.postRun !== "string" || !c.postRun)) {
+    bad("postRun must be a non-empty string when present");
+  }
   if (!c.expect || typeof c.expect.exitCode !== "number") bad("expect.exitCode must be a number");
   for (const i of c.expect.items ?? []) {
     if (typeof i.match !== "string") bad("expect.items[].match must be a string");
@@ -172,6 +179,26 @@ function runCase(cliPath: string, c: EvalCase): CaseResult {
       failures.push(`${c.mcp ? "mcp-drive" : "cdir run"} spawn failed: ${run.error.message}`);
       return { name: c.name, passed: false, failures, tmp, seconds };
     }
+
+    // The optional post-run hook runs after the guarded run and before the
+    // report is scored: the place a case makes a DIRECT edit (outside cdir)
+    // and proves the receipt still sees it. Its own failure fails the case.
+    if (c.postRun !== undefined) {
+      const post = spawnSync("sh", ["-c", c.postRun], {
+        cwd: tmp,
+        encoding: "utf8",
+        timeout: 60_000,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      if (post.error || post.status !== 0) {
+        failures.push(
+          `postRun ${post.error ? `spawn failed: ${post.error.message}` : `exited ${post.status}`}: ` +
+            `${post.stdout}${post.stderr}`.trim().slice(0, 300),
+        );
+        return { name: c.name, passed: false, failures, tmp, seconds };
+      }
+    }
+
     if (run.status !== c.expect.exitCode) {
       failures.push(`exitCode: expected ${c.expect.exitCode}, got ${run.status}\n  run output tail: ${(run.stdout + run.stderr).split("\n").slice(-8).join(" | ")}`);
     }

@@ -1,0 +1,39 @@
+schemaVersion: 1
+id: IL-0032
+status: verified
+utterance: the eval-harness extension (commands list or post-run hook) as a small scoped lock
+goal: "Eval cases can express a step between the guarded run and the scored report: an optional postRun shell hook runs after cdir run and before cdir report, so a direct edit outside cdir can be scored. Case 22 (verify-current-delta) lands as a real eval case; harness docs and ROADMAP updated; no product code touched."
+interpretation: "Post-run hook: an optional `postRun` shell command in an eval case runs in the temp repo after `cdir run` and before `cdir report` is scored — the step a case needs to make a direct edit outside cdir and prove the receipt still sees it. Case 22 exercises it; no product code changes."
+keep:
+  - kind: no-new-dependency
+deny:
+  - src/**
+  - test/**
+  - docs/specs/**
+  - package.json
+  - package-lock.json
+change: The eval harness gains an optional postRun hook (documented, validated, exit-code gated); case 22-verify-current-delta lands as a real case; ROADMAP entry.
+verifyCommand: npm run eval
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - eval/run.ts
+    - eval/cases/22-verify-current-delta.yaml
+    - eval/README.md
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 6
+  maxLines: 200
+accept: []
+assumptions:
+  - text: Anchors defended — Service.run — test/fixtures/basic-repo/src/service.ts (TypeScript); "run" is its whole name · Indexer.run — test/fixtures/swift-repo/Surface.swift (Swift); "run" is its whole name
+    source: system
+    confirmed: false
+  - text: Budget set explicitly when drafting (four files); the anchor-proposed files were overridden and are not in scope.
+    source: system
+    confirmed: false
+  - text: "Deny list set explicitly when drafting: src/**, test/**, docs/specs/**, package.json, package-lock.json — the product and the test suite are out of scope for a harness-only change."
+    source: system
+    confirmed: false
+createdAt: 2026-09-28T03:41:59.691Z
+createdBy: Yasirdora
