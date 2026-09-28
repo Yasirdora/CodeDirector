@@ -60,6 +60,37 @@ function bodyOf(node: SyntaxNode): SyntaxNode | null {
   );
 }
 
+/** Whether the declaration text already opens with a visibility modifier. */
+function hasVisibility(text: string): boolean {
+  return /^(public|open|internal|private|fileprivate)\b/.test(text);
+}
+
+/** The visibility prefix for text that carries none; public/open is the API. */
+function visibilityPrefix(exported: boolean): string {
+  return exported ? "public " : "internal ";
+}
+
+/**
+ * The member surface of a type declaration: one line per function member,
+ * visibility included. (Swift's API presence is public/open vs everything
+ * else; property members are separate symbols when public.) Removing or
+ * re-typing a member moves the type's signature hash, mirroring the
+ * TypeScript side's class surface.
+ */
+function typeSurface(node: SyntaxNode, source: string): string | undefined {
+  const body = bodyOf(node);
+  if (!body) return undefined;
+  const parts: string[] = [];
+  for (const member of body.namedChildren) {
+    if (member.type !== "function_declaration") continue;
+    const name = nameOf(member);
+    if (!name) continue;
+    const raw = signatureOf(member, source);
+    parts.push(hasVisibility(raw) ? raw : `${visibilityPrefix(isExported(member))}${raw}`);
+  }
+  return parts.length > 0 ? parts.join("; ") : undefined;
+}
+
 function nameOf(node: SyntaxNode): string | null {
   const named = node.childForFieldName("name");
   if (named) return named.text;
@@ -71,7 +102,16 @@ function nameOf(node: SyntaxNode): string | null {
 }
 
 function collapseWs(s: string): string {
-  return s.replace(/\s+/g, " ").trim();
+  // Canonical across formatters: whitespace runs collapse, padding inside
+  // brackets goes away, a trailing comma goes away, and a comma is followed
+  // by at most one space.
+  return s
+    .replace(/\s+/g, " ")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .replace(/,\s*\)/g, ")")
+    .replace(/\s*,\s*/g, ", ")
+    .trim();
 }
 
 /** Declaration text with the body cut off — the one-line signature. */
@@ -129,6 +169,13 @@ export function extractSwift(
     exported: boolean,
   ): void => {
     taken.add(qualifiedName);
+    // Visibility is part of the surface; type declarations also carry their
+    // member functions' signatures. The declaration text already opens with
+    // a modifier when one is written — never double it.
+    const raw = signatureOf(node, source);
+    const base = hasVisibility(raw) ? raw : `${visibilityPrefix(exported)}${raw}`;
+    const surface =
+      kind === "class" || kind === "interface" || kind === "enum" ? typeSurface(node, source) : undefined;
     symbols.push({
       id: `${relPath}#${qualifiedName}`,
       name,
@@ -138,7 +185,7 @@ export function extractSwift(
       startLine: node.startPosition.row + 1,
       endLine: node.endPosition.row + 1,
       exported,
-      signature: signatureOf(node, source),
+      signature: surface ? `${base} { ${surface} }` : base,
     });
   };
 

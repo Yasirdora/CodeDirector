@@ -457,3 +457,22 @@ appear in the receipt) had no eval case.
   denied file, and the scored report must come back failed with
   `DENY: src/secret.js`.
 - **Tests:** the case IS the test (the gate now covers it); suite unchanged.
+
+### Signature evidence overstated what the hash compared
+
+**Status: landed (IL-0033).** Dropping `export`, changing an unannotated
+arrow const's inferred type (`() => 1` → `() => "1"`), and removing a
+protected class member all left the api-unchanged hash unchanged — the
+receipt said "signature unchanged" for three real API changes.
+
+- **Fix:** the signature is now a declared **syntactic surface**: export and
+  visibility status, type parameters, parameters, return annotations; an
+  unannotated arrow const appends its initializer's KIND (never the text —
+  `() => 1` → `() => 2` stays held by design); classes/interfaces/enums
+  carry their member surface (methods with visibility, fields by annotation
+  or initializer kind); whitespace is collapsed so formatting-only edits
+  stay held. The Swift extractor gets visibility prefixes and function
+  member surfaces. `PARSER_VERSION` 6 forces re-parse.
+- **Tests:** `test/parser.test.ts` (each of the three repros flips;
+  formatting negative control; Swift surface); eval case
+  `23-signature-surface`; existing Swift API cases 17/18 stay green.

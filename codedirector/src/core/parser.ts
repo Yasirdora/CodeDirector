@@ -21,7 +21,7 @@ import { hasWasmStartupFlags, WASM_STARTUP_FLAGS } from "./wasm-flags";
 type SyntaxNode = any;
 
 /** Bump whenever extraction logic changes; stale entries are reparsed. */
-export const PARSER_VERSION = 5;
+export const PARSER_VERSION = 6;
 
 export type LangKey = "typescript" | "tsx" | "javascript" | "swift";
 
@@ -152,7 +152,18 @@ export class StructuralParser {
     if (kind === "class") {
       const className = nameOf(target);
       if (!className) return;
-      out.push(makeSymbol(relPath, target, "class", className, className, exported, source));
+      out.push(
+        makeSymbol(
+          relPath,
+          target,
+          "class",
+          className,
+          className,
+          exported,
+          source,
+          withExport(exported, classSurface(target, source)),
+        ),
+      );
       const body = target.childForFieldName("body");
       if (body) {
         for (const member of body.namedChildren) {
@@ -160,7 +171,16 @@ export class StructuralParser {
             const mName = nameOf(member);
             if (!mName || mName === "constructor") continue;
             out.push(
-              makeSymbol(relPath, member, "method", mName, `${className}.${mName}`, exported, source),
+              makeSymbol(
+                relPath,
+                member,
+                "method",
+                mName,
+                `${className}.${mName}`,
+                exported,
+                source,
+                signatureOf(member, source),
+              ),
             );
           }
         }
@@ -224,7 +244,89 @@ function hasDefaultKeyword(exportNode: SyntaxNode): boolean {
 }
 
 function collapseWs(s: string): string {
-  return s.replace(/\s+/g, " ").trim();
+  // Canonical across formatters: whitespace runs collapse, padding inside
+  // brackets goes away, a trailing comma goes away, and a comma is followed
+  // by at most one space.
+  return s
+    .replace(/\s+/g, " ")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .replace(/,\s*\)/g, ")")
+    .replace(/\s*,\s*/g, ", ")
+    .trim();
+}
+
+/**
+ * The KIND of an initializer — `number`, `string`, `call`, `binary_expression`
+ * — never its text. For unannotated arrow consts and class fields the
+ * initializer IS the inferred-type contract: the kind registers an
+ * inferred-type change (`() => 1` → `() => "1"`) while same-kind value edits
+ * stay held (that granularity is the approved design — this parser does not
+ * infer types).
+ */
+function initializerKind(node: SyntaxNode): string {
+  let n = node;
+  while (n.type === "parenthesized_expression" && n.namedChildren.length === 1) {
+    n = n.namedChildren[0];
+  }
+  switch (n.type) {
+    case "true":
+    case "false":
+      return "boolean";
+    case "template_string":
+      return "string";
+    case "statement_block":
+      return "block";
+    default:
+      return n.type; // the node type is itself a stable kind
+  }
+}
+
+/** Class-field surface: modifiers + name + type annotation (or the initializer's kind). */
+function fieldSurface(node: SyntaxNode, source: string): string {
+  const value = node.childForFieldName("value");
+  const typeAnn =
+    node.childForFieldName("type") ??
+    node.namedChildren.find((c: SyntaxNode) => c.type === "type_annotation");
+  let end = node.endIndex;
+  if (typeAnn && typeAnn.endIndex < end) end = typeAnn.endIndex;
+  else if (value && value.startIndex < end) end = value.startIndex;
+  let sig = collapseWs(source.slice(node.startIndex, end)).replace(/=\s*$/, "").trim();
+  if (!typeAnn && value) sig += ` = ${initializerKind(value)}`;
+  return sig;
+}
+
+/**
+ * Type surface: the declaration up to its body, plus one line per member —
+ * methods (with their visibility, which the member text carries) and fields.
+ * Removing or re-typing a member is an API change and must move the hash.
+ * Constructor signatures are not part of this surface yet.
+ */
+function classSurface(node: SyntaxNode, source: string): string {
+  const base = signatureOf(node, source);
+  const body =
+    node.childForFieldName("body") ??
+    node.namedChildren.find((c: SyntaxNode) => c.type === "class_body");
+  if (!body) return base;
+  const members: string[] = [];
+  for (const member of body.namedChildren) {
+    switch (member.type) {
+      case "method_definition":
+      case "method_signature":
+      case "abstract_method_signature": {
+        const name = nameOf(member);
+        if (!name || name === "constructor") continue;
+        members.push(signatureOf(member, source));
+        break;
+      }
+      case "public_field_definition":
+        members.push(fieldSurface(member, source));
+        break;
+      default:
+        break;
+    }
+  }
+  return members.length > 0 ? `${base} { ${members.join("; ")} }` : base;
 }
 
 /** Node types that make a variable declarator a function-valued export. */
@@ -244,6 +346,10 @@ const FUNCTION_INITIALIZER_TYPES = new Set([
  * For those, the signature runs from the declarator name through type
  * parameters, the parameter list, and any return-type annotation, and cuts
  * at the function BODY (`=>` body / `{`).
+ *
+ * An unannotated arrow const appends its initializer's KIND: the expression
+ * body IS its inferred-type contract, so `() => 1` → `() => "1"` must move
+ * the hash (`() => 1` → `() => 2` stays held, by design).
  */
 function signatureOf(node: SyntaxNode, source: string): string {
   // Types/interfaces/enums ARE their signature — include the whole node.
@@ -258,9 +364,14 @@ function signatureOf(node: SyntaxNode, source: string): string {
 
   let end = node.endIndex;
   const value = node.childForFieldName("value");
+  let inferredKind: string | undefined;
   if (value && FUNCTION_INITIALIZER_TYPES.has(value.type)) {
     const fnBody = value.childForFieldName("body");
     if (fnBody) end = fnBody.startIndex;
+    const returnType = value.childForFieldName("return_type");
+    if (!returnType && value.type === "arrow_function" && fnBody && fnBody.type !== "statement_block") {
+      inferredKind = initializerKind(fnBody);
+    }
   } else {
     const body =
       node.childForFieldName("body") ??
@@ -274,6 +385,7 @@ function signatureOf(node: SyntaxNode, source: string): string {
   let sig = collapseWs(source.slice(node.startIndex, end));
   if (sig.endsWith("=>")) sig = sig.slice(0, -2).trim();
   if (sig.endsWith("=")) sig = sig.slice(0, -1).trim();
+  if (inferredKind !== undefined) sig += ` => ${inferredKind}`;
   return sig;
 }
 
@@ -287,7 +399,11 @@ function markReExports(root: SyntaxNode, symbols: SymbolInfo[]): void {
         const name = n.childForFieldName("name");
         if (name) {
           for (const s of symbols) {
-            if (s.name === name.text) s.exported = true;
+            if (s.name === name.text) {
+              s.exported = true;
+              // The declaration itself had no `export`; the surface gains one.
+              if (!s.signature.startsWith("export ")) s.signature = `export ${s.signature}`;
+            }
           }
         }
       }
@@ -295,6 +411,11 @@ function markReExports(root: SyntaxNode, symbols: SymbolInfo[]): void {
     };
     visit(child);
   }
+}
+
+/** Export status is part of the declaration surface: dropping `export` moves the hash. */
+function withExport(exported: boolean, sig: string): string {
+  return exported ? `export ${sig}` : sig;
 }
 
 function makeSymbol(
@@ -305,6 +426,7 @@ function makeSymbol(
   qualifiedName: string,
   exported: boolean,
   source: string,
+  signature?: string,
 ): SymbolInfo {
   return {
     id: `${relPath}#${qualifiedName}`,
@@ -315,7 +437,9 @@ function makeSymbol(
     startLine: node.startPosition.row + 1,
     endLine: node.endPosition.row + 1,
     exported,
-    signature: signatureOf(node, source),
+    // Callers that build a richer surface pass it in; it carries its own
+    // visibility, so no export prefix is added on top of it.
+    signature: signature ?? withExport(exported, signatureOf(node, source)),
   };
 }
 

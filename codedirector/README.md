@@ -70,13 +70,14 @@ bucket is always rendered, even when empty; a report that hides it is lying.
 
 Two honesty limits worth knowing:
 
-- **Signature evidence covers the full callable surface** — including
-  initializer-declared functions (`export const compose = <E>(a, b) => …`),
-  whose signatures include type parameters, the parameter list, and the
-  return-type annotation. (A field-reported defect where adding a parameter
-  to a const-arrow left the hash unchanged is fixed and covered by parser
-  tests + two eval cases; `PARSER_VERSION` was bumped, so old indexes
-  re-parse.) Plain value consts still exclude the value, by design.
+- **Signature evidence is a syntactic declaration surface** — export and
+  visibility status, type parameters, the parameter list, return-type
+  annotations, and a type's member surface (methods with their visibility;
+  fields by annotation or initializer KIND). Unannotated arrow consts carry
+  their initializer's kind, so `() => 1` → `() => "1"` moves the hash while
+  `() => 1` → `() => 2` stays held; formatting-only edits (whitespace) never
+  move it. Plain value consts still exclude the value, by design.
+  (`PARSER_VERSION` was bumped, so old indexes re-parse.)
 - **Baselines are tamper-evident, not tamper-proof.** The baseline file's
   sha256 is recorded in the run record at capture; verification re-hashes
   and, on mismatch, marks every baseline-dependent check Unchecked —
@@ -330,8 +331,9 @@ After execution, every KEEP clause and every lock-level claim is verified as
 far as possible, in ladder order (cheapest/strongest first):
 
 1. **Structural (proven)** — re-index; each `api-unchanged` symbol's
-   signature hash compared pre/post (types/interfaces/enums include their
-   members; function signatures are not truncated); `no-new-dependency`
+   signature hash compared pre/post (declaration surface: export status,
+   parameters, annotations, member surfaces; whitespace-insensitive);
+   `no-new-dependency`
    diffs dependency maps in `package.json` plus lockfile hashes. Both
    produce `proven` held or violated.
 2. **Typecheck (proven when clean)** — if `tsconfig.json` exists and a

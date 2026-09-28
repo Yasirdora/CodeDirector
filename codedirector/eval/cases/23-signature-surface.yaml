@@ -1,0 +1,26 @@
+name: api-arrow-inferred-type
+# An unannotated arrow const's initializer IS its inferred-type contract:
+# 1 → "1" is an API change and must be a proven violation (IL-0033). The
+# same-kind value change (1 → 2) stays held, by design.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export const answer = () => 1;
+lock:
+  utterance: keep the answer's type stable
+  goal: answer keeps returning the same type
+  change: internals only
+  keep:
+    - kind: api-unchanged
+      symbols: ["src/math.js#answer"]
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").writeFileSync("src/math.js","export const answer = () => \"1\";\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "KEEP api-unchanged"
+  items:
+    - { match: api-unchanged, class: proven, verdict: violated }

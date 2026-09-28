@@ -144,7 +144,7 @@ test("extracts symbols with kind, export flag, lines, signature", async () => {
 
   const greet = byId.get("src/sample.ts#greet");
   assert.equal(greet?.kind, "function");
-  assert.equal(greet?.signature, "function greet(name: string): string");
+  assert.equal(greet?.signature, "export function greet(name: string): string");
 
   const greeter = byId.get("src/sample.ts#Greeter");
   assert.equal(greeter?.kind, "class");
@@ -201,23 +201,27 @@ export const LIMIT = 42;
   assert.ok(compose, "generic arrow const extracted");
   assert.equal(
     compose!.signature,
-    "compose = <E>(a: E, b: E): E",
+    "export compose = <E>(a: E, b: E): E",
     `type params + params + return type in signature, got: ${compose!.signature}`,
   );
 
   const fetchAll = byId.get("src/fn.ts#fetchAll");
   assert.equal(
     fetchAll!.signature,
-    "fetchAll = async (id: string, opts?: { raw: boolean }, retries = 3): Promise<void>",
+    "export fetchAll = async (id: string, opts?: { raw: boolean }, retries = 3): Promise<void>",
     `async + optional + default params in signature, got: ${fetchAll!.signature}`,
   );
 
   const plain = byId.get("src/fn.ts#plain");
-  assert.equal(plain!.signature, "plain = (x)", `expression-body arrow cut at body, got: ${plain!.signature}`);
+  assert.equal(
+    plain!.signature,
+    "export plain = (x) => binary_expression",
+    `expression-body arrow carries its initializer kind, got: ${plain!.signature}`,
+  );
 
   // plain value const: value excluded from the signature
   const limit = byId.get("src/fn.ts#LIMIT");
-  assert.equal(limit!.signature, "LIMIT", `plain const signature excludes the value, got: ${limit!.signature}`);
+  assert.equal(limit!.signature, "export LIMIT", `plain const signature excludes the value, got: ${limit!.signature}`);
 });
 
 test("arrow-function consts: adding a parameter CHANGES the signature hash (field-reported defect)", async () => {
@@ -280,4 +284,71 @@ test("export { name } marks the local symbol exported", async () => {
   const inner = fi.symbols.find((s) => s.name === "inner");
   assert.ok(inner);
   assert.equal(inner!.exported, true);
+});
+
+test("signature surface: dropping export changes the hash", async () => {
+  const p = await makeParser();
+  const sigOf = (src: string) =>
+    p.parseFile("x.ts", src, hashContent(src)).symbols.find((s) => s.name === "f")!.signature;
+  const exported = sigOf("export function f(a: number): void {}\n");
+  const plain = sigOf("function f(a: number): void {}\n");
+  assert.notEqual(exported, plain, "export status is part of the surface");
+  assert.notEqual(hashContent(exported), hashContent(plain), "and of the hash it feeds");
+});
+
+test("signature surface: an inferred-type change moves the hash; same-kind value edits do not", async () => {
+  const p = await makeParser();
+  const sigOf = (src: string) =>
+    p.parseFile("x.ts", src, hashContent(src)).symbols.find((s) => s.name === "g")!.signature;
+  const num = sigOf("export const g = () => 1;\n");
+  const str = sigOf('export const g = () => "1";\n');
+  const num2 = sigOf("export const g = () => 2;\n");
+  assert.notEqual(hashContent(num), hashContent(str), '() => 1 vs () => "1" must differ');
+  assert.equal(num, num2, "same kind, different value stays held, by design");
+  // an annotated arrow keeps the annotation as the contract
+  const annotated = sigOf('export const g = (): string => "1";\n');
+  assert.match(annotated, /\): string/);
+  assert.notEqual(annotated, num, "the annotation is on the surface");
+});
+
+test("signature surface: removing a class member changes the class hash", async () => {
+  const p = await makeParser();
+  const sigOf = (src: string, name: string) =>
+    p.parseFile("x.ts", src, hashContent(src)).symbols.find((s) => s.name === name)!.signature;
+  const withMember =
+    "export class Cache {\n  protected evictOldest(): void {}\n  get(n: number): number { return n; }\n}\n";
+  const without = "export class Cache {\n  get(n: number): number { return n; }\n}\n";
+  assert.notEqual(
+    hashContent(sigOf(withMember, "Cache")),
+    hashContent(sigOf(without, "Cache")),
+    "member removal moves the hash",
+  );
+  const publicized = withMember.replace("protected evictOldest", "public evictOldest");
+  assert.notEqual(sigOf(withMember, "Cache"), sigOf(publicized, "Cache"), "visibility is part of the member surface");
+  const bodyEdit = withMember.replace("return n;", "return n + 1;");
+  assert.equal(sigOf(withMember, "Cache"), sigOf(bodyEdit, "Cache"), "method bodies are not the surface");
+  const fieldA = "export class Fieldy {\n  value = 1;\n}\n";
+  const fieldB = 'export class Fieldy {\n  value = "s";\n}\n';
+  assert.notEqual(sigOf(fieldA, "Fieldy"), sigOf(fieldB, "Fieldy"), "field initializer kind is on the surface");
+});
+
+test("signature surface: formatting-only edits stay held", async () => {
+  const p = await makeParser();
+  const sigOf = (src: string) =>
+    p.parseFile("x.ts", src, hashContent(src)).symbols.find((s) => s.name === "f")!.signature;
+  const oneLine = "export function f(a: number, b: string): void {}\n";
+  const reflowed = "export function f(\n  a: number,\n  b: string\n): void {}\n";
+  assert.equal(sigOf(oneLine), sigOf(reflowed), "whitespace is collapsed before hashing");
+});
+
+test("swift: the type surface includes member functions and visibility", async () => {
+  const p = await makeParser();
+  const sigOf = (src: string) =>
+    p.parseFile("m.swift", src, hashContent(src)).symbols.find((s) => s.name === "Model")!.signature;
+  const two = "public struct Model {\n  public func a() {}\n  func b() {}\n}\n";
+  const one = "public struct Model {\n  public func a() {}\n}\n";
+  assert.notEqual(hashContent(sigOf(two)), hashContent(sigOf(one)), "member removal moves the type hash");
+  assert.match(sigOf(two), /public func a\(\)/);
+  assert.match(sigOf(two), /internal func b\(\)/);
+  assert.match(sigOf(one), /^public struct Model/);
 });

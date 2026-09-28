@@ -1,0 +1,44 @@
+schemaVersion: 1
+id: IL-0033
+status: verified
+utterance: implement Spec 04 — signature surface
+goal: "Declaration-level API evidence becomes honest: the signature hash covers export/visibility status, type parameters, parameters, return annotations, an initializer KIND for unannotated arrow consts (never the full initializer), and the member surface of classes/interfaces/enums. Formatting-only changes stay held; PARSER_VERSION bumps so old indexes re-parse; the Swift extractor gets the same surface; README wording states what the hash compares."
+interpretation: "Spec 04 — the signature surface, per docs/specs/04-signature-surface.md: the hash covers export/visibility status, type parameters, parameters and return annotations; unannotated arrow consts add the initializer KIND; classes/interfaces/enums add their member surface (name, kind, signature, visibility — one level). PARSER_VERSION bumps so old indexes re-parse; formatting-only edits stay held."
+keep:
+  - kind: no-new-dependency
+deny:
+  - docs/specs/**
+  - package.json
+  - package-lock.json
+  - src/lock/check.ts
+change: Both signatureOf implementations (TS/JS and Swift) hash the declaration surface; the parser version bumps; the three reproduction cases and a formatting negative control land as tests; one eval case gates the arrow-const inferred-type change; README states what the hash compares.
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/core/parser.ts
+    - src/core/swift.ts
+    - test/parser.test.ts
+    - test/verify.test.ts
+    - eval/cases/23-signature-surface.yaml
+    - README.md
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 9
+  maxLines: 600
+accept: []
+assumptions:
+  - text: 'low confidence — confirm territory with the human: every anchor matched only as a fragment of a symbol name ("signature" in signatureOf, "signature" in signatureOf, "signature" in signatureHash, "spec" in SuperviseSpec, "surface" in ScriptSurface) — an incidental word can do this'
+    source: system
+    confirmed: false
+  - text: Anchors defended — signatureOf — src/core/parser.ts (TypeScript); "signature" only occurs inside "signatureOf" · signatureOf — src/core/swift.ts (TypeScript); "signature" only occurs inside "signatureOf" · signatureHash — src/lock/check.ts (TypeScript); "signature" only occurs inside "signatureHash" · SuperviseSpec — src/run/supervise.ts (TypeScript); "spec" only occurs inside "SuperviseSpec" · ScriptSurface — test/fixtures/swift-repo/Surface.swift (Swift); "surface" only occurs inside "ScriptSurface"
+    source: system
+    confirmed: false
+  - text: Budget set explicitly when drafting (seven files); the anchor-proposed files were overridden and are not in scope.
+    source: system
+    confirmed: false
+  - text: "Deny list set explicitly when drafting: docs/specs/**, package.json, package-lock.json, src/lock/check.ts — the hashing primitive and the approved specs stay fixed."
+    source: system
+    confirmed: false
+createdAt: 2026-09-28T05:11:28.106Z
+createdBy: Yasirdora
