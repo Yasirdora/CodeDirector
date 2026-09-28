@@ -1,0 +1,51 @@
+schemaVersion: 1
+id: IL-0034
+status: verified
+utterance: implement Spec 02 — verdict semantics and acceptance criteria
+goal: A declared machine check that could not run (verifyCommand timeout, tests-pass timeout, an uncaptured clause surface) makes the verdict incomplete — never verified — with a non-zero exit and the reason named; circumstantial Unchecked (no tsconfig, no compiler) stays informational; offer accept[] in lock check, lock show and every report and count it in the judgment line; the word verified keeps its meaning.
+interpretation: "Spec 02 — declared vs circumstantial Unchecked: one helper in verify/types.ts selects the unchecked items a DECLARED check produced (verify-command, or a keep-clause other than custom); run.ts and report.ts turn that selection into verdict incomplete with a non-zero exit; accept[] is rendered in check, show and every report and counted in the judgment line."
+keep:
+  - kind: no-new-dependency
+deny:
+  - docs/specs/**
+  - package.json
+  - package-lock.json
+  - src/lock/seal.ts
+  - src/run/baseline.ts
+change: The verdict chain gains the declared-unrunnable test; run exit/status and the MCP run_locked wording follow it; acceptance criteria are surfaced everywhere and counted; eval case 24 pins the timeout-to-incomplete flow.
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/verify/types.ts
+    - src/run/run.ts
+    - src/report/report.ts
+    - src/report/format.ts
+    - src/lock/check.ts
+    - src/mcp/server.ts
+    - eval/run.ts
+    - eval/cases/24-verify-timeout-incomplete.yaml
+    - test/run.test.ts
+    - test/report.test.ts
+    - test/lock.test.ts
+    - test/verify.test.ts
+    - README.md
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 18
+  maxLines: 800
+accept:
+  - "Reproduction 1: a lock whose verifyCommand times out attempts incomplete with a non-zero exit (1) and can never be written as verified — eval case 24 pins it."
+  - "Reproduction 2: a lock's accept criteria are listed by name in lock check, lock show and every report (terminal, markdown, --format=json) and counted in the judgment line."
+assumptions:
+  - text: Anchors defended — Verdict — src/verify/types.ts (TypeScript); "verdict" is its whole name
+    source: system
+    confirmed: false
+  - text: Budget set explicitly when drafting (fourteen files); the anchor-proposed files were overridden and are not in scope.
+    source: system
+    confirmed: false
+  - text: "Deny list set explicitly when drafting: docs/specs/**, package.json, package-lock.json, src/lock/seal.ts, src/run/baseline.ts — the seal gate and the task baseline stay fixed."
+    source: system
+    confirmed: false
+createdAt: 2026-09-28T12:37:15.370Z
+createdBy: Yasirdora

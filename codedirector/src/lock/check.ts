@@ -267,5 +267,15 @@ export function checkLock(
     }
   }
 
+  // Acceptance criteria are a promise to the human, not to a machine: named
+  // here and rendered in every report, but never silently gating.
+  if (lock.accept.length > 0) {
+    warnings.push(
+      `${lock.accept.length} acceptance criterion(s) are human-judged and shown in every report: ` +
+        lock.accept.slice(0, 3).map((a) => `"${a}"`).join("; ") +
+        (lock.accept.length > 3 ? `; +${lock.accept.length - 3} more` : ""),
+    );
+  }
+
   return { ok: errors.length === 0, errors, warnings, clauses };
 }

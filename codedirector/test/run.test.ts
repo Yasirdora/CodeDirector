@@ -631,3 +631,16 @@ test("run: rebase moves the task baseline explicitly; the old reference is archi
   const noop = await runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" });
   assert.equal(noop.exitCode, 0, "after the explicit rebase the present tree is the accepted reference");
 });
+
+test("run: a declared check that times out is incomplete — exit 1, never verified", async () => {
+  const { root, lock } = await setup((l) => {
+    l.verifyCommand = 'node -e "setTimeout(() => {}, 8000)"';
+    l.verifyTimeoutMs = 800;
+  });
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/preview.ts", "// ok\n")], {
+    stdio: "pipe",
+  });
+  assert.equal(outcome.exitCode, 1, "a check that could not run fails the run");
+  assert.equal(loadLock(root, lock.id)!.status, "incomplete", "incomplete, not verified");
+  assert.equal(outcome.record.violations.length, 0, "it is not a violation; it is an unfinished declared check");
+});

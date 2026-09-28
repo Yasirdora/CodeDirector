@@ -1,0 +1,23 @@
+name: verify-timeout-incomplete
+# A DECLARED check that cannot run must not report verified: the lock's own
+# verifyCommand times out, so the verdict is incomplete, the exit code is
+# non-zero, and the reason is named (IL-0034, spec 02).
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: keep the check honest
+  goal: nothing broken while the harness could not run
+  change: comment only
+  verifyCommand: node -e "setTimeout(() => {}, 8000)"
+  verifyTimeoutMs: 800
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").appendFileSync("src/math.js","// ok\n")'
+expect:
+  exitCode: 1
+  status: incomplete
+  items:
+    - { match: verifyCommand, class: unchecked, verdict: unchecked }

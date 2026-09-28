@@ -330,6 +330,32 @@ test("report: --attempt renders the recorded attempt, labeled", async () => {
   assert.ok(/Basis\s+attempt/.test(text), text.slice(0, 400));
 });
 
+test("report: a declared check that could not run is incomplete, reason named", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.verifyCommand = 'node -e "setTimeout(() => {}, 8000)"';
+    l.verifyTimeoutMs = 800;
+  });
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  const report = await buildReport(root, lock.id);
+  assert.equal(report.verdict, "incomplete");
+  assert.match(report.incompleteReason ?? "", /declared check\(s\) could not run/);
+  const text = formatReport(report);
+  assert.ok(text.includes("Not verified —"), text.slice(0, 200));
+});
+
+test("report: acceptance criteria are rendered and counted as human judgment", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.accept = ["drag feels instant", "no new deps"];
+  });
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  const report = await buildReport(root, lock.id);
+  assert.deepEqual(report.accept, ["drag feels instant", "no new deps"]);
+  const text = formatReport(report);
+  assert.ok(text.includes("Acceptance criteria (human judges):"), text.slice(0, 400));
+  assert.ok(text.includes("drag feels instant"));
+  assert.match(summarizeReport(report), /things need your judgment/);
+});
+
 test("report: verifyCommand round-trips through the lock YAML", async () => {
   const { root, lock } = await setup([], (l) => {
     l.verifyCommand = "npm test";

@@ -40,6 +40,7 @@ import { loadTaskBaseline, taskBaselinePath } from "../run/baseline";
 import { verifyLock, VerifyOptions } from "../verify/verify";
 import {
   countByClass,
+  declaredButUnrunnable,
   EvidenceClass,
   enforceArtifactRule,
   ProbePutBack,
@@ -67,6 +68,8 @@ export interface ChangeReport {
   attemptId?: string;
   /** Why the verdict is incomplete (always set when it is). */
   incompleteReason?: string;
+  /** Acceptance criteria in words — human-judged; rendered everywhere, gating nothing. */
+  accept: string[];
   /** The user's exact words — verbatim, immutable. */
   utterance: string;
   goal: string;
@@ -284,10 +287,16 @@ export async function buildReport(
   // Always named, whatever else is: files were moved aside.
   findings.push(...(verification.putBack ?? []).map(putBackFinding));
 
+  const unrunnable = declaredButUnrunnable(verification.items);
   const incompleteReason =
     view === "current" && !taskBaseline
       ? `no task baseline for ${lockId} — scope could not be judged; run \`cdir run\` or \`cdir checkpoint ${lockId}\` first`
-      : undefined;
+      : unrunnable.length > 0
+        ? `declared check(s) could not run: ${unrunnable
+            .slice(0, 2)
+            .map((i) => `${i.subject} — ${i.reason ?? i.detail}`)
+            .join("; ")}${unrunnable.length > 2 ? `; +${unrunnable.length - 2} more` : ""}`
+        : undefined;
 
   const violations = [...scope, ...verification.violations];
   const verdict: ChangeReport["verdict"] =
@@ -307,6 +316,7 @@ export async function buildReport(
     view,
     utterance: lock.utterance,
     goal: lock.goal,
+    accept: lock.accept,
     generatedAt: new Date().toISOString(),
     ...(run ? { command: run.command } : {}),
     ...(run?.attemptId ? { attemptId: run.attemptId } : {}),

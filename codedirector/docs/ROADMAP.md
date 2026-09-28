@@ -476,3 +476,23 @@ receipt said "signature unchanged" for three real API changes.
 - **Tests:** `test/parser.test.ts` (each of the three repros flips;
   formatting negative control; Swift surface); eval case
   `23-signature-surface`; existing Swift API cases 17/18 stay green.
+
+### "Verified" survived an unfinished declared check; accept[] was invisible
+
+**Status: landed (IL-0034).** A lock whose own `verifyCommand` timed out
+still returned exit 0 and "Done — verified." — the Unchecked bucket named
+it, but the verdict did not care. And `accept[]` was stored and shown by
+`lock show` only: no report, no check output, no count.
+
+- **Fix:** a declared check that could not run (a `verify-command` item, or
+  any keep-clause except `custom`) makes the verdict **incomplete** — one
+  predicate (`declaredButUnrunnable` in `verify/types.ts`) shared by run,
+  report and MCP so they cannot drift; `cdir run` exits non-zero with status
+  `incomplete` and `run_locked` says "not verified". Circumstantial skips
+  (no tsconfig, no compiler) stay informational. Acceptance criteria are
+  rendered in `lock check`, every report format, and counted in the
+  summary's judgment line.
+- **Tests:** `test/run.test.ts` (timeout → exit 1, status incomplete, zero
+  violations), `test/report.test.ts` (incomplete reason; accept rendered and
+  counted), `test/lock.test.ts` (accept warning), `test/verify.test.ts`
+  (the predicate's boundary), eval case `24-verify-timeout-incomplete`.

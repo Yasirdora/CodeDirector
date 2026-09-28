@@ -100,3 +100,19 @@ export function enforceArtifactRule(items: VerificationItem[]): VerificationItem
     return item;
   });
 }
+
+/**
+ * The items a DECLARED check left unchecked: the Lock named the check
+ * (`verify-command`, or a keep-clause other than the human-judged `custom`)
+ * and it could not run — a timeout, a failed capture, a symbol that never
+ * resolved. Those block `verified` (the verdict is incomplete). Everything
+ * else that is unchecked is circumstantial — no tsconfig, no compiler — and
+ * stays informational. One predicate, so run, report and MCP cannot drift.
+ */
+export function declaredButUnrunnable(items: VerificationItem[]): VerificationItem[] {
+  return items.filter(
+    (i) =>
+      i.verdict === "unchecked" &&
+      (i.source === "verify-command" || (i.source === "keep-clause" && i.clauseKind !== "custom")),
+  );
+}

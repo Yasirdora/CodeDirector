@@ -317,13 +317,18 @@ Verified execution inside an active Lock:
    KEEP clause still fails;
 5. **run the verification ladder** (see below) against the baseline;
 6. write the run record (including the full verification result) to
-   `.codedirector/runs/`, update the lock status (`verified` / `failed`), and
-   emit the Change Report (`--no-report` suppresses the rendering, not the
-   verification).
+   `.codedirector/runs/`, update the lock status (`verified` / `failed` /
+   `incomplete`), and emit the Change Report (`--no-report` suppresses the
+   rendering, not the verification).
 
-Exit code: `0` only if the command succeeded AND no violations. `cdir run`
-without a lock id is refused — ad-hoc mode is a later phase; the whole point
-is the contract.
+A **declared** check that could not run — a `verifyCommand` or `tests-pass`
+timeout, a clause whose baseline surface never captured — makes the status
+`incomplete`, never `verified`; circumstantial skips (no `tsconfig.json`, no
+compiler) stay informational.
+
+Exit code: `0` only if the command succeeded AND no violations AND no
+declared check went unrunnable. `cdir run` without a lock id is refused —
+ad-hoc mode is a later phase; the whole point is the contract.
 
 ### The verification ladder
 
@@ -406,7 +411,8 @@ the latest attempt against the current tree: the scope delta from the task
 baseline is recomputed (a post-run edit is not invisible), the ladder re-runs
 against the task baseline, and the recorded command outcome is kept. The
 verdict is `verified`, `failed`, or `incomplete` — the last when there is no
-task baseline to judge scope against, and it is never written as verified.
+task baseline to judge scope against, or a declared check could not run, and
+it is never written as verified.
 `--attempt N` renders a recorded attempt as it was, labeled with its id. It
 opens with a plain-language summary generated from the same data as the
 detail ("Done — verified. Only src/preview.ts changed, within the agreed
@@ -422,6 +428,8 @@ when violations exist; the detail follows underneath:
   artifact reference (which baseline file, which command, which exit code) —
   violations first, then verified-held, then the Unchecked bucket (always
   visible, each item with its reason);
+- acceptance criteria (human judges), rendered beside the Unchecked bucket
+  and counted in the summary's judgment line;
 - findings: incidental observations (e.g. "src/x.ts changed in-budget but no
   test file references it — behavioral coverage unknown"), always Asserted
   and labeled;

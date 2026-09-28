@@ -688,3 +688,14 @@ test("seals are per-record; the legacy registry is read, never rewritten", () =>
   );
   assert.equal(fs.readFileSync(legacyPath, "utf8"), legacyText);
 });
+
+test("checkLock names acceptance criteria as human-judged", () => {
+  const root = copyDemoRepo();
+  const lock = sampleLock();
+  lock.accept = ["no new dependencies", "drag feels instant"];
+  const result = checkLock(root, lock, null);
+  assert.ok(
+    result.warnings.some((w) => w.includes("acceptance criterion") && w.includes("drag feels instant")),
+    result.warnings.join("; "),
+  );
+});

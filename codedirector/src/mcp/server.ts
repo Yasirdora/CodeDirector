@@ -476,6 +476,12 @@ const TOOLS: ToolDef[] = [
       if (outcome.exitCode === 0) {
         return ok(`run ${lockId} succeeded — no violations.\n\n${body}`);
       }
+      if (report.verdict === "incomplete") {
+        return fail(
+          `run ${lockId} is NOT VERIFIED — a declared check did not run; the report names it. ` +
+            `Do not claim success; show this report to the human.\n\n${body}`,
+        );
+      }
       return fail(
         `run ${lockId} FAILED (exit ${outcome.exitCode}) — violations below. ` +
           `Do not retry blindly; show this report to the human. Nothing was reverted — undo() restores the checkpoint.\n\n${body}`,

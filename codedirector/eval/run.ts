@@ -64,6 +64,7 @@ interface EvalCase {
     keep?: VibeCheck["keep"];
     deny?: string[];
     verifyCommand?: string;
+    verifyTimeoutMs?: number;
     budget: { files: string[]; maxFiles?: number; maxLines?: number };
   };
   command: string;
@@ -114,6 +115,7 @@ function composeLock(c: EvalCase, status: VibeCheck["status"] = "active"): VibeC
     deny: c.lock.deny ?? [],
     change: c.lock.change ?? c.name,
     ...(c.lock.verifyCommand !== undefined ? { verifyCommand: c.lock.verifyCommand } : {}),
+    ...(c.lock.verifyTimeoutMs !== undefined ? { verifyTimeoutMs: c.lock.verifyTimeoutMs } : {}),
     budget: {
       files: c.lock.budget.files,
       symbols: [],

@@ -18,7 +18,7 @@ import { VibeCheck, KeepClause } from "../src/lock/types";
 import { captureBaseline, saveBaseline, taskBaselinePath, loadBaseline } from "../src/run/baseline";
 import { runWithLock } from "../src/run/run";
 import { verifyLock, verifyWithBaseline } from "../src/verify/verify";
-import { VerificationItem } from "../src/verify/types";
+import { declaredButUnrunnable, VerificationItem } from "../src/verify/types";
 import { buildReport } from "../src/report/report";
 import { git, makeGitRepo } from "./helpers";
 
@@ -142,7 +142,7 @@ test("verify: tests-pass with an empty glob is a violation, not a silent pass", 
   assert.ok(item.detail.includes("matched no test files"), `detail: ${item.detail}`);
 });
 
-test("verify: a tests-pass glob that reaches a Swift file is unchecked with the reason, not failing", async () => {
+test("verify: a tests-pass glob that reaches a Swift file is unchecked — incomplete, not a false failure", async () => {
   // Reproduced on 0.4.5: a passing Swift test file was reported "tests
   // failing (exit 1)" — node --test ran it as a JavaScript file.
   const { root, lock } = await setup([{ kind: "tests-pass", glob: "Tests/**" }]);
@@ -154,7 +154,11 @@ test("verify: a tests-pass glob that reaches a Swift file is unchecked with the 
   git(root, ["add", "Tests"]);
   git(root, ["commit", "-qm", "swift tests"]);
   const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
-  assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
+  // The declared check could not run: never a false failure, but never a
+  // silent pass either — incomplete, with the reason named (spec 02).
+  assert.equal(outcome.exitCode, 1, "a declared check that cannot run is incomplete");
+  assert.equal(loadLock(root, lock.id)!.status, "incomplete", "never verified while the check could not run");
+  assert.equal(outcome.record.violations.length, 0, "unchecked is not a violation");
   const item = find(outcome.record.verification!.items, "tests-pass")[0];
   assert.equal(item.verdict, "unchecked");
   assert.match(item.reason ?? "", /node --test cannot run 1 matched file\(s\) \(Tests\/AppTests\.swift\)/);
@@ -444,6 +448,19 @@ test("verify: standalone verifyLock uses the task baseline", async () => {
   const item = find(report.items, "api-unchanged")[0];
   assert.equal(item.verdict, "held");
   assert.equal(report.baselinePath !== undefined, true);
+});
+
+test("verify: declared-but-unrunnable selects named checks, not circumstantial Unchecked", () => {
+  const items: VerificationItem[] = [
+    { source: "verify-command", subject: "verifyCommand · x", verdict: "unchecked", evidenceClass: "unchecked", detail: "timed out" },
+    { source: "typecheck", subject: "typecheck", verdict: "unchecked", evidenceClass: "unchecked", detail: "no tsconfig" },
+    { source: "keep-clause", clauseKind: "custom", subject: "custom · feels right", verdict: "unchecked", evidenceClass: "unchecked", detail: "human judges" },
+    { source: "keep-clause", clauseKind: "tests-pass", subject: "tests-pass · t", verdict: "unchecked", evidenceClass: "unchecked", detail: "timed out" },
+  ];
+  assert.deepEqual(
+    declaredButUnrunnable(items).map((i) => i.subject),
+    ["verifyCommand · x", "tests-pass · t"],
+  );
 });
 
 test("verify: standalone verifyLock with NO baseline marks structural checks unchecked", async () => {

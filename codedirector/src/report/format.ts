@@ -82,15 +82,13 @@ export function summarizeReport(report: ChangeReport): string {
     sentences.push(`${plural(held.length, "promise")} held (checked).`);
   }
 
-  // 4. What still needs a human.
-  if (unchecked.length > 0) {
-    const named = unchecked
-      .slice(0, 2)
-      .map((i) => i.reason ?? i.detail)
-      .join("; ");
-    const more = unchecked.length > 2 ? `; +${unchecked.length - 2} more` : "";
+  // 4. What still needs a human (unchecked claims + acceptance criteria).
+  const judgmentItems = [...unchecked.map((i) => i.reason ?? i.detail), ...report.accept];
+  if (judgmentItems.length > 0) {
+    const named = judgmentItems.slice(0, 2).join("; ");
+    const more = judgmentItems.length > 2 ? `; +${judgmentItems.length - 2} more` : "";
     sentences.push(
-      `${unchecked.length === 1 ? "1 thing needs" : `${unchecked.length} things need`} your judgment: ${named}${more}.`,
+      `${judgmentItems.length === 1 ? "1 thing needs" : `${judgmentItems.length} things need`} your judgment: ${named}${more}.`,
     );
   }
 
@@ -181,6 +179,13 @@ export function formatReport(report: ChangeReport): string {
     }
   }
 
+  // Acceptance criteria are the human's half; rendered everywhere, gating nothing.
+  if (report.accept.length > 0) {
+    lines.push(``);
+    lines.push(`Acceptance criteria (human judges):`);
+    for (const a of report.accept) lines.push(`  · ${a}`);
+  }
+
   if (report.findings.length > 0) {
     lines.push(``);
     lines.push(`Findings (asserted — observed, not verified):`);
@@ -265,6 +270,13 @@ export function formatReportMarkdown(report: ChangeReport): string {
     lines.push(`None — every claim had a runnable check.`);
   } else {
     for (const i of unchecked) lines.push(`- ? **${i.subject}** — ${i.reason ?? i.detail}`);
+  }
+
+  if (report.accept.length > 0) {
+    lines.push(``);
+    lines.push(`## Acceptance criteria (human judges)`);
+    lines.push(``);
+    for (const a of report.accept) lines.push(`- ${a}`);
   }
 
   if (report.findings.length > 0) {

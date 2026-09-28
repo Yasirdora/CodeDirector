@@ -47,7 +47,7 @@ import {
   scopeViolations,
 } from "./classify";
 import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
-import { ProbePutBack, VerificationReport } from "../verify/types";
+import { declaredButUnrunnable, ProbePutBack, VerificationReport } from "../verify/types";
 
 export interface KeepResult {
   kind: string;
@@ -375,12 +375,21 @@ export async function runWithLock(
   const recordPath = path.join(runsDir(rootDir), `${lock.id}-${newRecordId(new Date(startedAt))}.json`);
   writeFileAtomic(recordPath, stableStringify(record));
 
-  const exitCode = commandExit === 0 && violations.length === 0 ? 0 : 1;
+  // A declared check that could not run blocks success: not a violation, but
+  // not verified either — the verdict is incomplete (spec 02, IL-0034).
+  const unrunnable = verification ? declaredButUnrunnable(verification.items) : [];
+  const exitCode = commandExit === 0 && violations.length === 0 && unrunnable.length === 0 ? 0 : 1;
 
   // The Lock's status reflects the latest verdict: everything passed →
-  // verified; any violation or a failed command → failed.
+  // verified; a violation or a failed command → failed; otherwise an
+  // unfinished declared check → incomplete.
   if (opts.updateStatus !== false) {
-    lock.status = exitCode === 0 ? "verified" : "failed";
+    lock.status =
+      commandExit === 0 && violations.length === 0
+        ? unrunnable.length > 0
+          ? "incomplete"
+          : "verified"
+        : "failed";
     saveLock(rootDir, lock);
   }
 
