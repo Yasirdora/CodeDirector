@@ -1,0 +1,60 @@
+schemaVersion: 1
+id: IL-0031
+status: verified
+utterance: one immutable task baseline per lock, missing baseline = warn + incomplete, never VERIFIED
+goal: "Specs 01+03: one immutable task baseline per lock; attempts judged cumulatively against it; a rebase is an explicit approved revision; cdir verify computes a fresh full delta vs the task baseline; report binds to a named attempt; a missing task baseline warns and yields incomplete — never VERIFIED."
+interpretation: "Specs 01+03 — task baseline and receipt binding: one immutable task baseline per lock (first run, or cdir checkpoint IL-XXXX for direct edits); attempts judged cumulatively; cdir lock rebase as the explicit approved revision; verify computes a fresh full delta vs the task baseline; report binds to a named attempt; missing baseline → incomplete, never VERIFIED."
+keep:
+  - kind: no-new-dependency
+deny:
+  - docs/specs/**
+  - package.json
+  - package-lock.json
+  - src/core/ids.ts
+  - src/lock/seal.ts
+  - src/lock/store.ts
+  - test/ids.test.ts
+  - test/lock.test.ts
+change: The task baseline becomes immutable per lock, attempts are judged cumulatively, verify recomputes the scope delta, and reports bind to a named attempt; a missing baseline never reads as verified.
+verifyCommand: npm test
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/run/baseline.ts
+    - src/run/run.ts
+    - src/run/classify.ts
+    - src/verify/verify.ts
+    - src/lock/types.ts
+    - src/lock/yaml.ts
+    - src/report/report.ts
+    - src/report/format.ts
+    - src/cli-main.ts
+    - src/checkpoint/index.ts
+    - src/mcp/server.ts
+    - src/index.ts
+    - skills/codedirector/SKILL.md
+    - README.md
+    - test/run.test.ts
+    - test/verify.test.ts
+    - test/report.test.ts
+    - test/checkpoint.test.ts
+    - test/mcp.test.ts
+    - eval/cases/21-retry-no-rebaseline.yaml
+    - eval/cases/22-verify-current-delta.yaml
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 26
+  maxLines: 2000
+accept: []
+assumptions:
+  - text: Anchors defended — Baseline — src/run/baseline.ts (TypeScript); "baseline" is its whole name
+    source: system
+    confirmed: false
+  - text: Budget set explicitly when drafting (twenty-two files); the anchor-proposed files were overridden and are not in scope.
+    source: system
+    confirmed: false
+  - text: "Deny list set explicitly when drafting: docs/specs/**, package.json, package-lock.json, src/core/ids.ts, src/lock/seal.ts, src/lock/store.ts, test/ids.test.ts, test/lock.test.ts."
+    source: system
+    confirmed: false
+createdAt: 2026-09-27T21:55:59.531Z
+createdBy: Yasirdora

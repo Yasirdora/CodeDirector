@@ -13,9 +13,9 @@
 
 export const LOCK_SCHEMA_VERSION = 1;
 
-export type LockStatus = "draft" | "active" | "verified" | "failed" | "abandoned";
+export type LockStatus = "draft" | "active" | "verified" | "failed" | "incomplete" | "abandoned";
 
-export const LOCK_STATUSES: LockStatus[] = ["draft", "active", "verified", "failed", "abandoned"];
+export const LOCK_STATUSES: LockStatus[] = ["draft", "active", "verified", "failed", "incomplete", "abandoned"];
 
 export type KeepClauseKind =
   | "output-unchanged"

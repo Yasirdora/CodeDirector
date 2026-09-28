@@ -44,9 +44,12 @@ gets questions and options FIRST — not research:
    `cdir lock check IL-XXXX && cdir lock activate IL-XXXX`, then work
    begins. The user must never have to name a lock or run a command.
 3. **Work**: `cdir run IL-XXXX -- <command>`; or when editing directly:
-   `cdir checkpoint`, touch only budgeted files, then `cdir verify IL-XXXX`.
-   Need a file outside the budget? Stop and ask — a scope change is the
-   user's call, never yours.
+   `cdir checkpoint IL-XXXX` (this captures the task baseline), touch only
+   budgeted files, then `cdir verify IL-XXXX`. A retry is judged against the
+   same task baseline — fixing the work clears it, a no-op re-run does not;
+   moving the reference is `cdir lock rebase IL-XXXX --accept-current`, an
+   explicit act. Need a file outside the budget? Stop and ask — a scope
+   change is the user's call, never yours.
 4. **Report**: `cdir report IL-XXXX`. Plain summary first; name violations
    and the Unchecked bucket; never claim "verified" from your own narration.
    On failure, say so and offer `cdir undo`.

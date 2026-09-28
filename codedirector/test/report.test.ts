@@ -283,17 +283,51 @@ test("report: empty unchecked bucket is still rendered, not silent", async () =>
   assert.ok(tc && tc.verdict === "unchecked", "JS repo without tsconfig names the skipped typecheck rung");
 });
 
-test("report: standalone buildReport (no run) re-verifies and reports verification-only", async () => {
+test("report: standalone buildReport without a task baseline reports incomplete, never verified", async () => {
   const { root, lock } = await setup([{ kind: "tests-pass", glob: "test/*.test.js" }]);
-  // no run at all — no baseline, no record
+  // no run and no checkpoint — no task baseline, no reference to judge scope against
   const report = await buildReport(root, lock.id);
+  assert.equal(report.verdict, "incomplete");
+  assert.ok(report.incompleteReason?.includes("no task baseline"), report.incompleteReason);
   assert.equal(report.command, undefined);
   assert.ok(!report.runRecordPath);
   assert.equal(report.changed.length, 0);
   const text = formatReport(report);
-  assert.ok(text.includes("no run record — verification only"));
+  assert.ok(text.includes("no task baseline — scope not judged"), text.slice(0, 300));
   // tests still ran (self-contained), so the claim is measured
   assert.equal(report.counts.measured, 1);
+});
+
+test("report: a direct edit after the run is caught — the delta is recomputed, not reprinted", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.deny = ["src/untested.js"];
+  });
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  assert.equal((await buildReport(root, lock.id)).verdict, "verified");
+
+  // outside cdir: touch the denied file after the run
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  fs.appendFileSync(path.join(root, "src", "untested.js"), "// direct edit\n");
+
+  const after = await buildReport(root, lock.id);
+  assert.equal(after.verdict, "failed", "the receipt recomputes the delta; a post-run edit is not invisible");
+  assert.ok(
+    after.changed.some((c) => c.path === "src/untested.js" && c.class === "denied"),
+    JSON.stringify(after.changed),
+  );
+  assert.ok(after.violations.some((v) => v.startsWith("DENY: src/untested.js")), after.violations.join("; "));
+});
+
+test("report: --attempt renders the recorded attempt, labeled", async () => {
+  const { root, lock } = await setup([]);
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  const report = await buildReport(root, lock.id, { attempt: 1 });
+  assert.equal(report.view, "attempt");
+  assert.equal(report.attemptId, outcome.record.attemptId);
+  assert.deepEqual(report.changed.map((c) => c.path), ["src/math.js"]);
+  const text = formatReport(report);
+  assert.ok(/Basis\s+attempt/.test(text), text.slice(0, 400));
 });
 
 test("report: verifyCommand round-trips through the lock YAML", async () => {

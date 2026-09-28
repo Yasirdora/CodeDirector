@@ -29,7 +29,16 @@ import { defaultDomains, DomainRegistry } from "../domain/registry";
 import { loadLock, saveLock } from "../lock/store";
 import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
-import { Baseline, baselineFileHash, captureBaseline, saveBaseline } from "./baseline";
+import {
+  Baseline,
+  BaselineOptions,
+  baselineFileHash,
+  captureBaseline,
+  deriveTaskBaselineFromLegacy,
+  loadTaskBaseline,
+  saveTaskBaseline,
+  taskBaselinePath,
+} from "./baseline";
 import {
   changedFiles,
   changedLineCount,
@@ -56,14 +65,19 @@ export interface BudgetStats {
 
 export interface RunRecord {
   lockId: string;
+  /** Unique id of this attempt (IL-0031); absent on records written before it. */
+  attemptId?: string;
   command: string[];
   startedAt: string;
   finishedAt: string;
   exitCode: number;
   checkpoint: Checkpoint;
+  /** Repo-relative path of the task baseline this attempt was judged against. */
   baselinePath: string;
   /** sha256 of the baseline file at capture time — tamper detection. */
   baselineSha256?: string;
+  /** Where the task baseline came from when this attempt first used it ("captured" · "legacy:<file>"). */
+  taskBaselineSource?: string;
   changed: ClassifiedChange[];
   budget: BudgetStats;
   keepResults: KeepResult[];
@@ -97,6 +111,44 @@ export interface RunOutcome {
   recordPath: string;
   /** Process exit code: 0 only when command succeeded and no violations. */
   exitCode: number;
+}
+
+/**
+ * The task baseline: the one reference every attempt of a lock is judged
+ * against. Created once — by the first run, or by `cdir checkpoint IL-XXXX`
+ * for a direct-edit task — then immutable; a retry reuses it, so running
+ * again cannot launder a break into truth. A legacy lock (recorded before
+ * the task baseline existed) adopts its OLDEST recorded baseline instead of
+ * silently accepting the present tree; `cdir lock rebase --accept-current`
+ * is the explicit way to move the reference.
+ */
+export interface TaskBaselineResult {
+  baseline: Baseline;
+  path: string;
+  /** "existing" · "captured" · "legacy:<baseline file>" */
+  source: string;
+}
+
+export async function ensureTaskBaseline(
+  rootDir: string,
+  lock: VibeCheck,
+  checkpointTag?: string,
+  opts: BaselineOptions = {},
+): Promise<TaskBaselineResult> {
+  const existing = loadTaskBaseline(rootDir, lock.id);
+  if (existing) return { baseline: existing, path: taskBaselinePath(rootDir, lock.id), source: "existing" };
+
+  const legacy = deriveTaskBaselineFromLegacy(rootDir, lock.id);
+  if (legacy) {
+    return { baseline: legacy.baseline, path: taskBaselinePath(rootDir, lock.id), source: `legacy:${legacy.source}` };
+  }
+
+  const domains = opts.domains ?? defaultDomains();
+  const { index } = await buildIndex(rootDir, { domains });
+  const fresh = captureBaseline(rootDir, lock, index, checkpointTag, opts);
+  const saved = saveTaskBaseline(rootDir, fresh);
+  const stored = loadTaskBaseline(rootDir, lock.id);
+  return { baseline: stored ?? fresh, path: saved.path, source: saved.created ? "captured" : "existing" };
 }
 
 function checkKeepClauses(
@@ -219,20 +271,24 @@ export async function runWithLock(
   // 1. checkpoint before anything
   const checkpoint = createCheckpoint(rootDir);
 
-  // 2. refresh index + capture baseline (outside the source tree)
   const domains = opts.verifyOptions?.domains ?? defaultDomains();
-  const { index: indexBefore } = await buildIndex(rootDir, { domains });
   const vo = opts.verify === false ? { typecheck: false } : (opts.verifyOptions ?? {});
   // What any probe — before the command or after it — changed and had put back: the report names it.
   const putBack: ProbePutBack[] = [];
-  const baseline: Baseline = captureBaseline(rootDir, lock, indexBefore, checkpoint.tag, {
+
+  // 2. the task baseline — the one reference every attempt of this lock is
+  //    judged against. Captured once (first attempt, or cdir checkpoint
+  //    IL-XXXX); a retry reuses it, so running again cannot launder a break
+  //    into truth. A legacy lock adopts its oldest recorded baseline.
+  const task = await ensureTaskBaseline(rootDir, lock, checkpoint.tag, {
     typecheck: vo.typecheck,
     typecheckTimeoutMs: vo.typecheckTimeoutMs,
     env: vo.env,
     putBack,
     domains,
   });
-  const baselinePath = saveBaseline(rootDir, baseline);
+  const baseline: Baseline = task.baseline;
+  const baselinePath = task.path;
   // Hash the baseline at capture: the executed command could edit files under
   // .codedirector/baselines/ and fake a "held" verdict. The hash goes into
   // the run record; verify re-hashes and invalidates on mismatch. (True
@@ -240,6 +296,7 @@ export async function runWithLock(
   const baselineSha256 = baselineFileHash(baselinePath);
 
   // 3. execute
+  const attemptId = newRecordId();
   const startedAt = new Date().toISOString();
   const child = spawnSync(command[0], command.slice(1), {
     cwd: rootDir,
@@ -296,6 +353,7 @@ export async function runWithLock(
 
   const record: RunRecord = {
     lockId: lock.id,
+    attemptId,
     command,
     startedAt,
     finishedAt,
@@ -303,6 +361,7 @@ export async function runWithLock(
     checkpoint,
     baselinePath: path.relative(rootDir, baselinePath),
     baselineSha256,
+    ...(task.source !== "existing" ? { taskBaselineSource: task.source } : {}),
     changed,
     budget,
     keepResults,

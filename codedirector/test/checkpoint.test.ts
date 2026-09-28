@@ -6,12 +6,18 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import {
   CheckpointError,
   createCheckpoint,
   latestCheckpoint,
   undo,
 } from "../src/checkpoint";
+import { buildIndex } from "../src/core/builder";
+import { draftLock } from "../src/lock/draft";
+import { saveLock } from "../src/lock/store";
+import { sealLock } from "../src/lock/seal";
+import { taskBaselinePath } from "../src/run/baseline";
 import { git, makeGitRepo } from "./helpers";
 
 test("checkpoint/undo round-trip restores a modified tracked file", () => {
@@ -39,6 +45,23 @@ test("checkpoint store writes are atomic: no temp files survive, the store parse
     checkpoints: unknown[];
   };
   assert.equal(parsed.checkpoints.length, 2);
+});
+
+test("checkpoint with a lock captures the task baseline once", async () => {
+  const root = makeGitRepo({ "src/a.ts": "export const v = 1;\n" });
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "keep a still", { now: "2026-09-11T00:00:00.000Z", createdBy: "test" });
+  lock.status = "active";
+  saveLock(root, lock);
+  sealLock(root, lock);
+
+  const CLI = path.join(__dirname, "..", "src", "cli.js");
+  execFileSync(process.execPath, [CLI, "checkpoint", lock.id, "--root", root], { stdio: "pipe" });
+  const taskPath = taskBaselinePath(root, lock.id);
+  assert.ok(fs.existsSync(taskPath), "the task baseline is captured");
+  const first = fs.readFileSync(taskPath, "utf8");
+  execFileSync(process.execPath, [CLI, "checkpoint", lock.id, "--root", root], { stdio: "pipe" });
+  assert.equal(fs.readFileSync(taskPath, "utf8"), first, "captured once; a retry reuses it");
 });
 
 test(".codedirector tool state does not count as a dirty tree", () => {

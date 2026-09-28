@@ -1,0 +1,33 @@
+name: retry-no-rebaseline
+# A lock whose task baseline already records a broken promise: a no-op
+# attempt must still fail. Before IL-0031 every run captured a fresh
+# baseline, so re-running laundered the break into truth.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+  .codedirector/baselines/IL-0001-task.json: |
+    {
+      "lockId": "IL-0001",
+      "capturedAt": "2026-01-01T00:00:00.000Z",
+      "stamp": "20260101-000000-000-0-0",
+      "signatures": {},
+      "manifests": {"package.json": "0000000000000000000000000000000000000000000000000000000000000000"},
+      "gitStatus": "",
+      "gitStatusHash": "x"
+    }
+lock:
+  utterance: keep dependencies frozen
+  goal: no dependency changes
+  change: comment only
+  keep:
+    - kind: no-new-dependency
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").appendFileSync("src/math.js","// ok\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - "KEEP no-new-dependency"

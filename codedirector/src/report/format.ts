@@ -40,7 +40,9 @@ export function summarizeReport(report: ChangeReport): string {
   const undoHint = "Nothing was reverted — run `cdir undo` to restore.";
 
   // 1. Outcome first.
-  if (report.verdict === "verified") {
+  if (report.verdict === "incomplete") {
+    sentences.push(`Not verified — ${report.incompleteReason ?? "the scope could not be judged"}.`);
+  } else if (report.verdict === "verified") {
     sentences.push("Done — verified.");
   } else if (outOfScope.length > 0) {
     const first = outOfScope[0];
@@ -110,6 +112,13 @@ export function formatReport(report: ChangeReport): string {
   lines.push(`CHANGE REPORT · ${report.lockId} · verdict: ${report.verdict.toUpperCase()}`);
   lines.push(`Said   "${report.utterance}"`);
   lines.push(`Goal   ${report.goal}`);
+  if (report.view === "attempt") {
+    lines.push(`Basis  attempt ${report.attemptId ?? "(unnumbered)"} as recorded`);
+  } else if (report.taskBaselineCapturedAt) {
+    lines.push(`Basis  current tree vs task baseline (captured ${report.taskBaselineCapturedAt})`);
+  } else {
+    lines.push(`Basis  current tree (no task baseline — scope not judged)`);
+  }
   if (report.command) {
     lines.push(
       `Run    ${report.command.join(" ")} · record ${report.runRecordPath ?? "(unknown)"}`,
@@ -119,7 +128,7 @@ export function formatReport(report: ChangeReport): string {
 
   lines.push(``);
   if (report.changed.length === 0 && !report.budget) {
-    lines.push(`Changed files: (no run record — verification only)`);
+    lines.push(`Changed files: (no task baseline — scope not judged)`);
   } else {
     const b = report.budget;
     lines.push(
@@ -196,6 +205,11 @@ export function formatReportMarkdown(report: ChangeReport): string {
   lines.push(`> "${report.utterance}"`);
   lines.push(``);
   lines.push(`- **Goal:** ${report.goal}`);
+  if (report.view === "attempt") {
+    lines.push(`- **Basis:** attempt \`${report.attemptId ?? "(unnumbered)"}\` as recorded`);
+  } else if (report.taskBaselineCapturedAt) {
+    lines.push(`- **Basis:** current tree vs task baseline (captured ${report.taskBaselineCapturedAt})`);
+  }
   if (report.command) lines.push(`- **Run:** \`${report.command.join(" ")}\` (record: \`${report.runRecordPath ?? "?"}\`)`);
   if (report.baselinePath) lines.push(`- **Baseline:** \`${report.baselinePath}\``);
   lines.push(`- **Evidence counts:** proven ${report.counts.proven} · measured ${report.counts.measured} · asserted ${report.counts.asserted} · unchecked ${report.counts.unchecked}`);

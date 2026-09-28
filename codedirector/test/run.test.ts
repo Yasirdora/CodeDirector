@@ -14,6 +14,7 @@ import { draftLock } from "../src/lock/draft";
 import { checkLock } from "../src/lock/check";
 import { loadLock, lockPathFor, saveLock } from "../src/lock/store";
 import { sealLock, sealViolation } from "../src/lock/seal";
+import { loadTaskBaseline, rebaseTaskBaseline } from "../src/run/baseline";
 import { VibeCheck } from "../src/lock/types";
 import { runWithLock, RunError } from "../src/run/run";
 import { undo } from "../src/checkpoint";
@@ -579,4 +580,54 @@ test("run: two runs in the same second keep two distinct records", async () => {
     .readdirSync(path.join(root, ".codedirector", "runs"))
     .filter((f) => f.startsWith(`${lock.id}-`) && f.endsWith(".json"));
   assert.equal(records.length, 2, `expected two run records, got: ${records.join(", ")}`);
+});
+
+test("run: a retry cannot re-baseline a broken promise", async () => {
+  const { root, lock } = await setup((l) => {
+    l.keep = [{ kind: "api-unchanged", symbols: ["src/pipeline.ts#ImagePipeline.renderPreview"] }];
+    l.budget = { files: ["src/pipeline.ts"], symbols: [], maxFiles: 2, maxLines: 400 };
+  });
+  const edit = (from: string, to: string) =>
+    'const fs=require("fs"),p="src/pipeline.ts";' +
+    `fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace(${JSON.stringify(from)},${JSON.stringify(to)}))`;
+  const original = "renderPreview(intensity: number, maxDim = 512)";
+  const broken = "renderPreview(intensity: number, maxDim = 512, quality = 1)";
+  const BREAK = edit(original, broken);
+  const FIX = edit(broken, original);
+
+  const broke = await runWithLock(root, lock.id, [NODE, "-e", BREAK], { stdio: "pipe" });
+  assert.equal(broke.exitCode, 1, "a signature change fails the attempt");
+  assert.ok(broke.record.violations.some((v) => v.includes("signature changed")), broke.record.violations.join("; "));
+
+  const retry = await runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" });
+  assert.equal(retry.exitCode, 1, "a no-op retry is judged against the SAME task baseline");
+  assert.ok(
+    retry.record.violations.some((v) => v.includes("signature changed")),
+    retry.record.violations.join("; "),
+  );
+  assert.ok(
+    retry.record.changed.some((c) => c.path === "src/pipeline.ts"),
+    "the earlier attempt's change is still in the delta",
+  );
+
+  const fixed = await runWithLock(root, lock.id, [NODE, "-e", FIX], { stdio: "pipe" });
+  assert.equal(fixed.exitCode, 0, fixed.record.violations.join("; "));
+});
+
+test("run: rebase moves the task baseline explicitly; the old reference is archived", async () => {
+  const { root, lock } = await setup((l) => {
+    l.keep = [{ kind: "api-unchanged", symbols: ["src/pipeline.ts#ImagePipeline.renderPreview"] }];
+    l.budget = { files: ["src/pipeline.ts"], symbols: [], maxFiles: 2, maxLines: 400 };
+  });
+  const BREAK =
+    'const fs=require("fs"),p="src/pipeline.ts";' +
+    'fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("renderPreview(intensity: number, maxDim = 512)","renderPreview(intensity: number, maxDim = 512, quality = 1)"))';
+  await runWithLock(root, lock.id, [NODE, "-e", BREAK], { stdio: "pipe" });
+  assert.ok(loadTaskBaseline(root, lock.id), "the first attempt captured the task baseline");
+
+  const res = await rebaseTaskBaseline(root, lock);
+  assert.ok(res.archived, "the previous reference is archived, not lost");
+  assert.ok(fs.existsSync(res.path));
+  const noop = await runWithLock(root, lock.id, [NODE, "-e", "1"], { stdio: "pipe" });
+  assert.equal(noop.exitCode, 0, "after the explicit rebase the present tree is the accepted reference");
 });

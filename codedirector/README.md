@@ -261,7 +261,7 @@ A Lock **rejects** clauses it cannot even in principle check, unless
 `tests-pass:<glob>`, `output-unchanged:<command>`, `no-new-dependency`,
 `custom:<text>`.
 
-### `cdir lock ls` · `cdir lock show <id>` · `cdir lock check <id>` · `cdir lock activate <id>`
+### `cdir lock ls` · `cdir lock show <id>` · `cdir lock check <id>` · `cdir lock activate <id>` · `cdir lock rebase <id> --accept-current`
 
 `show` renders the Lock with per-clause checkability markers (✓ machine-checkable / ? human judges).
 `check` validates against the current index — budget files exist, symbols
@@ -270,14 +270,22 @@ on invalid. `activate` moves draft → active only when check passes; it is also
 the re-approval of an active, verified or failed Lock whose content changed
 (it re-seals). An abandoned Lock cannot be activated.
 
-### `cdir checkpoint` · `cdir undo [--force] [--keep-untracked]`
+`rebase --accept-current` moves the lock's **task baseline** to the present
+tree — the explicit revision, for a legacy lock or a reference that must
+change. The replaced baseline is archived beside the new one; nothing moves
+silently, and re-running never moves it.
+
+### `cdir checkpoint [<lock-id>]` · `cdir undo [--force] [--keep-untracked]`
 
 Git-native safety net (blueprint §19): `checkpoint` records a lightweight
 tag `cdir/ckpt-<timestamp>` at HEAD plus a byte snapshot of dirty /
-skip-worktree files under `.codedirector/ckpt-blobs/`. `undo` resets to the
-tagged ref and restores that snapshot — including a dirty tree as of
-checkpoint time (`--force`) and skip-worktree files that `git reset --hard`
-would otherwise leave. Honest limit: git cannot undo external side effects.
+skip-worktree files under `.codedirector/ckpt-blobs/`. With a lock id —
+`cdir checkpoint IL-XXXX` — it also captures that lock's **task baseline**
+once (the pre-change reference every later attempt is judged against; see
+`cdir run`). `undo` resets to the tagged ref and restores that snapshot —
+including a dirty tree as of checkpoint time (`--force`) and skip-worktree
+files that `git reset --hard` would otherwise leave. Honest limit: git
+cannot undo external side effects.
 
 **⚠ Behavior change from v0.1.0:** untracked files created *after* the
 checkpoint are **deleted** by undo (v0.1.0 left them in place). The files
@@ -289,18 +297,21 @@ is shown again in the undo output. Pass `--keep-untracked` to preserve them.
 Verified execution inside an active Lock:
 
 1. auto-checkpoint (git tag) before anything;
-2. refresh the index and capture the KEEP baseline — signature hashes of
-   every `api-unchanged` symbol, dependency fingerprints, **stdout+stderr
-   hashes of every `output-unchanged` command** (probes are isolated so they
-   cannot mutate the tree), plus HEAD / dirty hashes / skip-worktree state —
-   to `.codedirector/baselines/` (gitignored);
+2. resolve the lock's **task baseline** — one immutable reference per lock
+   (signature hashes of every `api-unchanged` symbol, dependency
+   fingerprints, **stdout+stderr hashes of every `output-unchanged`
+   command** — probes are isolated so they cannot mutate the tree — plus
+   HEAD / dirty hashes / skip-worktree state) at
+   `.codedirector/baselines/<id>-task.json`. Captured by the first run (or
+   `cdir checkpoint IL-XXXX`); a retry REUSES it, so a broken promise cannot
+   be laundered by running again;
 3. run the command (spawned, stdio inherited);
 4. classify every file the command actually touched against the Lock — delta
-   vs the pre-run baseline, not vs current HEAD, so `git commit`, `git mv`,
+   vs the task baseline, not vs current HEAD, so `git commit`, `git mv`,
    and skip-worktree cannot hide a deny. Writes outside `--root` are
-   out-of-budget. Pre-existing dirt is not billed to the command. Denied or
-   out-of-budget changes are violations; nothing is auto-reverted (`cdir undo`
-   is offered).
+   out-of-budget. Pre-existing dirt is not billed to the command — but an
+   earlier attempt's change IS. Denied or out-of-budget changes are
+   violations; nothing is auto-reverted (`cdir undo` is offered).
    `--allow-expand` is the logged override for scope growth only — a broken
    KEEP clause still fails;
 5. **run the verification ladder** (see below) against the baseline;
@@ -356,19 +367,17 @@ permissions — a fully sandboxed verifier is a later phase.
 
 ### `cdir verify <lock-id> [--test-timeout MS]`
 
-Re-runs the ladder without re-running the change command: latest baseline for
-the lock, fresh index, all rungs. Without any baseline, structural and output
+Re-runs the ladder without re-running the change command: the lock's **task
+baseline**, fresh index, all rungs. It also recomputes the **scope delta**
+from the current tree against that baseline — a file changed after the run
+is part of the receipt. Without a task baseline, structural and output
 checks report Unchecked ("no pre-change baseline") while tests and typecheck
-still run. Updates the lock status; exit 0 only when verified.
+still run, and the verdict is **incomplete** — never verified. Updates the
+lock status; exit 0 only when verified.
 
-It also re-**judges**. Every path the run recorded is re-classified against
-the Lock as it stands now, and both ceilings are re-read from it — so raising
-`maxLines` after a refusal and re-verifying gives a truthful new verdict
-instead of reprinting the old one. It convicts as readily as it acquits: a
-`deny` added after a clean run turns the verdict to failed. The measured line
-count is carried over rather than re-derived, since it belongs to the
-baseline the run made. Editing a Lock breaks its seal, so re-approval
-(`cdir lock check` then `cdir lock activate`) is still a human act.
+Editing a Lock breaks its seal, so re-approval (`cdir lock check` then
+`cdir lock activate`) is still a human act; moving the task baseline is
+`cdir lock rebase --accept-current`, an explicit act of its own.
 
 `--test-timeout MS` (on both `run` and `verify`) sets the timeout for
 `tests-pass` runs and the lock's `verifyCommand`, overriding the lock's
@@ -388,15 +397,21 @@ Per-edit enforcement covers file membership only; `maxFiles` / `maxLines`
 stay with the run-time classifier, and the hook cannot see inside shell
 commands — `cdir run` verification remains the hard floor.
 
-### `cdir report <lock-id> [--format=terminal|md|json]`
+### `cdir report <lock-id> [--format=terminal|md|json] [--attempt N]`
 
-Renders the **Change Report** — the product's signature artifact. It opens
-with a plain-language summary generated from the same data as the detail
-("Done — verified. Only src/preview.ts changed, within the agreed scope. 2
-promises held (checked). 1 thing needs your judgment…" — or, on failure,
-"Blocked: src/export.ts was outside the agreed scope. Nothing was reverted —
-run `cdir undo` to restore."). The summary never says "verified" when
-violations exist; the detail follows underneath:
+Renders the **Change Report** — the product's signature artifact. It judges
+the latest attempt against the current tree: the scope delta from the task
+baseline is recomputed (a post-run edit is not invisible), the ladder re-runs
+against the task baseline, and the recorded command outcome is kept. The
+verdict is `verified`, `failed`, or `incomplete` — the last when there is no
+task baseline to judge scope against, and it is never written as verified.
+`--attempt N` renders a recorded attempt as it was, labeled with its id. It
+opens with a plain-language summary generated from the same data as the
+detail ("Done — verified. Only src/preview.ts changed, within the agreed
+scope. 2 promises held (checked). 1 thing needs your judgment…" — or, on
+failure, "Blocked: src/export.ts was outside the agreed scope. Nothing was
+reverted — run `cdir undo` to restore."). The summary never says "verified"
+when violations exist; the detail follows underneath:
 
 - lock id + the original utterance, verbatim and immutable;
 - changed files with classification (in-budget / out-of-budget / denied) and

@@ -417,3 +417,28 @@ shared seals.json that concurrent sessions rewrote wholesale.
   atomic round-trip; no temp leftovers; two same-second baselines);
   `test/lock.test.ts` (four parallel processes allocate twelve distinct
   ids); `test/run.test.ts` (a lost per-record seal refuses fail-closed).
+
+### Retries re-baselined a broken promise; receipts could go stale
+
+**Status: landed (IL-0031).** Every `cdir run` captured a fresh KEEP
+baseline, so a failed attempt followed by a no-op re-run reported the broken
+signature "unchanged" — the break became the accepted truth. And `report`
+re-judged only the run's recorded file list, so a direct edit after the run
+was invisible to the receipt; the recommended checkpoint → edit → verify
+flow captured no baseline at all and reported verified with an empty change
+list.
+
+- **Fix:** one immutable **task baseline** per lock
+  (`.codedirector/baselines/<id>-task.json`), captured once — by the first
+  run or `cdir checkpoint IL-XXXX` — and reused by every attempt (judged
+  cumulatively). Legacy locks adopt their oldest recorded baseline, never
+  the present tree. `cdir lock rebase --accept-current` is the explicit
+  revision (the old reference is archived). `cdir verify`/`report`
+  recompute the full scope delta against the task baseline; `report
+  --attempt N` renders a recorded attempt, labeled. Without a task baseline
+  the verdict is **incomplete** — never verified.
+- **Tests:** `test/run.test.ts` (a retry cannot re-baseline a broken
+  signature; rebase moves the reference explicitly); `test/report.test.ts`
+  (a direct post-run edit is caught; attempt view labeled; missing baseline
+  = incomplete); `test/checkpoint.test.ts` (checkpoint with a lock captures
+  the task baseline once); eval case `21-retry-no-rebaseline`.

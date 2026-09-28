@@ -28,7 +28,15 @@ import { VibeCheck } from "../lock/types";
 import { languageOf } from "../lock/draft";
 import { loadLock, saveLock } from "../lock/store";
 import { BudgetStats, RunRecord, runsDir } from "../run/run";
-import { ClassifiedChange, rejudgeRun } from "../run/classify";
+import {
+  changedFiles,
+  changedLineCount,
+  ClassifiedChange,
+  classifyChanges,
+  rejudgeRun,
+  scopeViolations,
+} from "../run/classify";
+import { loadTaskBaseline, taskBaselinePath } from "../run/baseline";
 import { verifyLock, VerifyOptions } from "../verify/verify";
 import {
   countByClass,
@@ -51,8 +59,14 @@ export interface Finding {
 export interface ChangeReport {
   schemaVersion: 1;
   lockId: string;
-  /** verified = no violations and the command succeeded · failed otherwise. */
-  verdict: "verified" | "failed";
+  /** verified = nothing violated · incomplete = judged, but the scope reference is missing · failed otherwise. */
+  verdict: "verified" | "failed" | "incomplete";
+  /** Which snapshot this report describes: the current tree, or a recorded attempt. */
+  view: "current" | "attempt";
+  /** The attempt this report is bound to, when one is recorded. */
+  attemptId?: string;
+  /** Why the verdict is incomplete (always set when it is). */
+  incompleteReason?: string;
   /** The user's exact words — verbatim, immutable. */
   utterance: string;
   goal: string;
@@ -60,7 +74,11 @@ export interface ChangeReport {
   command?: string[];
   /** Repo-relative path of the run record this report summarizes. */
   runRecordPath?: string;
+  /** Repo-relative path of the reference the scope delta is measured against. */
   baselinePath?: string;
+  /** Repo-relative task baseline (the immutable per-lock reference). */
+  taskBaselinePath?: string;
+  taskBaselineCapturedAt?: string;
   changed: ClassifiedChange[];
   budget?: BudgetStats;
   /** All checked claims, artifact-rule already enforced. */
@@ -77,23 +95,32 @@ export interface BuildReportOptions extends VerifyOptions {
   /** Precomputed run record — otherwise the latest record for the lock. */
   run?: RunRecord;
   runRecordPath?: string;
+  /** Render a recorded attempt (1-based, oldest first) instead of the current tree. */
+  attempt?: number;
   /** Prebuilt index for findings — otherwise built incrementally. */
   index?: RepoIndex;
   /** Compute incidental findings (default true). */
   findings?: boolean;
 }
 
-/** Latest run record for a lock (by filename, which embeds the timestamp). */
-export function latestRunRecord(rootDir: string, lockId: string): { record: RunRecord; recordPath: string } | null {
+/** All run records for a lock, oldest first (the filename embeds the attempt id). */
+export function listRunRecords(rootDir: string, lockId: string): { record: RunRecord; recordPath: string }[] {
   const dir = runsDir(rootDir);
-  if (!fs.existsSync(dir)) return null;
-  const matches = fs
+  if (!fs.existsSync(dir)) return [];
+  return fs
     .readdirSync(dir)
     .filter((f) => f.startsWith(`${lockId}-`) && f.endsWith(".json"))
-    .sort();
-  if (matches.length === 0) return null;
-  const p = path.join(dir, matches[matches.length - 1]);
-  return { record: JSON.parse(fs.readFileSync(p, "utf8")) as RunRecord, recordPath: p };
+    .sort()
+    .map((f) => {
+      const p = path.join(dir, f);
+      return { record: JSON.parse(fs.readFileSync(p, "utf8")) as RunRecord, recordPath: p };
+    });
+}
+
+/** Latest run record for a lock, or null when none was recorded. */
+export function latestRunRecord(rootDir: string, lockId: string): { record: RunRecord; recordPath: string } | null {
+  const all = listRunRecords(rootDir, lockId);
+  return all.length > 0 ? all[all.length - 1] : null;
 }
 
 /**
@@ -172,52 +199,103 @@ export async function buildReport(
   const lock = loadLock(rootDir, lockId);
   if (!lock) throw new ReportError(`no such lock: ${lockId} (see \`cdir lock ls\`)`);
 
-  const latest = opts.run ? { record: opts.run, recordPath: opts.runRecordPath } : latestRunRecord(rootDir, lockId);
-  // When re-verifying standalone, verify against the run's own baseline and
-  // enforce its capture-time hash (baseline tamper detection).
+  const taskBaselineFile = taskBaselinePath(rootDir, lockId);
+  const taskBaseline = loadTaskBaseline(rootDir, lockId);
+
+  // Which attempt the report is bound to: the explicit one, the live run, or
+  // the latest recorded. `--attempt N` renders that attempt as recorded;
+  // everything else measures the CURRENT tree and says so.
+  const view: ChangeReport["view"] = opts.attempt !== undefined && !opts.run ? "attempt" : "current";
+  let latest: { record: RunRecord; recordPath: string } | null = null;
+  if (opts.run) {
+    latest = { record: opts.run, recordPath: opts.runRecordPath ?? "" };
+  } else if (opts.attempt !== undefined) {
+    const all = listRunRecords(rootDir, lockId);
+    const chosen = all[opts.attempt - 1];
+    if (!chosen) {
+      throw new ReportError(
+        `no attempt ${opts.attempt} for ${lockId} (${all.length} recorded${all.length === 1 ? "" : "s"})`,
+      );
+    }
+    latest = chosen;
+  } else {
+    latest = latestRunRecord(rootDir, lockId);
+  }
+  const run = latest?.record;
+
+  // When re-verifying standalone, hold the task baseline to its capture-time
+  // hash (baseline tamper detection).
   const integrity =
-    !opts.verification && latest?.record.baselineSha256 && latest.record.baselinePath
+    !opts.verification && run?.baselineSha256 && run.baselinePath
       ? {
-          baselinePath: path.join(rootDir, latest.record.baselinePath),
-          expectedBaselineSha256: latest.record.baselineSha256,
+          baselinePath: path.join(rootDir, run.baselinePath),
+          expectedBaselineSha256: run.baselineSha256,
         }
       : {};
   const verification = opts.verification ?? (await verifyLock(rootDir, lockId, { ...integrity, ...opts }));
-  const run = latest?.record;
   const runRecordPath = latest?.recordPath
     ? path.isAbsolute(latest.recordPath)
       ? path.relative(rootDir, latest.recordPath).split(path.sep).join("/")
       : latest.recordPath
     : undefined;
 
-  // THE REJUDGE. A standalone verify or report judges the recorded change
-  // against the Lock as it stands now, rather than reprinting the verdict
-  // stored when the command ran. Without this, raising a ceiling and
-  // re-verifying still reported the ceiling the run was refused by, and the
-  // only remedy was reverting the work and applying it again.
-  //
-  // Never on a live run (`opts.run`): that classified against this same Lock
-  // moments ago, and re-deriving it would say the same thing more slowly.
-  const rejudged = !opts.run && run ? rejudgeRun(run, lock) : undefined;
+  // The scope half of the verdict. A live run already classified against the
+  // task baseline; an attempt view re-judges the recorded paths against the
+  // Lock as it stands now; the default view recomputes the FULL delta of the
+  // current tree against the task baseline — a change made after the run is
+  // not invisible to the receipt.
+  let changed: ClassifiedChange[] = [];
+  let budget: BudgetStats | undefined;
+  let scope: string[] = [];
+  if (view === "attempt" && run) {
+    const rejudged = rejudgeRun(run, lock);
+    changed = rejudged.changed;
+    budget = rejudged.budget;
+    scope = rejudged.violations;
+  } else if (opts.run && run) {
+    changed = run.changed;
+    budget = run.budget;
+    scope = run.allowExpand ? [] : scopeViolations(run.changed, run.budget);
+  } else if (taskBaseline) {
+    changed = classifyChanges(rootDir, lock, taskBaseline);
+    const untracked = changedFiles(rootDir, taskBaseline)
+      .filter((c) => c.status === "??" || c.status === "!!")
+      .map((c) => c.path);
+    const linesChanged = changedLineCount(rootDir, untracked, taskBaseline);
+    budget = {
+      filesChanged: changed.length,
+      linesChanged,
+      maxFiles: lock.budget.maxFiles,
+      maxLines: lock.budget.maxLines,
+    };
+    // A logged --allow-expand on the latest attempt is the human's recorded
+    // acceptance of scope growth; the fresh view carries it over.
+    scope = run?.allowExpand ? [] : scopeViolations(changed, budget);
+  }
 
   const items = enforceArtifactRule(verification.items);
 
   let findings: Finding[] = [];
-  if (opts.findings !== false && run && run.changed.length > 0) {
+  if (opts.findings !== false && changed.length > 0) {
     const domains = opts.domains ?? defaultDomains();
     const index = opts.index ?? (await buildIndex(rootDir, { domains })).index;
-    findings = computeFindings(index, run.changed, domains);
+    findings = computeFindings(index, changed, domains);
   }
   // Always named, whatever else is: files were moved aside.
   findings.push(...(verification.putBack ?? []).map(putBackFinding));
 
-  const violations = rejudged
-    ? [...rejudged.violations, ...verification.violations]
-    : run
-      ? run.violations
-      : verification.violations;
+  const incompleteReason =
+    view === "current" && !taskBaseline
+      ? `no task baseline for ${lockId} — scope could not be judged; run \`cdir run\` or \`cdir checkpoint ${lockId}\` first`
+      : undefined;
+
+  const violations = [...scope, ...verification.violations];
   const verdict: ChangeReport["verdict"] =
-    violations.length > 0 || (run !== undefined && run.exitCode !== 0) ? "failed" : "verified";
+    violations.length > 0 || (run !== undefined && run.exitCode !== 0)
+      ? "failed"
+      : incompleteReason !== undefined
+        ? "incomplete"
+        : "verified";
 
   const counts = countByClass(items);
   counts.asserted += findings.length;
@@ -226,14 +304,21 @@ export async function buildReport(
     schemaVersion: 1,
     lockId: lock.id,
     verdict,
+    view,
     utterance: lock.utterance,
     goal: lock.goal,
     generatedAt: new Date().toISOString(),
     ...(run ? { command: run.command } : {}),
+    ...(run?.attemptId ? { attemptId: run.attemptId } : {}),
     ...(runRecordPath !== undefined ? { runRecordPath } : {}),
+    ...(taskBaseline
+      ? { taskBaselinePath: path.relative(rootDir, taskBaselineFile).split(path.sep).join("/") }
+      : {}),
+    ...(taskBaseline ? { taskBaselineCapturedAt: taskBaseline.capturedAt } : {}),
     ...(verification.baselinePath !== undefined ? { baselinePath: verification.baselinePath } : {}),
-    changed: rejudged?.changed ?? run?.changed ?? [],
-    ...(rejudged ? { budget: rejudged.budget } : run ? { budget: run.budget } : {}),
+    changed,
+    ...(budget ? { budget } : {}),
+    ...(incompleteReason !== undefined ? { incompleteReason } : {}),
     items,
     findings,
     violations,

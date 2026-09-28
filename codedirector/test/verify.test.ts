@@ -15,7 +15,7 @@ import { draftLock } from "../src/lock/draft";
 import { loadLock, saveLock } from "../src/lock/store";
 import { sealLock } from "../src/lock/seal";
 import { VibeCheck, KeepClause } from "../src/lock/types";
-import { captureBaseline, saveBaseline, latestBaselinePath, loadBaseline } from "../src/run/baseline";
+import { captureBaseline, saveBaseline, taskBaselinePath, loadBaseline } from "../src/run/baseline";
 import { runWithLock } from "../src/run/run";
 import { verifyLock, verifyWithBaseline } from "../src/verify/verify";
 import { VerificationItem } from "../src/verify/types";
@@ -432,12 +432,12 @@ test("verify: no tsconfig surfaces typecheck as Unchecked, not omitted", async (
   assert.ok(tc!.reason?.includes("no tsconfig.json"));
 });
 
-test("verify: standalone verifyLock uses the latest baseline", async () => {
+test("verify: standalone verifyLock uses the task baseline", async () => {
   const { root, lock } = await setup([{ kind: "api-unchanged", symbols: ["src/math.js#add"] }]);
   await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
-  const p = latestBaselinePath(root, lock.id);
-  assert.ok(p, "baseline exists after run");
-  const baseline = loadBaseline(p!);
+  const p = taskBaselinePath(root, lock.id);
+  assert.ok(fs.existsSync(p), "the task baseline exists after the first run");
+  const baseline = loadBaseline(p);
   assert.ok(baseline.signatures["src/math.js#add"], "signature pinned in baseline");
 
   const report = await verifyLock(root, lock.id);

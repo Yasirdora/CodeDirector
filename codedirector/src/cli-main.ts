@@ -37,6 +37,8 @@ import { checkLock } from "./lock/check";
 import { formatLock, formatLockLine } from "./lock/show";
 import { createCheckpoint, latestCheckpoint, undo, CheckpointError } from "./checkpoint";
 import { formatRunReport, runWithLock, RunError } from "./run/run";
+import { ensureTaskBaseline } from "./run/run";
+import { rebaseTaskBaseline } from "./run/baseline";
 import { VerifyError } from "./verify/verify";
 import { buildReport, finalizeLockStatus, ReportError } from "./report/report";
 import { formatReport, formatReportJson, formatReportMarkdown } from "./report/format";
@@ -347,8 +349,30 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
       return 0;
     }
 
+    case "rebase": {
+      const id = positional[1];
+      if (!id) fail("lock rebase requires a lock id, e.g. cdir lock rebase IL-0001 --accept-current", 2);
+      if (!flags.has("accept-current")) {
+        fail(
+          `lock rebase moves the task baseline to the PRESENT tree. Review \`cdir report ${id}\` ` +
+            `first, then pass --accept-current to confirm that reading.`,
+          2,
+        );
+      }
+      const lock = loadLock(root, id);
+      if (!lock) fail(`no such lock: ${id} (see \`cdir lock ls\`)`, 1);
+      const res = await rebaseTaskBaseline(root, lock);
+      process.stdout.write(
+        `task baseline for ${id} moved to the present tree\n` +
+          `  new:      ${path.relative(root, res.path)}\n` +
+          (res.archived ? `  archived: ${path.relative(root, res.archived)}\n` : `  (no previous baseline existed)\n`) +
+          `  captured: ${res.capturedAt}\n`,
+      );
+      return 0;
+    }
+
     default:
-      fail(`lock: unknown subcommand "${sub ?? ""}" (new · ls · show · check · activate)`, 2);
+      fail(`lock: unknown subcommand "${sub ?? ""}" (new · ls · show · check · activate · rebase)`, 2);
   }
 }
 
@@ -413,10 +437,32 @@ async function main(): Promise<number> {
     case "checkpoint": {
       try {
         const ckpt = createCheckpoint(root);
-        process.stdout.write(
-          `checkpoint ${ckpt.id}\n  tag:   ${ckpt.tag}\n  ref:   ${ckpt.ref.slice(0, 12)}\n` +
-            `  tree:  ${ckpt.dirty ? "dirty (uncommitted changes present — undo will need --force)" : "clean"}\n`,
-        );
+        const lines = [
+          `checkpoint ${ckpt.id}`,
+          `  tag:   ${ckpt.tag}`,
+          `  ref:   ${ckpt.ref.slice(0, 12)}`,
+          `  tree:  ${ckpt.dirty ? "dirty (uncommitted changes present — undo will need --force)" : "clean"}`,
+        ];
+        // `cdir checkpoint IL-XXXX` also captures the lock's task baseline —
+        // the pre-change reference for a task done by direct edits.
+        const lockArg = positional[0];
+        if (lockArg) {
+          const lock = loadLock(root, lockArg);
+          if (!lock) fail(`no such lock: ${lockArg} (see \`cdir lock ls\`)`, 1);
+          if (lock.status === "draft") {
+            fail(
+              `lock ${lockArg} is a draft — approve it first (\`lock check\` + \`lock activate\`); ` +
+                `the task baseline is captured for an approved contract`,
+              1,
+            );
+          }
+          const task = await ensureTaskBaseline(root, lock, ckpt.tag);
+          lines.push(
+            `  task baseline: .codedirector/baselines/${lockArg}-task.json (${task.source})` +
+              (task.source === "existing" ? " — captured once; a retry reuses it" : ""),
+          );
+        }
+        process.stdout.write(lines.join("\n") + "\n");
         return 0;
       } catch (e) {
         if (e instanceof CheckpointError) fail(e.message);
@@ -526,7 +572,8 @@ async function main(): Promise<number> {
       const lockId = positional[0];
       if (!lockId) fail("report requires a lock id, e.g. cdir report IL-0001", 2);
       try {
-        const report = await buildReport(root, lockId);
+        const attempt = flags.has("attempt") ? intFlag(flags, "attempt", 1) : undefined;
+        const report = await buildReport(root, lockId, attempt !== undefined ? { attempt } : {});
         finalizeLockStatus(root, report);
         const fmt = flagStr(flags, "format") ?? "terminal";
         process.stdout.write(renderReport(report, fmt) + "\n");

@@ -39,7 +39,7 @@ import { loadLock } from "../lock/store";
 import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
-import { Baseline, baselineFileHash, latestBaselinePath, loadBaseline } from "../run/baseline";
+import { Baseline, baselineFileHash, loadBaseline, taskBaselinePath } from "../run/baseline";
 import { runArgvProbe, runShellProbe } from "../run/probe";
 import { runIsolated } from "../run/tree";
 import { diagnosticsExcerpt, newDiagnostics, probeDiagnostics } from "../run/diagnostics";
@@ -521,10 +521,11 @@ export function verifyWithBaseline(
 }
 
 /**
- * `cdir verify <lock-id>`: re-index, load the latest baseline for the lock
- * (or the one passed explicitly), and run the ladder. Without any baseline,
+ * `cdir verify <lock-id>`: re-index, load the lock's TASK baseline (or the
+ * one passed explicitly), and run the ladder. Without a task baseline,
  * structural and output checks report Unchecked — "no pre-change baseline" —
- * while tests and typecheck still run (they are self-contained).
+ * while tests and typecheck still run (they are self-contained); the report
+ * that consumes this result says incomplete, never verified.
  */
 export async function verifyLock(rootDir: string, lockId: string, opts: VerifyOptions = {}): Promise<VerificationReport> {
   const lock = loadLock(rootDir, lockId);
@@ -533,7 +534,8 @@ export async function verifyLock(rootDir: string, lockId: string, opts: VerifyOp
   // grade the agent's own amendment — refuse until the user re-approves.
   const seal = sealViolation(rootDir, lock);
   if (seal) throw new VerifyError(seal);
-  const baselinePath = opts.baselinePath ?? latestBaselinePath(rootDir, lockId) ?? undefined;
+  const taskBaselineFile = taskBaselinePath(rootDir, lockId);
+  const baselinePath = opts.baselinePath ?? (fs.existsSync(taskBaselineFile) ? taskBaselineFile : undefined);
   let baseline: Baseline | null = null;
   if (baselinePath) {
     try {

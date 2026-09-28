@@ -14,6 +14,7 @@ import { buildGraph } from "../core/graph";
 import { hashContent } from "../core/builder";
 import { indexDir, stableStringify } from "../core/store";
 import { newRecordId, writeFileAtomic } from "../core/ids";
+import { buildIndex } from "../core/builder";
 import { workTreeStatusPorcelain } from "../checkpoint";
 import { VibeCheck } from "../lock/types";
 import { signatureHash } from "../lock/check";
@@ -277,8 +278,10 @@ export function loadBaseline(baselinePath: string): Baseline {
 }
 
 /**
- * Latest baseline file for a lock (by filename, whose leading stamp sorts in
- * capture order), or null when the lock has never been run/baselined.
+ * Latest per-run baseline snapshot for a lock (by filename, whose leading
+ * stamp sorts in capture order), or null when the lock has none. The task
+ * baseline is a separate file (`<id>-task.json`) and its archives
+ * (`<id>-task-archive-*`) are excluded here.
  */
 export function latestBaselinePath(rootDir: string, lockId: string): string | null {
   const dir = baselinesDir(rootDir);
@@ -286,6 +289,114 @@ export function latestBaselinePath(rootDir: string, lockId: string): string | nu
   const matches = fs
     .readdirSync(dir)
     .filter((f) => f.startsWith(`${lockId}-`) && f.endsWith(".json"))
+    .filter((f) => f !== taskBaselineFileName(lockId) && !f.startsWith(`${lockId}-task-archive-`))
     .sort();
   return matches.length > 0 ? path.join(dir, matches[matches.length - 1]) : null;
+}
+
+// ---------------------------------------------------------------------
+// The task baseline (IL-0031)
+//
+// One immutable reference per lock, captured at task start: the first
+// `cdir run`, or `cdir checkpoint IL-XXXX` for work done by direct edits.
+// Every attempt is judged cumulatively against it — a retry reuses the
+// reference instead of minting a fresh one, which is what let a broken
+// promise become the accepted baseline before this existed. `cdir lock
+// rebase` moves the reference explicitly, archiving what it replaces.
+
+export function taskBaselineFileName(lockId: string): string {
+  return `${lockId}-task.json`;
+}
+
+export function taskBaselinePath(rootDir: string, lockId: string): string {
+  return path.join(baselinesDir(rootDir), taskBaselineFileName(lockId));
+}
+
+/** The task baseline for a lock, or null when none was captured (or it is unreadable). */
+export function loadTaskBaseline(rootDir: string, lockId: string): Baseline | null {
+  try {
+    return loadBaseline(taskBaselinePath(rootDir, lockId));
+  } catch {
+    return null;
+  }
+}
+
+function taskTempName(p: string): string {
+  return path.join(
+    path.dirname(p),
+    `.${path.basename(p)}.tmp-${process.pid.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+}
+
+/**
+ * Write the task baseline if it does not exist yet. Atomic (temp + link) and
+ * exclusive (link fails on an existing target), so two sessions racing to
+ * start the same task cannot mint two references. Returns the path and
+ * whether this call created it.
+ */
+export function saveTaskBaseline(rootDir: string, baseline: Baseline): { path: string; created: boolean } {
+  fs.mkdirSync(baselinesDir(rootDir), { recursive: true });
+  const p = taskBaselinePath(rootDir, baseline.lockId);
+  const tmp = taskTempName(p);
+  fs.writeFileSync(tmp, stableStringify(baseline));
+  try {
+    fs.linkSync(tmp, p);
+    return { path: p, created: true };
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "EEXIST") return { path: p, created: false };
+    throw e;
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+}
+
+/**
+ * A lock that predates the task baseline adopts its OLDEST recorded per-run
+ * baseline — the tree as it stood before the first attempt — rather than
+ * silently accepting the present tree. Null when there is nothing to adopt.
+ */
+export function deriveTaskBaselineFromLegacy(
+  rootDir: string,
+  lockId: string,
+): { baseline: Baseline; source: string } | null {
+  const dir = baselinesDir(rootDir);
+  if (!fs.existsSync(dir)) return null;
+  const candidates = fs
+    .readdirSync(dir)
+    .filter((f) => f.startsWith(`${lockId}-`) && f.endsWith(".json"))
+    .filter((f) => f !== taskBaselineFileName(lockId) && !f.startsWith(`${lockId}-task-archive-`))
+    .sort();
+  if (candidates.length === 0) return null;
+  const source = candidates[0];
+  try {
+    const adopted = loadBaseline(path.join(dir, source));
+    saveTaskBaseline(rootDir, adopted);
+    return { baseline: loadTaskBaseline(rootDir, lockId) ?? adopted, source };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Move the task baseline to the present tree — the explicit revision. The
+ * replaced reference is archived beside it (never lost), and this is the
+ * only path that moves it: retries reuse, rebases move.
+ */
+export async function rebaseTaskBaseline(
+  rootDir: string,
+  lock: VibeCheck,
+  opts: BaselineOptions = {},
+): Promise<{ path: string; archived?: string; capturedAt: string }> {
+  const existing = loadTaskBaseline(rootDir, lock.id);
+  const domains = opts.domains ?? defaultDomains();
+  const { index } = await buildIndex(rootDir, { domains });
+  const fresh = captureBaseline(rootDir, lock, index, undefined, opts);
+  let archived: string | undefined;
+  if (existing) {
+    const dir = baselinesDir(rootDir);
+    archived = path.join(dir, `${lock.id}-task-archive-${existing.stamp ?? baselineStamp(existing.capturedAt)}.json`);
+    fs.renameSync(taskBaselinePath(rootDir, lock.id), archived);
+  }
+  saveTaskBaseline(rootDir, fresh);
+  return { path: taskBaselinePath(rootDir, lock.id), ...(archived ? { archived } : {}), capturedAt: fresh.capturedAt };
 }
