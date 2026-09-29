@@ -1,0 +1,119 @@
+{
+  "accept": [
+    "A 65-second verification and a slow locked command leave ping and tools/list responsive within 500ms on an otherwise idle local machine; independent-root requests also complete before the long work ends.",
+    "With a progress token, send monotonic progress at least every 5 seconds while pending; a client using timeout=60000 and resetTimeoutOnProgress=true receives the final result after 65 seconds. Without a token, send no progress notification.",
+    "Offload the whole run_locked path including baseline capture and final report construction, and standalone report verification. Preserve final content and isError for success, violation, command failure and incomplete checks.",
+    "While a job owns a canonical repository root, reject competing same-root tools promptly as busy, including undo, activate, amend, draft, report and another run; release ownership on completion or worker failure. Resolve aliases and nested roots to the shared Git worktree identity.",
+    "Client cancellation or timeout does not silently retry, undo, kill a worker mid-probe, or release its repository guard: allow the job to finish and retain its record for report recovery. Graceful disconnect waits for active work; abrupt process death recovery is outside this lock.",
+    "Worker startup/error/exit failures return an error without claiming verified; stdout remains MCP-only; Node startup flags including --liftoff-only are inherited; flight recorder retains one completed entry per tool call.",
+    "Existing probe process-group timeout, cleanup, output hashing, seal refusal, task-baseline retry and verdict tests stay green; npm test and npm run eval pass.",
+    "No activation before the user says yes; audit before a commit, explicit user commit instruction still required; never push. Help-book sandboxing is a separate future Vibe Check and lock."
+  ],
+  "baselinePath": ".codedirector/baselines/IL-0035-task.json",
+  "budget": {
+    "filesChanged": 6,
+    "linesChanged": 644,
+    "maxFiles": 7,
+    "maxLines": 900
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/ROADMAP.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/jobs.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/server.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/worker.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/mcp-responsive.test.ts",
+      "status": "??"
+    }
+  ],
+  "counts": {
+    "asserted": 1,
+    "measured": 1,
+    "proven": 3,
+    "unchecked": 1
+  },
+  "findings": [
+    {
+      "evidenceClass": "asserted",
+      "text": "src/mcp/worker.ts changed in-budget, but no test file references its symbols — behavioral coverage unknown"
+    }
+  ],
+  "generatedAt": "2026-09-29T05:10:25.647Z",
+  "goal": "Keep MCP responsive throughout locked commands and verification; provide token-scoped progress and preserve the final verified/failed/incomplete report semantics.",
+  "items": [
+    {
+      "artifactRef": ".codedirector/baselines/IL-0035-task.json#manifests[package-lock.json]",
+      "clauseKind": "no-new-dependency",
+      "detail": "package-lock.json unchanged",
+      "evidenceClass": "proven",
+      "source": "keep-clause",
+      "subject": "no-new-dependency · package-lock.json",
+      "verdict": "held"
+    },
+    {
+      "artifactRef": ".codedirector/baselines/IL-0035-task.json#manifests[package.json]",
+      "clauseKind": "no-new-dependency",
+      "detail": "package.json unchanged",
+      "evidenceClass": "proven",
+      "source": "keep-clause",
+      "subject": "no-new-dependency · package.json",
+      "verdict": "held"
+    },
+    {
+      "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+      "detail": "tsc --noEmit clean",
+      "evidenceClass": "proven",
+      "source": "typecheck",
+      "subject": "typecheck · tsc --noEmit",
+      "verdict": "held"
+    },
+    {
+      "artifactRef": "sh -c \"npm test && npm run eval\" → exit 0",
+      "detail": "verifyCommand passed: npm test && npm run eval",
+      "evidenceClass": "measured",
+      "source": "verify-command",
+      "subject": "verifyCommand · npm test && npm run eval",
+      "verdict": "held"
+    },
+    {
+      "clauseKind": "custom",
+      "detail": "not machine-checkable — human judges",
+      "evidenceClass": "unchecked",
+      "reason": "not machine-checkable — human judges",
+      "source": "keep-clause",
+      "subject": "custom · Preserve approval seals, immutable task baselines, scope enforcement, probe cleanup, timeout escalation, and CLI behavior.",
+      "verdict": "unchecked"
+    }
+  ],
+  "lockId": "IL-0035",
+  "schemaVersion": 1,
+  "taskBaselineCapturedAt": "2026-09-29T04:50:57.379Z",
+  "taskBaselinePath": ".codedirector/baselines/IL-0035-task.json",
+  "utterance": "long checks block the MCP server — while a long check runs, the server doesn't respond until the check finishes.",
+  "verdict": "verified",
+  "view": "current",
+  "violations": []
+}
+

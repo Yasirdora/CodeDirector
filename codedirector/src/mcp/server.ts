@@ -26,13 +26,9 @@ import { describeProfiles, getProfile, mergeDraftOptions, PROFILE_NAMES } from "
 import { checkLock } from "../lock/check";
 import { loadLock, saveLock } from "../lock/store";
 import { sealLock } from "../lock/seal";
-import { runWithLock } from "../run/run";
-import { buildReport } from "../report/report";
-import { formatReport, formatReportJson, formatReportMarkdown } from "../report/format";
 import { latestCheckpoint, undo } from "../checkpoint";
 import { recordCall, type CallOutcome } from "./log";
-
-type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
+import { runJob, WorktreeGuard, type ToolResult } from "./jobs";
 
 function ok(text: string): ToolResult {
   return { content: [{ type: "text", text }] };
@@ -463,29 +459,7 @@ const TOOLS: ToolDef[] = [
       const lockId = str(a, "lockId");
       const command = strArray(a, "command");
       const testTimeoutMs = typeof a.testTimeoutMs === "number" && a.testTimeoutMs > 0 ? a.testTimeoutMs : undefined;
-      const outcome = await runWithLock(root, lockId, command, {
-        stdio: "pipe",
-        ...(testTimeoutMs !== undefined ? { verifyOptions: { testTimeoutMs } } : {}),
-      });
-      const report = await buildReport(root, lockId, {
-        verification: outcome.record.verification,
-        run: outcome.record,
-        runRecordPath: outcome.recordPath,
-      });
-      const body = formatReport(report);
-      if (outcome.exitCode === 0) {
-        return ok(`run ${lockId} succeeded — no violations.\n\n${body}`);
-      }
-      if (report.verdict === "incomplete") {
-        return fail(
-          `run ${lockId} is NOT VERIFIED — a declared check did not run; the report names it. ` +
-            `Do not claim success; show this report to the human.\n\n${body}`,
-        );
-      }
-      return fail(
-        `run ${lockId} FAILED (exit ${outcome.exitCode}) — violations below. ` +
-          `Do not retry blindly; show this report to the human. Nothing was reverted — undo() restores the checkpoint.\n\n${body}`,
-      );
+      return runJob({ kind: "run_locked", root, lockId, command, testTimeoutMs });
     },
   },
   {
@@ -504,10 +478,7 @@ const TOOLS: ToolDef[] = [
     handler: async (root, a) => {
       const lockId = str(a, "lockId");
       const format = str(a, "format", false) || "terminal";
-      const report = await buildReport(root, lockId);
-      if (format === "md") return ok(formatReportMarkdown(report));
-      if (format === "json") return ok(formatReportJson(report));
-      return ok(formatReport(report));
+      return runJob({ kind: "report", root, lockId, format });
     },
   },
   {
@@ -550,49 +521,88 @@ export async function startMcpServer(rootDir: string): Promise<void> {
 
   // One dispatch point for every tool, which is why the flight recorder
   // lives here: a tool added later cannot forget to be recorded.
-  server.setRequestHandler(CallToolRequestSchema, async (req) => {
-    const name = req.params.name;
-    const at = new Date().toISOString();
-    const started = process.hrtime.bigint();
-    let resolved = "";
-    let outcome: CallOutcome = "ok";
-    try {
-      const tool = TOOLS.find((t) => t.name === name);
-      if (!tool) {
-        outcome = "error";
-        return fail(`unknown tool: ${name}`);
+  const guard = new WorktreeGuard();
+  const pending = new Set<Promise<ToolResult>>();
+  let closed = false;
+  server.setRequestHandler(CallToolRequestSchema, (req, extra) => {
+    const call = (async () => {
+      const name = req.params.name;
+      const at = new Date().toISOString();
+      const started = process.hrtime.bigint();
+      let resolved = "";
+      let outcome: CallOutcome = "ok";
+      let release: (() => void) | undefined;
+      let heartbeat: ReturnType<typeof setInterval> | undefined;
+      try {
+        const tool = TOOLS.find((t) => t.name === name);
+        if (!tool) {
+          outcome = "error";
+          return fail(`unknown tool: ${name}`);
+        }
+        const args = (req.params.arguments ?? {}) as Record<string, unknown>;
+        // Hoisted out of the handler call so the record knows which root the
+        // call was against even when the handler itself fails.
+        resolved = resolveRoot(root, args);
+        if (closed) throw new Error("MCP connection closed");
+        release = await guard.acquire(resolved, name);
+        if (closed) throw new Error("MCP connection closed");
+        const token = req.params._meta?.progressToken;
+        if (token !== undefined && (name === "run_locked" || name === "report")) {
+          const pulse = () => {
+            if (closed || extra.signal.aborted) { clearInterval(heartbeat); return; }
+            const elapsed = Number(process.hrtime.bigint() - started) / 1e9;
+            void extra.sendNotification({ method: "notifications/progress", params: {
+              progressToken: token, progress: elapsed,
+              message: `${name} still running (${Math.floor(elapsed)}s elapsed); completion unknown`,
+            } }).catch(() => { /* a failed notification must not abandon a run */ });
+          };
+          pulse();
+          heartbeat = setInterval(pulse, 5000);
+        }
+        const result = await tool.handler(resolved, args);
+        outcome = result.isError ? "error" : "ok";
+        return result;
+      } catch (e) {
+        outcome = "threw";
+        return fail(`${name} failed: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        clearInterval(heartbeat);
+        release?.();
+        // `resolveRoot` refuses a defaulted home directory, so a call can end
+        // without any root at all. Log it against the server's own when that
+        // is a real project, and drop it rather than guess when it is not.
+        const where = resolved || (root === os.homedir() ? "" : root);
+        if (where) {
+          recordCall(where, {
+            at,
+            tool: name,
+            root: where,
+            durationMs: Math.round(Number(process.hrtime.bigint() - started) / 1e6),
+            outcome,
+          });
+        }
       }
-      const args = (req.params.arguments ?? {}) as Record<string, unknown>;
-      // Hoisted out of the handler call so the record knows which root the
-      // call was against even when the handler itself fails.
-      resolved = resolveRoot(root, args);
-      const result = await tool.handler(resolved, args);
-      outcome = result.isError ? "error" : "ok";
-      return result;
-    } catch (e) {
-      outcome = "threw";
-      return fail(`${name} failed: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      // `resolveRoot` refuses a defaulted home directory, so a call can end
-      // without any root at all. Log it against the server's own when that
-      // is a real project, and drop it rather than guess when it is not.
-      const where = resolved || (root === os.homedir() ? "" : root);
-      if (where) {
-        recordCall(where, {
-          at,
-          tool: name,
-          root: where,
-          durationMs: Math.round(Number(process.hrtime.bigint() - started) / 1e6),
-          outcome,
-        });
-      }
-    }
+    })();
+    pending.add(call);
+    void call.then(() => pending.delete(call), () => pending.delete(call));
+    return call;
   });
 
   const transport = new StdioServerTransport();
-  await server.connect(transport);
-  // Stay alive until the client disconnects; then let main() exit 0.
-  await new Promise<void>((resolve) => {
-    transport.onclose = () => resolve();
+  let finishDisconnect: () => void;
+  const disconnected = new Promise<void>((resolve) => {
+    finishDisconnect = () => { closed = true; resolve(); };
+    server.onclose = finishDisconnect;
   });
+  await server.connect(transport);
+  // The SDK stdio transport does not close itself on input EOF. Close the
+  // protocol (aborting responses), but keep workers alive to save records.
+  const end = () => {
+    closed = true;
+    void server.close().catch(() => { finishDisconnect(); });
+  };
+  process.stdin.once("end", end);
+  await disconnected;
+  while (pending.size) await Promise.allSettled([...pending]);
+  process.stdin.off("end", end);
 }

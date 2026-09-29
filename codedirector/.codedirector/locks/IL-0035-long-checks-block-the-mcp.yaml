@@ -1,0 +1,56 @@
+schemaVersion: 1
+id: IL-0035
+status: verified
+utterance: long checks block the MCP server — while a long check runs, the server doesn't respond until the check finishes.
+goal: Keep MCP responsive throughout locked commands and verification; provide token-scoped progress and preserve the final verified/failed/incomplete report semantics.
+interpretation: 'Measured on 2026-09-29, macOS Node 26.3.1, source HEAD 1cfb66e compiled into /private/tmp/cdir-mcp-repro. Disposable Git fixtures, SDK stdio client; concurrent ping/tools-list sent after the child writes a started marker. Results (milliseconds): [{"label":"command","root":"/var/folders/_3/kvqht5fx3xs_hswpzlltl8440000gn/T/cdir-git-q5X1VL","seconds":4,"sent":168,"run":{"at":4335,"error":false},"ping":{"at":4335,"latency":4167},"list":{"at":4336,"latency":4168},"progress":0,"records":["IL-0001-20260929-042837-514-cqs2-dfe4.json","mcp.log"]},{"label":"verify","root":"/var/folders/_3/kvqht5fx3xs_hswpzlltl8440000gn/T/cdir-git-5oOce2","seconds":65,"sent":442,"run":{"at":60004,"error":"MCP error -32001: Request timed out"},"ping":{"at":65477,"latency":65035},"list":{"at":65478,"latency":65036},"progress":0,"records":["IL-0001-20260929-043114-352-d7b2-6b09.json","mcp.log"]}]. Cause: runWithLock uses spawnSync for the command; probe uses spawnSync to wait for its supervisor; async handlers do not free the event loop during these calls. Baseline checks and standalone report verification share this synchronous path (source inspection, not separately timed). Proposed fix: worker thread for entire run_locked and report paths; unchanged domain logic. Parent sends token-scoped elapsed liveness every 5s, no fabricated percentage, and owns a canonical Git-worktree busy guard for calls in this server. Cross-process locking, raw log streaming, forced cancellation and durable job scheduling are excluded. Progress extends client timeout only when the client opts into resetTimeoutOnProgress; absolute client deadlines remain. Cancellation retains the guard until work finishes and preserves the record. External edraft tree is an operational no-touch fence (repo-relative deny patterns cannot enforce paths outside root). No help-book changes: defer user-script sandbox fix to a separate Vibe Check after MCP; ENABLE_USER_SCRIPT_SANDBOXING=NO is the known workaround, not this fix.'
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: Preserve approval seals, immutable task baselines, scope enforcement, probe cleanup, timeout escalation, and CLI behavior.
+deny:
+  - package.json
+  - package-lock.json
+  - src/run/**
+  - src/verify/**
+  - src/lock/**
+  - src/checkpoint/**
+  - src/report/**
+  - scripts/help-book-entry.ts
+  - src/lib/help/**
+change: Offload MCP locked runs and report verification to workers, add token-scoped five-second liveness and a canonical worktree busy guard, and preserve completion records after cancellation.
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 300000
+budget:
+  files:
+    - src/mcp/server.ts
+    - src/mcp/worker.ts
+    - src/mcp/jobs.ts
+    - test/mcp.test.ts
+    - test/mcp-responsive.test.ts
+    - README.md
+    - docs/ROADMAP.md
+  symbols: []
+  maxFiles: 7
+  maxLines: 900
+accept:
+  - A 65-second verification and a slow locked command leave ping and tools/list responsive within 500ms on an otherwise idle local machine; independent-root requests also complete before the long work ends.
+  - With a progress token, send monotonic progress at least every 5 seconds while pending; a client using timeout=60000 and resetTimeoutOnProgress=true receives the final result after 65 seconds. Without a token, send no progress notification.
+  - Offload the whole run_locked path including baseline capture and final report construction, and standalone report verification. Preserve final content and isError for success, violation, command failure and incomplete checks.
+  - While a job owns a canonical repository root, reject competing same-root tools promptly as busy, including undo, activate, amend, draft, report and another run; release ownership on completion or worker failure. Resolve aliases and nested roots to the shared Git worktree identity.
+  - "Client cancellation or timeout does not silently retry, undo, kill a worker mid-probe, or release its repository guard: allow the job to finish and retain its record for report recovery. Graceful disconnect waits for active work; abrupt process death recovery is outside this lock."
+  - Worker startup/error/exit failures return an error without claiming verified; stdout remains MCP-only; Node startup flags including --liftoff-only are inherited; flight recorder retains one completed entry per tool call.
+  - Existing probe process-group timeout, cleanup, output hashing, seal refusal, task-baseline retry and verdict tests stay green; npm test and npm run eval pass.
+  - No activation before the user says yes; audit before a commit, explicit user commit instruction still required; never push. Help-book sandboxing is a separate future Vibe Check and lock.
+assumptions:
+  - text: 'low confidence — confirm territory with the human: every anchor matched only as a fragment of a symbol name ("check" in Checkpoint, "check" in CheckpointError, "check" in checkpointsPath, "check" in CheckpointStore, "check" in createCheckpoint) — an incidental word can do this'
+    source: system
+    confirmed: false
+  - text: Anchors defended — Checkpoint — src/checkpoint/index.ts (TypeScript); "check" only occurs inside "Checkpoint" · CheckpointError — src/checkpoint/index.ts (TypeScript); "check" only occurs inside "CheckpointError" · checkpointsPath — src/checkpoint/index.ts (TypeScript); "check" only occurs inside "checkpointsPath" · CheckpointStore — src/checkpoint/index.ts (TypeScript); "check" only occurs inside "CheckpointStore" · createCheckpoint — src/checkpoint/index.ts (TypeScript); "check" only occurs inside "createCheckpoint"
+    source: system
+    confirmed: false
+  - text: 'The anchor-proposed budget was discarded: anchors matched only "check" inside "Checkpoint…". The seven-file budget and deny list are a manual assessment of the measured blocking paths, approved by the user.'
+    source: user
+    confirmed: true
+createdAt: 2026-09-29T04:29:28.562Z
+createdBy: Yasirdora

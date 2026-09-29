@@ -113,7 +113,29 @@ same contract as the CLI. Every call
 leaves a line in `.codedirector/runs/mcp.log` — when it started, which tool, which
 root, how long it took, and how it ended — so a call that appears to hang can
 be read about afterwards instead of guessed at. Arguments are not recorded.
-The log rotates at 5 MB, keeping one previous file. Example for a
+The log rotates at 5 MB, keeping one previous file.
+
+Long `run_locked` commands and checks, and standalone `report` verification,
+run in worker threads. Ping and tool listing remain available. Calls carrying
+an MCP progress token receive elapsed-time liveness immediately and every five
+seconds, without a completion percentage. Clients must opt into resetting
+their request timeout on progress (SDK: `resetTimeoutOnProgress: true`);
+progress cannot extend an absolute deadline or a client that ignores it.
+
+Each server permits one tool call per canonical Git worktree at a time;
+competing calls return “repository busy” promptly, including `undo` and lock
+changes. Symlinks and project subfolders share that guard; other worktrees
+remain available. This guard does not coordinate separate servers or CLI
+processes. Cancellation or client timeout stops waiting, not the command:
+the guard stays held until completion and the run record remains available
+through `report`. Do not retry a timed-out command blindly. Closing input
+cleanly drains active work before exit; forcibly killing the server cannot
+promise completion or recovery. The locked command has no server-imposed
+deadline: if it never exits, its guard and clean-disconnect drain wait
+indefinitely. Check timeouts still apply to verification probes. Worker
+errors return errors, never success. Other tools still run on the parent
+thread; a large indexing request in another worktree can delay liveness.
+
 Agent CLI CLI setup — add to `~/.agents/mcp.json`:
 
 ```json

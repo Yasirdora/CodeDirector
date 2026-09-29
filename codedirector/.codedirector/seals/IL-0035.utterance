@@ -1,0 +1,1 @@
+long checks block the MCP server — while a long check runs, the server doesn't respond until the check finishes.

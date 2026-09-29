@@ -75,11 +75,31 @@ was left out; `output-unchanged` hashes the whole output, so the cut can
 never hide a difference. Cost: about 45 ms per check. Guarded by
 `test/probe.test.ts`; each of its protective tests fails on the old code.
 
-**Still open — long checks block the MCP server.** Verification is
-synchronous, so while `run_locked` runs a 15-minute xcodebuild the server
-answers nothing and sends no progress; an MCP client with a 60-second
-request timeout gives up. Wanted: run the locked command and its checks off
-the server's main thread, and report progress while they run.
+**In review — long checks block the MCP server (IL-0035).** Measured on
+1cfb66e, macOS / Node 26.3.1: a four-second locked command delayed ping and
+tool listing by 4.17s. A 65-second verifyCommand delayed both by 65.04s;
+the client timed out at 60.004s, with zero progress notifications, while the
+server still saved the run record. Both the command and the probe supervisor
+were awaited synchronously on the server thread.
+
+The complete `run_locked` and standalone `report` paths now run in workers,
+including baseline probes and report construction. The parent sends
+progress-token-scoped elapsed liveness every five seconds, with no invented
+percentage. Clients must reset their timeout on progress to wait longer.
+A per-server canonical Git-worktree guard rejects competing tools as busy;
+symlinks and subfolders share it. Cancellation retains the guard until the
+worker exits and keeps the final record. Clean input EOF drains pending work;
+forced termination and cross-process locking remain outside this change.
+A command that never exits retains its guard and delays clean exit indefinitely;
+verification probes keep their existing timeouts. Other tools still run on the
+parent thread, so large indexing requests can delay liveness.
+Existing domain runners, probe cleanup, seals and baselines are unchanged.
+
+The anchor-proposed budget was discarded: anchors matched only “check”
+inside “Checkpoint…” names. The seven-file / 900-line budget is the author's
+manual assessment of the measured blocking paths, approved by the user.
+Protocol regressions live in `test/mcp-responsive.test.ts`; review and the
+full test/eval gate are required before a commit.
 
 **Also fixed:** the "unchecked without a compiler" test assumed no compiler
 existed and failed on any machine with a global TypeScript (`npm i -g
