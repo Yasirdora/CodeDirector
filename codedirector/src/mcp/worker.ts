@@ -1,7 +1,7 @@
 /** Whole guarded run/report lives here, including baseline probes and rendering. */
 import { parentPort, workerData } from "node:worker_threads";
 import { runWithLock } from "../run/run";
-import { buildReport } from "../report/report";
+import { buildReport, finalizeLockStatus } from "../report/report";
 import { formatReport, formatReportJson, formatReportMarkdown } from "../report/format";
 import type { Job, ToolResult, WorkerReply } from "./jobs";
 
@@ -13,6 +13,9 @@ async function execute(job: Job): Promise<ToolResult> {
   const { root, lockId } = job;
   if (job.kind === "report") {
     const report = await buildReport(root, lockId);
+    // The same refresh the CLI does: a completed re-verification writes its
+    // verdict onto the lock, so a fixed re-run is never left reading FAILED.
+    finalizeLockStatus(root, report);
     if (job.format === "md") return text(formatReportMarkdown(report));
     if (job.format === "json") return text(formatReportJson(report));
     return text(formatReport(report));

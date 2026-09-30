@@ -299,8 +299,15 @@ export async function buildReport(
         : undefined;
 
   const violations = [...scope, ...verification.violations];
+  // The recorded command outcome is an attempt's history. It decides the
+  // verdict only when this report IS that attempt — an explicit attempt view,
+  // or the live run's own report. A current-tree re-verification judges the
+  // tree it just measured; otherwise a fixed re-verify kept reading FAILED
+  // from the attempt before it (a stale record).
+  const boundToRun = view === "attempt" || opts.run !== undefined;
+  const commandFailed = boundToRun && run !== undefined && run.exitCode !== 0;
   const verdict: ChangeReport["verdict"] =
-    violations.length > 0 || (run !== undefined && run.exitCode !== 0)
+    violations.length > 0 || commandFailed
       ? "failed"
       : incompleteReason !== undefined
         ? "incomplete"

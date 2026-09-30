@@ -537,3 +537,53 @@ test("mcp: lock_amend patches a draft, re-validates, and refuses anything not a 
     await close();
   }
 });
+
+test("mcp: a report refreshes the lock's verdict instead of leaving the last FAILED run", async () => {
+  const root = makeGitRepo(FILES);
+  const { client, close } = await connect(root);
+  try {
+    const call = (name: string, args: Record<string, unknown>) => client.callTool({ name, arguments: args });
+    const draft = await call("lock_draft", { utterance: "keep math tidy", budgetFiles: ["src/math.js"] });
+    const lockId = JSON.parse(resultText(draft)).lockId as string;
+    await call("lock_check", { lockId });
+    const act = await call("lock_activate", { lockId });
+    assert.ok(!isError(act), resultText(act));
+
+    const failed = await call("run_locked", { lockId, command: [NODE, "-e", "process.exit(1)"] });
+    assert.ok(isError(failed), "a failing command is an error-level result");
+
+    const lockDir = path.join(root, ".codedirector", "locks");
+    const lockFile = path.join(lockDir, fs.readdirSync(lockDir).find((n) => n.startsWith(lockId))!);
+    assert.match(fs.readFileSync(lockFile, "utf8"), /^status: failed$/m);
+
+    const rep = await call("report", { lockId, format: "json" });
+    assert.equal(JSON.parse(resultText(rep)).verdict, "verified");
+    assert.match(fs.readFileSync(lockFile, "utf8"), /^status: verified$/m, "the MCP report refreshes the lock's verdict");
+  } finally {
+    await close();
+  }
+});
+
+test("mcp: lock_draft carries verifyTimeoutMs and lock_amend can set it", async () => {
+  const root = makeGitRepo(FILES);
+  const { client, close } = await connect(root);
+  try {
+    const call = (name: string, args: Record<string, unknown>) => client.callTool({ name, arguments: args });
+    const draft = await call("lock_draft", {
+      utterance: "document math without behavior change",
+      budgetFiles: ["src/math.js"],
+      verifyCommand: "npm test",
+      verifyTimeoutMs: 424242,
+    });
+    const info = JSON.parse(resultText(draft));
+    assert.equal(info.verifyTimeoutMs, 424242, "the MCP argument is echoed back");
+    const dir = path.join(root, ".codedirector", "locks");
+    const file = fs.readdirSync(dir).find((n) => n.startsWith(info.lockId))!;
+    assert.match(fs.readFileSync(path.join(dir, file), "utf8"), /^verifyTimeoutMs: 424242$/m, "it round-trips through the YAML");
+
+    const amended = await call("lock_amend", { lockId: info.lockId, verifyTimeoutMs: 999 });
+    assert.equal(JSON.parse(resultText(amended)).verifyTimeoutMs, 999, "lock_amend patches it too");
+  } finally {
+    await close();
+  }
+});

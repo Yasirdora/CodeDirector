@@ -233,7 +233,7 @@ Blast radius for a symbol — genuinely useful with no AI involved:
 
 Exit codes: `0` success · `1` failure (e.g. symbol not found) · `2` usage error.
 
-### `cdir lock new "<utterance>" [--goal TEXT] [--keep SPEC] [--deny GLOB] [--budget-files F] [--profile NAME]`
+### `cdir lock new "<utterance>" [--goal TEXT] [--keep SPEC] [--deny GLOB] [--budget-files F] [--profile NAME] [--verify-timeout MS]`
 
 Drafts an **Vibe Check** — a compiled, enforceable contract, human-readable
 YAML versioned at `.codedirector/locks/IL-<NNNN>-<slug>.yaml`. The command is
@@ -251,8 +251,10 @@ written with `status: draft` — edit it, then
 The Lock schema (v1): `utterance` (your exact words, immutable), `goal`,
 `interpretation` (the system's operationalization — editable), `keep[]`,
 `deny[]`, `change`, `verifyCommand` (optional user test harness, e.g.
-`npm test` — run as measured evidence), `verifyTimeoutMs` (optional timeout
-for it and `tests-pass` runs — the CLI's `--test-timeout` overrides it),
+`npm test` — run as measured evidence), `verifyTimeoutMs` (timeout for it
+and `tests-pass` runs; the draft estimates it from the command, and a lock
+carrying a `verifyCommand` never falls back to 60s — `--verify-timeout` on
+`lock new` and `--test-timeout` on run/verify override it),
 `verifyCovers[]` (optional; languages you assert `verifyCommand` exercises —
 see below), `budget {files, symbols, maxFiles, maxLines}`, `accept[]`,
 `assumptions[]`.
@@ -410,7 +412,8 @@ Editing a Lock breaks its seal, so re-approval (`cdir lock check` then
 
 `--test-timeout MS` (on both `run` and `verify`) sets the timeout for
 `tests-pass` runs and the lock's `verifyCommand`, overriding the lock's
-`verifyTimeoutMs` (default 60s).
+`verifyTimeoutMs` (estimated from the command when the draft omitted it; a
+lock carrying a `verifyCommand` never falls back to 60s).
 
 ### `cdir hook`
 
@@ -430,8 +433,10 @@ commands — `cdir run` verification remains the hard floor.
 
 Renders the **Change Report** — the product's signature artifact. It judges
 the latest attempt against the current tree: the scope delta from the task
-baseline is recomputed (a post-run edit is not invisible), the ladder re-runs
-against the task baseline, and the recorded command outcome is kept. The
+baseline is recomputed (a post-run edit is not invisible) and the ladder
+re-runs against the task baseline. The recorded command outcome is kept as
+that attempt's history and decides the verdict only for the attempt it
+belongs to, so a fixed re-verification is never left reading FAILED. The
 verdict is `verified`, `failed`, or `incomplete` — the last when there is no
 task baseline to judge scope against, or a declared check could not run, and
 it is never written as verified.

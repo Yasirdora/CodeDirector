@@ -1,0 +1,51 @@
+schemaVersion: 1
+id: IL-0037
+status: failed
+utterance: "LOCK B (stale record): today a passing re-run did not update the lock's record file, leaving the verdict reading FAILED from an earlier failed run. Measured seam: find where run completion writes the record. Fix: every completed re-verification refreshes the lock's recorded verdict."
+goal: "A completed re-verification refreshes the lock's recorded verdict: after a failed attempt is fixed, cdir verify / cdir report and the MCP report tool read VERIFIED and update the lock's status — never FAILED from the earlier run's recorded command outcome."
+interpretation: "Seam measured 2026-09-30, reproduced on the built CLI: the run record is written only at run completion (src/run/run.ts:375); `cdir verify`/`cdir report` (src/cli-main.ts:561,577) write no record, so buildReport falls back to the latest recorded attempt (src/report/report.ts:225) and its verdict keeps that attempt's command outcome (report.ts:303, `run.exitCode !== 0`). A failed attempt followed by a fix and a re-verify therefore still reads FAILED. The MCP report tool (src/mcp/worker.ts:14) additionally never refreshes the lock's status. Fix: in the current-tree view the verdict is decided by the fresh scope delta plus the freshly-run ladder, and every completed re-verification refreshes the lock's recorded status the way the CLI already does."
+keep:
+  - kind: no-new-dependency
+  - kind: api-unchanged
+    symbols:
+      - src/report/report.ts#buildReport
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - src/lock/**
+  - src/verify/**
+  - src/run/**
+  - src/cli-main.ts
+  - docs/**
+  - eval/**
+change: report/verify — a completed re-verification refreshes the lock's configured verdict instead of reading FAILED from an earlier failed run
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - src/report/report.ts
+    - src/mcp/worker.ts
+    - test/report.test.ts
+    - test/mcp.test.ts
+    - README.md
+  symbols: []
+  maxFiles: 5
+  maxLines: 400
+accept:
+  - "After a run whose command exits non-zero, a fix followed by cdir verify (or cdir report) on a clean tree reports VERIFIED and writes status: verified — not FAILED from the earlier run."
+  - The MCP report tool refreshes the lock's verdict the same way the CLI does.
+  - A run that genuinely breaks scope or a KEEP clause still reports FAILED after a re-verification — the fix does not launder real breaks.
+  - A report bound to an attempt (opts.run / --attempt N) still keeps that attempt's recorded command outcome.
+assumptions:
+  - text: Anchors defended — Verdict — src/verify/types.ts (TypeScript); "verdict" is its whole name · Service.run — test/fixtures/basic-repo/src/service.ts (TypeScript); "run" is its whole name · Indexer.run — test/fixtures/swift-repo/Surface.swift (Swift); "run" is its whole name · find — test/verify.test.ts (TypeScript); "find" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: Verdict, Service.run, Indexer.run, find (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-29T22:12:37.722Z
+createdBy: Yasirdora

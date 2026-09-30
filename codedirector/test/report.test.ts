@@ -439,3 +439,20 @@ test("report summary: deny lead, broken KEEP lead, and command-failure lead", as
   assert.ok(cSum.startsWith("The command itself failed."), cSum);
   assert.ok(!cSum.includes("verified"));
 });
+
+test("report: a fixed re-verification refreshes the verdict, not the failed attempt's", async () => {
+  const { root, lock } = await setup([]);
+  const failed = await runWithLock(root, lock.id, [NODE, "-e", "process.exit(1)"], { stdio: "pipe" });
+  assert.equal(failed.exitCode, 1);
+  assert.equal(loadLock(root, lock.id)!.status, "failed");
+
+  // The command failed; the tree did not, and no promise broke. A fresh
+  // re-verification judges the tree it just measured, not the attempt before it.
+  const after = await buildReport(root, lock.id);
+  assert.equal(after.verdict, "verified", after.violations.join("; "));
+  finalizeLockStatus(root, after);
+  assert.equal(loadLock(root, lock.id)!.status, "verified");
+
+  // A report bound to that attempt still keeps its recorded command failure.
+  assert.equal((await buildReport(root, lock.id, { attempt: 1 })).verdict, "failed");
+});

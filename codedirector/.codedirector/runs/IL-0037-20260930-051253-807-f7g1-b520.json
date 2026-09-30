@@ -1,0 +1,164 @@
+{
+  "allowExpand": true,
+  "attemptId": "20260930-051253-807-f7g0-b520",
+  "baselinePath": ".codedirector/baselines/IL-0037-task.json",
+  "baselineSha256": "a55517facd6d9122f7f0651717698b3d6c038c157dcf5ae51858fd9b10d10f2b",
+  "budget": {
+    "filesChanged": 11,
+    "linesChanged": 143,
+    "maxFiles": 5,
+    "maxLines": 400
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "denied",
+      "matchedDeny": "src/cli-main.ts",
+      "path": "src/cli-main.ts",
+      "status": "M"
+    },
+    {
+      "class": "denied",
+      "matchedDeny": "src/lock/**",
+      "path": "src/lock/profiles.ts",
+      "status": "M"
+    },
+    {
+      "class": "denied",
+      "matchedDeny": "src/lock/**",
+      "path": "src/lock/types.ts",
+      "status": "M"
+    },
+    {
+      "class": "out-of-budget",
+      "path": "src/mcp/server.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/worker.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "out-of-budget",
+      "path": "test/lock.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/mcp.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "out-of-budget",
+      "path": "test/profiles.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/report.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260930T051253281",
+    "createdAt": "2026-09-30T05:12:53.803Z",
+    "dirty": true,
+    "id": "ckpt-20260930T051253281",
+    "ref": "7da17ec40235bc5510acae14948ce6fa6cb16b6e",
+    "statusHash": "6c3dceadb8fd9e368cc218f9a74994f4877412aab206cc78418004f58bcfd103",
+    "tag": "cdir/ckpt-20260930T051253281"
+  },
+  "command": [
+    "node",
+    "/tmp/il0037-v2.mjs"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-30T05:12:53.857Z",
+  "keepResults": [
+    {
+      "detail": "signature unchanged: src/report/report.ts#buildReport",
+      "kind": "api-unchanged",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0037",
+  "startedAt": "2026-09-30T05:12:53.807Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0037-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 4,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0037-task.json#signatures[src/report/report.ts#buildReport]",
+        "clauseKind": "api-unchanged",
+        "detail": "signature unchanged: src/report/report.ts#buildReport",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "api-unchanged · src/report/report.ts#buildReport",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0037-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0037-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 0",
+        "detail": "verifyCommand passed: npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0037",
+    "verifiedAt": "2026-09-30T05:15:31.339Z",
+    "violations": []
+  },
+  "violations": []
+}

@@ -1,0 +1,1 @@
+LOCK B (stale record): today a passing re-run did not update the lock's record file, leaving the verdict reading FAILED from an earlier failed run. Measured seam: find where run completion writes the record. Fix: every completed re-verification refreshes the lock's recorded verdict.
