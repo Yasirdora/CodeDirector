@@ -1,0 +1,65 @@
+schemaVersion: 1
+id: IL-0036
+status: verified
+utterance: "LOCK A (verifyTimeoutMs default): today a lock draft without an explicit verifyTimeoutMs silently gets 60s, which no real Swift chain fits — this caused two slips today. Measured seam first: find where the default is applied (draft creation / run). Fix: the drafter must require the field or estimate it from the verifyCommand contents (xcodebuild present ⇒ ≥3600000), never silently default to 60s. Fail-first pin: drafting without the field either errors or gets a sane estimate — assert it."
+goal: "A lock that carries a verifyCommand never silently runs under a 60s timeout: the drafter estimates verifyTimeoutMs from the command (xcodebuild ⇒ 3,600,000; otherwise a 900,000 floor), cdir lock new and the MCP lock_draft/lock_amend tools can set it explicitly, and the run/verify path never falls back to 60s for a lock that carries a verifyCommand."
+interpretation: "Seam measured 2026-09-30: src/lock/draft.ts:398 emits verifyTimeoutMs only when it is passed explicitly; src/verify/verify.ts:315 and :385 then apply `opts.testTimeoutMs ?? lock.verifyTimeoutMs ?? 60_000`. Neither `cdir lock new` (no --verify-timeout flag) nor the MCP lock_draft/lock_amend tools (verifyTimeoutMs is not in AMENDABLE_PROPS and draftArgsFrom ignores it) can set the field, so every hand-drafted verifyCommand ran under a silent 60s. Fix: the drafter estimates the field from the command (xcodebuild ⇒ 3_600_000, else a 900_000 floor), both front-ends gain the argument, and the run/verify fallback for a lock carrying a verifyCommand becomes the 900_000 floor — never 60_000."
+keep:
+  - kind: no-new-dependency
+  - kind: api-unchanged
+    symbols:
+      - src/lock/draft.ts#draftLock
+      - src/verify/verify.ts#verifyWithBaseline
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - src/run/**
+  - src/report/**
+  - src/mcp/worker.ts
+  - src/lock/store.ts
+  - src/lock/seal.ts
+  - README.md
+  - docs/**
+  - eval/**
+change: verifyTimeoutMs — the drafter estimates it from verifyCommand, both front-ends can set it, and run/verify stops silently capping a verify chain at 60s
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - src/lock/types.ts
+    - src/lock/draft.ts
+    - src/verify/verify.ts
+    - src/cli-main.ts
+    - src/mcp/server.ts
+    - src/domain/types.ts
+    - src/domain/registry.ts
+    - src/domains/apple/index.ts
+    - src/lock/profiles.ts
+    - test/lock.test.ts
+    - test/verify.test.ts
+    - test/domains.test.ts
+    - test/profiles.test.ts
+  symbols: []
+  maxFiles: 13
+  maxLines: 400
+accept:
+  - Drafting with verifyCommand 'xcodebuild test -scheme App' and no explicit timeout writes a lock whose verifyTimeoutMs is at least 3600000 — the estimate comes from the apple domain through the registry, and no ecosystem word appears in core (the ADR-0001 boundary test stays green).
+  - Drafting with verifyCommand 'npm test' and no explicit timeout writes verifyTimeoutMs 900000 — never 60s.
+  - A lock carrying a verifyCommand and no verifyTimeoutMs no longer runs or verifies under a silent 60s cap.
+  - cdir lock new --verify-timeout and the MCP lock_draft/lock_amend verifyTimeoutMs argument are accepted and round-trip through the lock YAML.
+assumptions:
+  - text: "Scope widened 2026-09-30 with the owner's approval: the ADR-0001 boundary test (test/domains.test.ts:521) refuses the literal `xcodebuild` in core, so the hour goes into src/domains/apple and the drafter asks the registry — src/domain/types.ts, src/domain/registry.ts and src/domains/apple/index.ts join the budget (7 → 11 files)."
+    source: user
+    confirmed: true
+  - text: Anchors defended — fail — src/cli-main.ts (TypeScript); "fail" is its whole name · fail — src/mcp/server.ts (TypeScript); "fail" is its whole name · verifyCommand — src/verify/verify.ts (TypeScript); "verifycommand" is its whole name · Service.run — test/fixtures/basic-repo/src/service.ts (TypeScript); "run" is its whole name · Indexer.run — test/fixtures/swift-repo/Surface.swift (Swift); "run" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: fail, fail, verifyCommand, Service.run, Indexer.run (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-29T22:12:34.533Z
+createdBy: Yasirdora

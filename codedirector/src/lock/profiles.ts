@@ -67,7 +67,12 @@ export function mergeDraftOptions(profile: DraftOptions, explicit: DraftOptions)
     deny: [...(profile.deny ?? []), ...(explicit.deny ?? [])],
     budgetFiles: [...(profile.budgetFiles ?? []), ...(explicit.budgetFiles ?? [])],
     verifyCommand: explicit.verifyCommand ?? profile.verifyCommand,
-    verifyTimeoutMs: explicit.verifyTimeoutMs ?? profile.verifyTimeoutMs,
+    // The profile's timeout belongs to the profile's command. When the human
+    // replaces the command, the pair must not be split — otherwise an explicit
+    // xcodebuild command inherits the profile's 15 minutes and the drafter's
+    // estimate never runs. Omitted, draftLock estimates from the new command.
+    verifyTimeoutMs:
+      explicit.verifyTimeoutMs ?? (explicit.verifyCommand !== undefined ? undefined : profile.verifyTimeoutMs),
     verifyCovers: mergeOptionalList(profile.verifyCovers, explicit.verifyCovers),
     accept: [...(profile.accept ?? []), ...(explicit.accept ?? [])],
     maxFiles: explicit.maxFiles ?? profile.maxFiles,

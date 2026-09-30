@@ -34,7 +34,7 @@ import * as path from "node:path";
 import { RepoIndex } from "../core/types";
 import { buildIndex } from "../core/builder";
 import { buildGraph } from "../core/graph";
-import { VibeCheck } from "../lock/types";
+import { VibeCheck, DEFAULT_VERIFY_TIMEOUT_MS } from "../lock/types";
 import { loadLock } from "../lock/store";
 import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
@@ -62,7 +62,11 @@ export interface VerifyOptions {
   typecheck?: boolean;
   /** Compiler-check timeout (default: each check's own — 120s for tsc). */
   typecheckTimeoutMs?: number;
-  /** Per-test-run and verifyCommand timeout (default: lock.verifyTimeoutMs, else 60s). */
+  /**
+   * Per-test-run and verifyCommand timeout (default: lock.verifyTimeoutMs; a
+   * lock that carries a verifyCommand without one gets DEFAULT_VERIFY_TIMEOUT_MS,
+   * never a silent 60s).
+   */
   testTimeoutMs?: number;
   /** Per-output-command timeout (default 30s). */
   outputTimeoutMs?: number;
@@ -310,9 +314,20 @@ function verifyOneDiagnosticsCheck(
 // ---------------------------------------------------------------------
 // Rung 3 — tests (measured): tests-pass globs + Lock-level verifyCommand
 
+/**
+ * The timeout for tests-pass runs and verifyCommand. A lock that promises a
+ * verifyCommand but names no timeout gets the floor — never a silent 60s that
+ * no real chain fits.
+ */
+export function resolveVerifyTimeoutMs(lock: VibeCheck, opts: VerifyOptions): number {
+  if (opts.testTimeoutMs !== undefined) return opts.testTimeoutMs;
+  if (lock.verifyTimeoutMs !== undefined) return lock.verifyTimeoutMs;
+  return lock.verifyCommand ? DEFAULT_VERIFY_TIMEOUT_MS : 60_000;
+}
+
 function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions, domains: DomainRegistry): VerificationItem[] {
   const items: VerificationItem[] = [];
-  const timeout = opts.testTimeoutMs ?? lock.verifyTimeoutMs ?? 60_000;
+  const timeout = resolveVerifyTimeoutMs(lock, opts);
   const found = domains.testRunner();
   // Expanding the glob skips what the core never reads plus what the
   // runner's own domain says is never source (node_modules for node).
@@ -382,7 +397,7 @@ function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions, 
 function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): VerificationItem[] {
   if (!lock.verifyCommand) return [];
   const subject = `verifyCommand · ${lock.verifyCommand}`;
-  const timeout = opts.testTimeoutMs ?? lock.verifyTimeoutMs ?? 60_000;
+  const timeout = resolveVerifyTimeoutMs(lock, opts);
   const probe = runIsolated(
     rootDir,
     () => runShellProbe(rootDir, lock.verifyCommand!, timeout, opts.env),

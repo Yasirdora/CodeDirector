@@ -30,6 +30,7 @@ import { blastRadius, formatBlastRadius } from "./core/why";
 import { RepoIndex } from "./core/types";
 import { stableStringify } from "./core/store";
 import { draftLock, parseKeepClause, LOW_CONFIDENCE_FLAG, type DraftOptions } from "./lock/draft";
+import { DEFAULT_VERIFY_TIMEOUT_MS } from "./lock/types";
 import { getProfile, mergeDraftOptions, PROFILE_NAMES } from "./lock/profiles";
 import { listLocks, loadLock, saveLock } from "./lock/store";
 import { sealLock } from "./lock/seal";
@@ -59,6 +60,9 @@ Usage:
           [--verify-command CMD]            activate. SPECs: api-unchanged:<file>#<sym>,
           [--profile NAME]                  tests-pass:<glob>, output-unchanged:<cmd>,
                                             no-new-dependency, custom:<text>
+          [--verify-timeout MS]             sets the lock's verifyTimeoutMs
+                                            (estimated from --verify-command
+                                            when omitted)
                                             --profile applies a preset bundle of draft
                                             defaults (available: ${PROFILE_NAMES.join(", ")}); explicit
                                             --deny/--keep/--budget-files ADD to the
@@ -89,7 +93,7 @@ Usage:
                                           Change Report. Exit 0 only when the
                                           command succeeded AND no violations.
                                           --test-timeout overrides the lock's
-                                          verifyTimeoutMs (default 60s) for
+                                          verifyTimeoutMs (estimated from the verifyCommand) for
                                           tests and verifyCommand. Without a
                                           lock id: refused (the whole point is
                                           the contract).
@@ -259,6 +263,9 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
         deny: flagList(flags, "deny"),
         budgetFiles: flagList(flags, "budget-files"),
         verifyCommand: flagStr(flags, "verify-command"),
+        verifyTimeoutMs: flags.has("verify-timeout")
+          ? intFlag(flags, "verify-timeout", DEFAULT_VERIFY_TIMEOUT_MS)
+          : undefined,
       }));
       const lines: string[] = [];
       // Before anything else it says: the territory below may be wrong.

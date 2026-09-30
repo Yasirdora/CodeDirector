@@ -81,6 +81,11 @@ test("profile: merge — explicit lists ADD to the profile, explicit verifyComma
   assert.deepEqual(merged.keep, [{ kind: "no-new-dependency" }, { kind: "tests-pass", glob: "Tests/**" }]);
   assert.deepEqual(merged.budgetFiles, ["Sources/App/Main.swift"]);
   assert.equal(merged.verifyCommand, "xcodebuild test -scheme App", "explicit verifyCommand overrides the profile's");
+  assert.equal(
+    merged.verifyTimeoutMs,
+    undefined,
+    "the profile's timeout belongs to the profile's command — the drafter estimates for the new one",
+  );
 });
 
 test("profile: drafting with the preset lands in the lock YAML (round-trip)", async () => {

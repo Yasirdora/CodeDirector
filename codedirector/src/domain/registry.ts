@@ -76,6 +76,24 @@ export class DomainRegistry {
     return unique(this.list.flatMap((d) => d.generatedPathRules?.neverSourceDirs ?? []));
   }
 
+  // --- verifyTimeouts ----------------------------------------------------
+
+  /**
+   * The timeout the domains ask for this verifyCommand — the largest match
+   * across every registered domain, or undefined when none recognises it.
+   * Core never names an ecosystem; a domain that knows the toolchain says so.
+   */
+  verifyTimeoutHint(verifyCommand: string): number | undefined {
+    let best: number | undefined;
+    for (const d of this.list) {
+      for (const hint of d.verifyTimeouts ?? []) {
+        if (verifyCommand.search(hint.match) < 0) continue;
+        if (best === undefined || hint.timeoutMs > best) best = hint.timeoutMs;
+      }
+    }
+    return best;
+  }
+
   // --- graphFacts --------------------------------------------------------
 
   /** The first domain's resolution of an import, with its provenance; null when none resolves it. */

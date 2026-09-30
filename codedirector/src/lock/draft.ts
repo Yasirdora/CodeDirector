@@ -18,7 +18,7 @@ import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
 import { buildRepoMap, resolveAnchorsDetailed, type AnchorMatch, type AnchorStrength } from "../core/map";
 import { INDEXABLE_EXTENSIONS } from "../core/walk";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
-import { VibeCheck, KeepClause, LOCK_SCHEMA_VERSION } from "./types";
+import { VibeCheck, KeepClause, LOCK_SCHEMA_VERSION, DEFAULT_VERIFY_TIMEOUT_MS } from "./types";
 import { nextLockId, saveLock } from "./store";
 
 export interface DraftOptions {
@@ -274,6 +274,17 @@ function gitUserName(rootDir: string): string {
 }
 
 /**
+ * The verifyTimeoutMs a draft gets when the human named a verifyCommand but no
+ * timeout: the domains' own estimate for the command, else the generic floor.
+ * The old behavior wrote nothing and the run silently capped the chain at 60s,
+ * which no real chain fits. No ecosystem word lives here — the domain that
+ * knows the toolchain declares the estimate, core only asks (ADR 0001).
+ */
+export function estimateVerifyTimeoutMs(verifyCommand: string, domains: DomainRegistry): number {
+  return domains.verifyTimeoutHint(verifyCommand) ?? DEFAULT_VERIFY_TIMEOUT_MS;
+}
+
+/**
  * Draft a Lock from an utterance. Never throws for "no anchors" — the draft
  * is still written (with an empty proposed budget) so the human can edit it.
  */
@@ -395,7 +406,11 @@ export function draftLock(
     deny: opts.deny && opts.deny.length > 0 ? opts.deny : suggestedDeny,
     change: "TODO — one-line scope description",
     ...(opts.verifyCommand !== undefined ? { verifyCommand: opts.verifyCommand } : {}),
-    ...(opts.verifyTimeoutMs !== undefined ? { verifyTimeoutMs: opts.verifyTimeoutMs } : {}),
+    ...(opts.verifyTimeoutMs !== undefined
+      ? { verifyTimeoutMs: opts.verifyTimeoutMs }
+      : opts.verifyCommand !== undefined
+        ? { verifyTimeoutMs: estimateVerifyTimeoutMs(opts.verifyCommand, domains) }
+        : {}),
     ...(opts.verifyCovers !== undefined ? { verifyCovers: opts.verifyCovers } : {}),
     budget: {
       files: budgetFiles,

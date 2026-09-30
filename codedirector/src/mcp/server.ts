@@ -99,6 +99,12 @@ const AMENDABLE_PROPS: Record<string, unknown> = {
   budgetFiles: STRING_ARRAY("Files (or globs) the change may touch — replaces the anchor-proposed budget."),
   accept: STRING_ARRAY("Acceptance criteria in words; shown in reports, human-judged."),
   verifyCommand: { type: "string", description: "Optional harness executed as measured evidence, e.g. \"npm test\"." },
+  verifyTimeoutMs: {
+    type: "number",
+    description:
+      "Timeout (ms) for tests-pass runs and verifyCommand. Left out, the drafter asks the domains for an estimate " +
+      "and falls back to a 15-minute floor — never the old silent 60s.",
+  },
   verifyCovers: STRING_ARRAY("Languages the harness exercises when its text cannot say (the coverage escape hatch)."),
   maxFiles: { type: "number", description: "Ceiling on changed files (default: budgetFiles length)." },
   maxLines: { type: "number", description: "Ceiling on changed lines (default 400)." },
@@ -168,6 +174,8 @@ function draftArgsFrom(p: Record<string, unknown>): DraftOptions {
   const accept = optionalStringArray(p.accept, "accept");
   if (accept !== undefined) out.accept = accept;
   if (typeof p.verifyCommand === "string" && p.verifyCommand) out.verifyCommand = p.verifyCommand;
+  if (typeof p.verifyTimeoutMs === "number" && Number.isInteger(p.verifyTimeoutMs) && p.verifyTimeoutMs > 0)
+    out.verifyTimeoutMs = p.verifyTimeoutMs;
   const verifyCovers = optionalStringArray(p.verifyCovers, "verifyCovers");
   if (verifyCovers !== undefined) out.verifyCovers = verifyCovers;
   if (typeof p.maxFiles === "number" && Number.isFinite(p.maxFiles) && p.maxFiles > 0) out.maxFiles = Math.floor(p.maxFiles);
@@ -311,6 +319,7 @@ const TOOLS: ToolDef[] = [
         status: result.lock.status,
         keep: result.lock.keep,
         ...(result.lock.verifyCommand ? { verifyCommand: result.lock.verifyCommand } : {}),
+        ...(result.lock.verifyTimeoutMs !== undefined ? { verifyTimeoutMs: result.lock.verifyTimeoutMs } : {}),
         ...(result.lock.verifyCovers ? { verifyCovers: result.lock.verifyCovers } : {}),
         accept: result.lock.accept,
         budget: result.lock.budget,
@@ -358,6 +367,7 @@ const TOOLS: ToolDef[] = [
       if (args.budgetFiles !== undefined) lock.budget.files = args.budgetFiles;
       if (args.accept !== undefined) lock.accept = args.accept;
       if (args.verifyCommand !== undefined) lock.verifyCommand = args.verifyCommand;
+      if (args.verifyTimeoutMs !== undefined) lock.verifyTimeoutMs = args.verifyTimeoutMs;
       if (args.verifyCovers !== undefined) lock.verifyCovers = args.verifyCovers;
       if (args.maxFiles !== undefined) lock.budget.maxFiles = args.maxFiles;
       if (args.maxLines !== undefined) lock.budget.maxLines = args.maxLines;
@@ -377,6 +387,7 @@ const TOOLS: ToolDef[] = [
         warnings: result.warnings,
         keep: lock.keep,
         ...(lock.verifyCommand ? { verifyCommand: lock.verifyCommand } : {}),
+        ...(lock.verifyTimeoutMs !== undefined ? { verifyTimeoutMs: lock.verifyTimeoutMs } : {}),
         ...(lock.verifyCovers ? { verifyCovers: lock.verifyCovers } : {}),
         accept: lock.accept,
         budget: lock.budget,
@@ -450,7 +461,7 @@ const TOOLS: ToolDef[] = [
         },
         testTimeoutMs: {
           type: "number",
-          description: "Optional timeout (ms) for test runs and the lock's verifyCommand; overrides the lock's verifyTimeoutMs (default 60s).",
+          description: "Optional timeout (ms) for test runs and the lock's verifyCommand; overrides the lock's verifyTimeoutMs (drafted from the command when absent).",
         },
       },
       required: ["lockId", "command"],

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { VibeCheck, LOCK_SCHEMA_VERSION } from "../src/lock/types";
@@ -698,4 +698,47 @@ test("checkLock names acceptance criteria as human-judged", () => {
     result.warnings.some((w) => w.includes("acceptance criterion") && w.includes("drag feels instant")),
     result.warnings.join("; "),
   );
+});
+
+test("draft: a verifyCommand without a timeout gets a sane estimate, never 60s", async () => {
+  const root = makeGitRepo({ "src/a.ts": "export const a = 1;\n" });
+  const { index } = await buildIndex(root);
+  const at = { now: "2026-09-30T00:00:00.000Z", createdBy: "test" };
+
+  const xcode = draftLock(root, index, "run the app tests", {
+    verifyCommand: "xcodebuild test -scheme App",
+    ...at,
+  });
+  assert.ok(
+    (xcode.lock.verifyTimeoutMs ?? 0) >= 3_600_000,
+    `an xcodebuild draft carried ${xcode.lock.verifyTimeoutMs} (want >= 3600000)`,
+  );
+
+  const generic = draftLock(root, index, "run the suite", { verifyCommand: "npm test", ...at });
+  assert.equal(generic.lock.verifyTimeoutMs, 900_000, "a non-xcodebuild chain gets the 15-minute floor, never 60s");
+
+  const explicit = draftLock(root, index, "run the suite", {
+    verifyCommand: "npm test",
+    verifyTimeoutMs: 120_000,
+    ...at,
+  });
+  assert.equal(explicit.lock.verifyTimeoutMs, 120_000, "an explicit timeout is never overridden");
+});
+
+test("cli: --verify-timeout round-trips into the drafted lock", () => {
+  const root = makeGitRepo({ "src/a.ts": "export const a = 1;\n" });
+  const cli = path.join(__dirname, "..", "src", "cli.js");
+  const r = spawnSync(
+    process.execPath,
+    [
+      cli, "lock", "new", "run the suite", "--root", root,
+      "--verify-command", "npm test", "--verify-timeout", "123456",
+      "--budget-files", "src/a.ts",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(r.status, 0, r.stderr);
+  const dir = path.join(root, ".codedirector", "locks");
+  const file = fs.readdirSync(dir).find((n) => /^IL-\d+-/.test(n))!;
+  assert.match(fs.readFileSync(path.join(dir, file), "utf8"), /^verifyTimeoutMs: 123456$/m);
 });

@@ -17,7 +17,8 @@ import { sealLock } from "../src/lock/seal";
 import { VibeCheck, KeepClause } from "../src/lock/types";
 import { captureBaseline, saveBaseline, taskBaselinePath, loadBaseline } from "../src/run/baseline";
 import { runWithLock } from "../src/run/run";
-import { verifyLock, verifyWithBaseline } from "../src/verify/verify";
+import { verifyLock, verifyWithBaseline, resolveVerifyTimeoutMs } from "../src/verify/verify";
+import { DEFAULT_VERIFY_TIMEOUT_MS } from "../src/lock/types";
 import { declaredButUnrunnable, VerificationItem } from "../src/verify/types";
 import { buildReport } from "../src/report/report";
 import { git, makeGitRepo } from "./helpers";
@@ -583,4 +584,28 @@ test("typecheck: a run that breaks a caller it never touched is caught", async (
   assert.equal(outcome.exitCode, 1);
   const v = outcome.record.violations.find((x) => x.startsWith("VERIFY typecheck"))!;
   assert.match(v, /1 new error\(s\) since the baseline: src\/use\.ts/);
+});
+
+test("verify: a verifyCommand without a timeout gets the floor, never a silent 60s", () => {
+  const bare: VibeCheck = {
+    schemaVersion: 1,
+    id: "IL-0001",
+    status: "active",
+    utterance: "u",
+    goal: "g",
+    interpretation: "i",
+    keep: [],
+    deny: [],
+    change: "c",
+    budget: { files: [], symbols: [], maxFiles: 1, maxLines: 10 },
+    accept: [],
+    assumptions: [],
+    createdAt: "2026-09-30T00:00:00.000Z",
+    createdBy: "test",
+  };
+  const promised = { ...bare, verifyCommand: "npm test" };
+  assert.equal(resolveVerifyTimeoutMs(promised, {}), DEFAULT_VERIFY_TIMEOUT_MS, "a promised chain gets the floor, not 60s");
+  assert.equal(resolveVerifyTimeoutMs({ ...promised, verifyTimeoutMs: 800 }, {}), 800, "an explicit lock timeout wins");
+  assert.equal(resolveVerifyTimeoutMs(promised, { testTimeoutMs: 1500 }), 1500, "--test-timeout wins over the lock");
+  assert.equal(resolveVerifyTimeoutMs(bare, {}), 60_000, "no verifyCommand keeps the short default");
 });

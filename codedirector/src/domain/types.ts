@@ -288,4 +288,19 @@ export interface Domain {
   changeClassifiers?: ChangeClassifier[];
   profileRules?: ProfileRule[];
   generatedPathRules?: GeneratedPathRules;
+  /**
+   * Timeouts this domain asks for a verifyCommand that names its toolchain.
+   * The ecosystem word lives here, never in core (ADR 0001); the core's
+   * drafter asks the registry and takes the largest match.
+   */
+  verifyTimeouts?: VerifyTimeoutHint[];
+}
+
+/**
+ * A domain's own estimate: a verifyCommand matching `match` needs at least
+ * `timeoutMs`. The pattern must not be global — the registry re-tests it.
+ */
+export interface VerifyTimeoutHint {
+  match: RegExp;
+  timeoutMs: number;
 }

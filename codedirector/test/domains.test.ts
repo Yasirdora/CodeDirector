@@ -21,6 +21,7 @@ import { buildGraph, isTestFile, testFilesFor } from "../src/core/graph";
 import { compareProvenance, effectiveEvidence, freshnessOf, FactProvenance, strongestProvenance } from "../src/core/provenance";
 import { defaultDomains, DomainRegistry, DomainRegistryError } from "../src/domain/registry";
 import { Domain, DiagnosticsCheck, TestRunnerDescription } from "../src/domain/types";
+import { APPLE_VERIFY_TIMEOUT_MS, XCODEBUILD_VERIFY_TIMEOUT_MS } from "../src/domains/apple";
 import { checkLock, verifyCoverage } from "../src/lock/check";
 import { draftLock } from "../src/lock/draft";
 import { describeProfiles, getProfile, PROFILE_NAMES } from "../src/lock/profiles";
@@ -590,4 +591,15 @@ test("run: with verification off, an untouched package.json is not a new depende
     [["package.json unchanged", "ok"]],
   );
   assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.record.violations));
+});
+
+test("domains: a verifyCommand's timeout estimate is the domain's, not the core's", () => {
+  const d = defaultDomains();
+  assert.equal(d.verifyTimeoutHint("xcodebuild test -scheme App"), XCODEBUILD_VERIFY_TIMEOUT_MS);
+  assert.equal(d.verifyTimeoutHint("swift test"), APPLE_VERIFY_TIMEOUT_MS);
+  assert.equal(d.verifyTimeoutHint("npm test"), undefined, "no domain claims it — the core adds its own floor");
+  assert.ok(
+    d.verifyTimeoutHint("xcodebuild test")! > d.verifyTimeoutHint("swift test")!,
+    "the longest match wins",
+  );
 });

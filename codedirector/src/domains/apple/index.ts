@@ -14,8 +14,11 @@ import * as path from "node:path";
 import type { KeepClause } from "../../lock/types";
 import type { Domain, ProjectFact } from "../../domain/types";
 
-/** Apple test suites (xcodebuild, swift test) need minutes, not the 60s default. */
+/** Apple test suites (swift test) need minutes, not the 60s default. */
 export const APPLE_VERIFY_TIMEOUT_MS = 900_000;
+
+/** A full xcodebuild chain (build plus test) routinely outruns 15 minutes. */
+export const XCODEBUILD_VERIFY_TIMEOUT_MS = 3_600_000;
 
 /** Fact kind: a SwiftPM package manifest at the project root. */
 export const SWIFTPM_PACKAGE = "swiftpm-package";
@@ -69,6 +72,10 @@ export const appleDomain: Domain = {
       },
     ],
   },
+  verifyTimeouts: [
+    { match: /\bxcodebuild\b/, timeoutMs: XCODEBUILD_VERIFY_TIMEOUT_MS },
+    { match: /\bswift\b/, timeoutMs: APPLE_VERIFY_TIMEOUT_MS },
+  ],
   generatedPathRules: {
     // Build products — routinely gigabytes, never source.
     neverSourceDirs: ["DerivedData", ".build", ".swiftpm", "Pods", "Carthage"],

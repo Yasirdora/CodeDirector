@@ -13,6 +13,14 @@
 
 export const LOCK_SCHEMA_VERSION = 1;
 
+/**
+ * Timeout floor for a verifyCommand whose lock names no verifyTimeoutMs and
+ * whose command no domain claims (DomainRegistry.verifyTimeoutHint). A real
+ * chain does not fit the old 60s fallback; the drafter and the runtime floor
+ * share this value. Ecosystem-specific estimates belong to the domains.
+ */
+export const DEFAULT_VERIFY_TIMEOUT_MS = 900_000;
+
 export type LockStatus = "draft" | "active" | "verified" | "failed" | "incomplete" | "abandoned";
 
 export const LOCK_STATUSES: LockStatus[] = ["draft", "active", "verified", "failed", "incomplete", "abandoned"];
@@ -93,8 +101,11 @@ export interface VibeCheck {
    */
   verifyCommand?: string;
   /**
-   * Optional timeout (ms) for tests-pass runs and verifyCommand — long Apple
-   * test suites need more than the 60s default. CLI --test-timeout overrides.
+   * Timeout (ms) for tests-pass runs and verifyCommand. The drafter estimates
+   * it from the command when absent — the domains' own hint for a command that
+   * names their toolchain, else DEFAULT_VERIFY_TIMEOUT_MS; CLI --test-timeout
+   * overrides it per run. A lock that carries a verifyCommand never falls back
+   * to 60s.
    */
   verifyTimeoutMs?: number;
   /**
