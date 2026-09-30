@@ -1,0 +1,146 @@
+{
+  "allowExpand": false,
+  "attemptId": "20260930-063119-380-16hi0-21fa",
+  "baselinePath": ".codedirector/baselines/IL-0038-task.json",
+  "baselineSha256": "2cdc72fbf52e34bfa0cac7ac5a2cbe3c4a9c2ca11cadb120daa1dee8052541d1",
+  "budget": {
+    "filesChanged": 4,
+    "linesChanged": 93,
+    "maxFiles": 5,
+    "maxLines": 400
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/run/probe.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/run.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/verify.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260930T063119196",
+    "createdAt": "2026-09-30T06:31:19.378Z",
+    "dirty": true,
+    "id": "ckpt-20260930T063119196",
+    "ref": "282fc3553de99c035a1e29233bf537425a93cc9a",
+    "statusHash": "210878609013faa9bb97739070bb7cf7c33853aacea922eebd56084ff87394a1",
+    "tag": "cdir/ckpt-20260930T063119196"
+  },
+  "command": [
+    "node",
+    "/tmp/il0038-impl.mjs"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-30T06:31:19.410Z",
+  "keepResults": [
+    {
+      "detail": "signature unchanged: src/verify/verify.ts#verifyWithBaseline",
+      "kind": "api-unchanged",
+      "status": "ok"
+    },
+    {
+      "detail": "signature unchanged: src/run/tree.ts#runIsolated",
+      "kind": "api-unchanged",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0038",
+  "startedAt": "2026-09-30T06:31:19.380Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0038-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 2,
+      "proven": 4,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0038-task.json#signatures[src/verify/verify.ts#verifyWithBaseline]",
+        "clauseKind": "api-unchanged",
+        "detail": "signature unchanged: src/verify/verify.ts#verifyWithBaseline",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "api-unchanged · src/verify/verify.ts#verifyWithBaseline",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0038-task.json#signatures[src/run/tree.ts#runIsolated]",
+        "clauseKind": "api-unchanged",
+        "detail": "signature unchanged: src/run/tree.ts#runIsolated",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "api-unchanged · src/run/tree.ts#runIsolated",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0038-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0038-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 2",
+        "detail": "tsc --noEmit: 1 new error(s) since the baseline: test/run.test.ts(650,16): error TS2304: Cannot find name 'makeGitRepo'.",
+        "evidenceClass": "measured",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "violated"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 2",
+        "detail": "verifyCommand failed (exit 2): npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "violated"
+      }
+    ],
+    "lockId": "IL-0038",
+    "verifiedAt": "2026-09-30T06:31:29.041Z",
+    "violations": [
+      "VERIFY typecheck: tsc --noEmit: 1 new error(s) since the baseline: test/run.test.ts(650,16): error TS2304: Cannot find name 'makeGitRepo'.",
+      "VERIFY verify-command: verifyCommand failed (exit 2): npm test && npm run eval"
+    ]
+  },
+  "violations": [
+    "VERIFY typecheck: tsc --noEmit: 1 new error(s) since the baseline: test/run.test.ts(650,16): error TS2304: Cannot find name 'makeGitRepo'.",
+    "VERIFY verify-command: verifyCommand failed (exit 2): npm test && npm run eval"
+  ]
+}

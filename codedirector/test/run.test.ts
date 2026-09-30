@@ -17,8 +17,9 @@ import { sealLock, sealViolation } from "../src/lock/seal";
 import { loadTaskBaseline, rebaseTaskBaseline } from "../src/run/baseline";
 import { VibeCheck } from "../src/lock/types";
 import { runWithLock, RunError } from "../src/run/run";
+import { runIsolated } from "../src/run/tree";
 import { undo } from "../src/checkpoint";
-import { makeDemoGitRepo, makeSubfolderDemoGitRepo, git } from "./helpers";
+import { git, makeDemoGitRepo, makeGitRepo, makeSubfolderDemoGitRepo } from "./helpers";
 
 const NODE = process.execPath;
 const append = (file: string, text: string) =>
@@ -643,4 +644,26 @@ test("run: a declared check that times out is incomplete — exit 1, never verif
   assert.equal(outcome.exitCode, 1, "a check that could not run fails the run");
   assert.equal(loadLock(root, lock.id)!.status, "incomplete", "incomplete, not verified");
   assert.equal(outcome.record.violations.length, 0, "it is not a violation; it is an unfinished declared check");
+});
+
+test("run: a probe hands back the tree it took — a dirty file byte-identical, a clean one at HEAD", () => {
+  const root = makeGitRepo({ "src/a.ts": "export const a = 1;\n", "src/b.ts": "export const b = 2;\n" });
+  const dirty = "export const a = 1;\n// uncommitted work, not in HEAD\n";
+  fs.writeFileSync(path.join(root, "src/a.ts"), dirty);
+
+  runIsolated(root, () => {
+    fs.writeFileSync(path.join(root, "src/a.ts"), "the probe rewrote the dirty file\n");
+    fs.writeFileSync(path.join(root, "src/b.ts"), "the probe rewrote the clean file\n");
+  });
+
+  assert.equal(
+    fs.readFileSync(path.join(root, "src/a.ts"), "utf8"),
+    dirty,
+    "a file that differed from HEAD before the probe comes back byte-identical",
+  );
+  assert.equal(
+    fs.readFileSync(path.join(root, "src/b.ts"), "utf8"),
+    "export const b = 2;\n",
+    "a file that was clean before the probe comes back at HEAD",
+  );
 });

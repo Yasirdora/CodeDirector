@@ -1,0 +1,1 @@
+draft IL-0038 (the isolated probe defect in src/run/tree.ts). Draft only, no activation: the probe stores only the exit code, so a failing verifyCommand can't be diagnosed from the Change Report, and on this repo it reported exit 1/2 on a chain that passes directly. Include a pin that reproduces the exit-code-only reporting.

@@ -17,6 +17,7 @@ import { sealLock } from "../src/lock/seal";
 import { VibeCheck, KeepClause } from "../src/lock/types";
 import { captureBaseline, saveBaseline, taskBaselinePath, loadBaseline } from "../src/run/baseline";
 import { runWithLock } from "../src/run/run";
+import { runShellProbe } from "../src/run/probe";
 import { verifyLock, verifyWithBaseline, resolveVerifyTimeoutMs } from "../src/verify/verify";
 import { DEFAULT_VERIFY_TIMEOUT_MS } from "../src/lock/types";
 import { declaredButUnrunnable, VerificationItem } from "../src/verify/types";
@@ -608,4 +609,39 @@ test("verify: a verifyCommand without a timeout gets the floor, never a silent 6
   assert.equal(resolveVerifyTimeoutMs({ ...promised, verifyTimeoutMs: 800 }, {}), 800, "an explicit lock timeout wins");
   assert.equal(resolveVerifyTimeoutMs(promised, { testTimeoutMs: 1500 }), 1500, "--test-timeout wins over the lock");
   assert.equal(resolveVerifyTimeoutMs(bare, {}), 60_000, "no verifyCommand keeps the short default");
+});
+
+test("verify: a failing verifyCommand's item carries the command's own output, not the exit code alone", async () => {
+  const write = 'console.log("il0038-" + (6 * 7));console.error("stderr-" + (6 * 7));process.exit(3)';
+  const command = `${JSON.stringify(NODE)} -e ${JSON.stringify(write)}`;
+  const { root, lock } = await setup([], (l) => {
+    l.verifyCommand = command;
+  });
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 1, "a failing verifyCommand fails the run");
+  const item = outcome.record.verification!.items.find((i) => i.source === "verify-command")!;
+  assert.equal(item.verdict, "violated");
+  const rendered = `${item.detail} ${item.artifactRef ?? ""}`;
+  // The same command run directly: the contract is measured against the probe's
+  // own bytes, never against a string this test made up.
+  const probe = runShellProbe(root, command, 60_000);
+  const marker = probe.stdout.trim();
+  assert.equal(marker, "il0038-42");
+  assert.ok(!command.includes(marker), "the marker lives only in the output — the command's own text cannot satisfy this pin");
+  assert.ok(rendered.includes(marker), `the item must carry the command's own output; item: ${rendered}`);
+  assert.ok(rendered.includes(probe.stdoutSha256), `stdout hash missing from the item: ${rendered}`);
+  assert.ok(rendered.includes(probe.stderrSha256), `stderr hash missing from the item: ${rendered}`);
+
+  // Bounded: a chain that says a great deal still costs the report an excerpt —
+  // the tail, where a runner's last words are, never the whole stream.
+  const loud = 'const l=[];for(let i=0;i<300;i++)l.push("loud-"+i+"-"+"x".repeat(60));console.log(l.join("\\n"));process.exit(4)';
+  const loudLock = { ...lock, verifyCommand: `${JSON.stringify(NODE)} -e ${JSON.stringify(loud)}` };
+  saveLock(root, { ...loudLock, status: "active" });
+  sealLock(root, { ...loudLock, status: "active" });
+  const loudOutcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// loud\\n")], { stdio: "pipe" });
+  const loudItem = loudOutcome.record.verification!.items.find((i) => i.source === "verify-command")!;
+  assert.equal(loudItem.verdict, "violated");
+  assert.ok(loudItem.detail.includes("loud-299"), `the excerpt keeps the tail; item ends: ${loudItem.detail.slice(-120)}`);
+  assert.ok(!loudItem.detail.includes("loud-0-"), "and drops the head — it is an excerpt, not the log");
+  assert.ok(loudItem.detail.length < 700, `bounded: the item is ${loudItem.detail.length} chars`);
 });

@@ -1,0 +1,130 @@
+{
+  "allowExpand": false,
+  "attemptId": "20260930-062220-526-16hi1-7090",
+  "baselinePath": ".codedirector/baselines/IL-0038-task.json",
+  "baselineSha256": "2cdc72fbf52e34bfa0cac7ac5a2cbe3c4a9c2ca11cadb120daa1dee8052541d1",
+  "budget": {
+    "filesChanged": 1,
+    "linesChanged": 21,
+    "maxFiles": 5,
+    "maxLines": 400
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "test/verify.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20260930T062214354",
+    "createdAt": "2026-09-30T06:22:14.545Z",
+    "dirty": true,
+    "id": "ckpt-20260930T062214354",
+    "ref": "282fc3553de99c035a1e29233bf537425a93cc9a",
+    "statusHash": "fe69d847ab97330f753508d880bf5259b0a7900670210f2fe62ac2e2290a5221",
+    "tag": "cdir/ckpt-20260930T062214354"
+  },
+  "command": [
+    "node",
+    "/tmp/il0038-red.mjs"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-09-30T06:22:20.558Z",
+  "keepResults": [
+    {
+      "detail": "signature unchanged: src/verify/verify.ts#verifyWithBaseline",
+      "kind": "api-unchanged",
+      "status": "ok"
+    },
+    {
+      "detail": "signature unchanged: src/run/tree.ts#runIsolated",
+      "kind": "api-unchanged",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0038",
+  "startedAt": "2026-09-30T06:22:20.526Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0038-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 5,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0038-task.json#signatures[src/verify/verify.ts#verifyWithBaseline]",
+        "clauseKind": "api-unchanged",
+        "detail": "signature unchanged: src/verify/verify.ts#verifyWithBaseline",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "api-unchanged · src/verify/verify.ts#verifyWithBaseline",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0038-task.json#signatures[src/run/tree.ts#runIsolated]",
+        "clauseKind": "api-unchanged",
+        "detail": "signature unchanged: src/run/tree.ts#runIsolated",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "api-unchanged · src/run/tree.ts#runIsolated",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0038-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0038-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 1",
+        "detail": "verifyCommand failed (exit 1): npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "violated"
+      }
+    ],
+    "lockId": "IL-0038",
+    "verifiedAt": "2026-09-30T06:24:16.043Z",
+    "violations": [
+      "VERIFY verify-command: verifyCommand failed (exit 1): npm test && npm run eval"
+    ]
+  },
+  "violations": [
+    "VERIFY verify-command: verifyCommand failed (exit 1): npm test && npm run eval"
+  ]
+}

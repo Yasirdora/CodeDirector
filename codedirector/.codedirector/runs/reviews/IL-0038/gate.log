@@ -1,0 +1,30 @@
+IL-0038 gate — 2026-09-30
+
+== fail-first RED (record 062644-818-16hi1-31d5) ==
+command: ['node', '/tmp/il0038-red2.mjs'] exit 0
+changed: [('test/verify.test.ts', 'in-budget')]
+violations: ['VERIFY verify-command: verifyCommand failed (exit 1): npm test && npm run eval']
+
+== green run (record 070335-899-16hi1-5fa5) ==
+command: ['node', '/tmp/il0038-bound2.mjs'] exit 0
+changed: [('src/run/probe.ts', 'in-budget'), ('src/verify/verify.ts', 'in-budget'), ('test/run.test.ts', 'in-budget'), ('test/verify.test.ts', 'in-budget')]
+budget: {'filesChanged': 4, 'linesChanged': 108, 'maxFiles': 5, 'maxLines': 400}
+violations: []
+counts: {'asserted': 0, 'measured': 1, 'proven': 5, 'unchecked': 0}
+verifiedAt: 2026-09-30T07:07:57.611Z
+
+== 3x direct vs 3x probe (interleaved) ==
+direct-1 exit=0 seconds=135
+probe-1 exit=0 seconds=145
+direct-2 exit=0 seconds=136
+probe-2 exit=0 seconds=147
+direct-3 exit=0 seconds=151
+probe-3 exit=1 seconds=125
+---- verify-command evidence line per probe run ----
+             artifact: sh -c "npm test && npm run eval" → exit 0
+             artifact: sh -c "npm test && npm run eval" → exit 0
+Blocked: verifyCommand · npm test && npm run eval — verifyCommand failed (exit 1): npm test && npm run eval — output: at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) { · generatedMessage: false, · code: 'ERR_ASSERTION', · actual: false, · expected: true, · operator: '==', · diff: 'simple' · }. Nothing was reverted — run `cdir undo` to restore. 4 files changed, all within the agreed scope. 5 promises held (checked). 5 things need your judgment: A failing verifyCommand's report item names the command's own output — a bounded stdout/stderr excerpt plus the full-output hashes — not only the exit code; the fail-first pin in test/verify.test.ts (a failing verifyCommand's item carries the command's own output, not the exit code alone) is red on today's tree and green after the fix.; The pin reproduces the exit-code-only reporting: before the fix, the item's detail and artifactRef carry no byte of the command's output — proved against a stub chain that fails on purpose, so the pin does not depend on the real chain failing.; +3 more.
+             artifact: sh -c "npm test && npm run eval" → exit 1 · stdout sha256 00ade8af20730d91854dd0b7ec10f4594a431db9adf6e9c40df36eaa4bfda4c8 · stderr sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+== cdir report IL-0038 ==
+exit 0 — verdict VERIFIED (lock status: status: verified)

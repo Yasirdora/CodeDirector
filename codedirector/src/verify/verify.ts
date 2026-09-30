@@ -40,7 +40,7 @@ import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
 import { Baseline, baselineFileHash, loadBaseline, taskBaselinePath } from "../run/baseline";
-import { runArgvProbe, runShellProbe } from "../run/probe";
+import { probeArtifactRef, probeExcerpt, runArgvProbe, runShellProbe } from "../run/probe";
 import { runIsolated } from "../run/tree";
 import { diagnosticsExcerpt, newDiagnostics, probeDiagnostics } from "../run/diagnostics";
 import { CORE_SKIP_DIRS } from "../core/walk";
@@ -413,7 +413,20 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): V
   if (probe.exitCode === 0) {
     return [{ source: "verify-command", subject, verdict: "held", evidenceClass: "measured", detail: `verifyCommand passed: ${lock.verifyCommand}`, artifactRef }];
   }
-  return [{ source: "verify-command", subject, verdict: "violated", evidenceClass: "measured", detail: `verifyCommand failed (exit ${probe.exitCode}): ${lock.verifyCommand}`, artifactRef }];
+  // A failure has to be diagnosable from the report alone: the command's own
+  // last words, and the hashes of everything it said, as the evidence pointer.
+  // A pass needs neither — its exit code is the whole story.
+  const excerpt = probeExcerpt(probe);
+  return [
+    {
+      source: "verify-command",
+      subject,
+      verdict: "violated",
+      evidenceClass: "measured",
+      detail: `verifyCommand failed (exit ${probe.exitCode}): ${lock.verifyCommand}${excerpt ? ` — output: ${excerpt}` : ""}`,
+      artifactRef: probeArtifactRef(`sh -c ${JSON.stringify(lock.verifyCommand)}`, probe),
+    },
+  ];
 }
 
 // ---------------------------------------------------------------------

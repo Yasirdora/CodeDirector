@@ -191,3 +191,33 @@ export function runArgvProbe(
 export function sha256(text: string): string {
   return hashContent(text);
 }
+
+/** Longest excerpt the Change Report carries from a failed probe, and how many of its last lines. */
+export const PROBE_EXCERPT_CHARS = 400;
+export const PROBE_EXCERPT_LINES = 8;
+
+/**
+ * A probe's own last words, as one line for the Change Report — the same shape
+ * as the typecheck rung's diagnosticsExcerpt, and for the same reason: a
+ * failure the report cannot quote is a failure nobody can diagnose. The END is
+ * kept, where compilers and test runners put their errors and summaries,
+ * stderr first, whitespace collapsed and bounded.
+ */
+export function probeExcerpt(probe: ProbeResult, maxChars = PROBE_EXCERPT_CHARS): string {
+  const lines = `${probe.stderr}\n${probe.stdout}`
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return "";
+  const text = lines.slice(-PROBE_EXCERPT_LINES).join(" · ");
+  return text.length > maxChars ? `…${text.slice(-maxChars)}` : text;
+}
+
+/**
+ * The evidence pointer for a probe: what ran, what it exited with, and the
+ * sha256 of every byte it wrote — the hashes of the full output, not of the
+ * excerpt, so a reader can re-run the command and compare.
+ */
+export function probeArtifactRef(label: string, probe: ProbeResult): string {
+  return `${label} → exit ${probe.exitCode ?? "?"} · stdout sha256 ${probe.stdoutSha256} · stderr sha256 ${probe.stderrSha256}`;
+}

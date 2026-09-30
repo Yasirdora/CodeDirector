@@ -1,0 +1,56 @@
+schemaVersion: 1
+id: IL-0038
+status: verified
+utterance: "draft IL-0038 (the isolated probe defect in src/run/tree.ts). Draft only, no activation: the probe stores only the exit code, so a failing verifyCommand can't be diagnosed from the Change Report, and on this repo it reported exit 1/2 on a chain that passes directly. Include a pin that reproduces the exit-code-only reporting."
+goal: "A failing verifyCommand is diagnosable from the Change Report, and the isolated probe is faithful: the report item carries the command's own output — a bounded stdout/stderr excerpt plus the full-output hashes — instead of the exit code alone, and the tree the probe hands back is the tree it took, so a chain that passes when run directly is never reported as a bare, unexplained exit 1/2."
+interpretation: "Seams measured 2026-09-30 on this repo. (1) Diagnosis — proven by reading and by the records: the verify-command rung (src/verify/verify.ts:398-418) receives a ProbeResult that already carries stdout, stderr, stdoutSha256/stderrSha256 and an `omitted` count (src/run/probe.ts:22-40), and keeps only `sh -c \"…\" → exit N` (artifactRef) plus `verifyCommand failed (exit N): …` (detail). The typecheck rung solves the same problem with diagnosticsExcerpt (src/run/diagnostics.ts:102); the verify-command rung has no equivalent. The cost is in this repo's own run records: of seven IL-0036 attempts, four read `verifyCommand failed (exit 1|2)` with no output — including three whose own command exited 0 (IL-0036-20260930-050254-937-30q1-cae8 exit 2; …051536-928-1r091-13b8 exit 1; IL-0036-20260929-222116-493-1lv92-2ffd exit 1) — while the same chain is measured `held` in …044248-189-23aj1-48ff and …044521-842-148x1-be54. (2) Isolation — narrowed by measurement, not by argument: runIsolated (src/run/tree.ts:330) snapshots the work tree before the probe and puts it back after; the restore writes the snapshot's own bytes back for files that were dirty at snapshot (tree.ts:249-261) and falls back to `git checkout HEAD --` only for files that were clean then (tree.ts:266-303), where HEAD and the snapshot agree by construction. Measured 2026-09-30 in a scratch repo: a dirty tracked file the probe rewrote came back byte-identical to its pre-probe content, and a file that was clean came back at HEAD — so the first draft's reading, that the restore reverts uncommitted work to HEAD, is not the mechanism. What stands unexplained is the phenomenon the exit-only wording hides: the same chain passes in some probe runs and reports exit 1/2 in others, and the Change Report cannot say whether the tree or the isolation failed — which is what the pin must reproduce and the fix must make readable."
+keep:
+  - kind: no-new-dependency
+  - kind: api-unchanged
+    symbols:
+      - src/verify/verify.ts#verifyWithBaseline
+      - src/run/tree.ts#runIsolated
+deny:
+  - package.json
+  - package-lock.json
+  - dist/**
+  - src/lock/**
+  - src/report/**
+  - src/domain/**
+  - src/domains/**
+  - src/mcp/**
+  - src/cli-main.ts
+  - README.md
+  - docs/**
+  - eval/**
+change: probe diagnosis — a failed command's output reaches the Change Report, and the isolated run restores the snapshot rather than HEAD
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - src/run/tree.ts
+    - src/run/probe.ts
+    - src/verify/verify.ts
+    - test/verify.test.ts
+    - test/run.test.ts
+  symbols: []
+  maxFiles: 5
+  maxLines: 400
+accept:
+  - A failing verifyCommand's report item names the command's own output — a bounded stdout/stderr excerpt plus the full-output hashes — not only the exit code; the fail-first pin in test/verify.test.ts (a failing verifyCommand's item carries the command's own output, not the exit code alone) is red on today's tree and green after the fix.
+  - "The pin reproduces the exit-code-only reporting: before the fix, the item's detail and artifactRef carry no byte of the command's output — proved against a stub chain that fails on purpose, so the pin does not depend on the real chain failing."
+  - "Running a probe hands back the tree it took: a tracked file that differed from HEAD before the probe returns byte-identical afterwards, and a file that was clean returns at HEAD (measured 2026-09-30 in a scratch repo; pinned in test/run.test.ts)."
+  - "The in-probe discrepancy is either eliminated or named: a chain that passes when run directly does not report a different exit code because of the isolation, or the report's evidence states the difference in its own words (three consecutive measured runs)."
+  - No new dependency; the existing detail/artifact rendering carries the excerpt without a new record field.
+assumptions:
+  - text: Anchors defended — verifyCommand — src/verify/verify.ts (TypeScript); "verifycommand" is its whole name · Service.run — test/fixtures/basic-repo/src/service.ts (TypeScript); "run" is its whole name · Indexer.run — test/fixtures/swift-repo/Surface.swift (Swift); "run" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: verifyCommand, Service.run, Indexer.run (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-09-30T06:01:53.414Z
+createdBy: Yasirdora
