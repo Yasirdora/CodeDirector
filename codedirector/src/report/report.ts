@@ -36,7 +36,7 @@ import {
   rejudgeRun,
   scopeViolations,
 } from "../run/classify";
-import { loadTaskBaseline, taskBaselinePath } from "../run/baseline";
+import { Baseline, baselinesDir, loadTaskBaseline, taskBaselineFileName, taskBaselinePath } from "../run/baseline";
 import { verifyLock, VerifyOptions } from "../verify/verify";
 import {
   countByClass,
@@ -66,6 +66,13 @@ export interface ChangeReport {
   view: "current" | "attempt";
   /** The attempt this report is bound to, when one is recorded. */
   attemptId?: string;
+  /**
+   * The lock that closed this one — its task baseline was captured after
+   * this lock's last attempt, so the tree since then is that lock's to
+   * answer for. Set when, for that reason, the report shows the last
+   * attempt as recorded instead of judging the live tree.
+   */
+  closedBy?: ClosingLock;
   /** Why the verdict is incomplete (always set when it is). */
   incompleteReason?: string;
   /** Acceptance criteria in words — human-judged; rendered everywhere, gating nothing. */
@@ -194,6 +201,63 @@ export function putBackFinding(p: ProbePutBack): Finding {
   };
 }
 
+/** The lock that closed another, and when it started. */
+export interface ClosingLock {
+  lockId: string;
+  /** When its task baseline was captured (ISO 8601). */
+  capturedAt: string;
+}
+
+/**
+ * The lock that closed `lockId`, or null while it is still open.
+ *
+ * A lock answers for the tree from its task baseline until the next lock
+ * starts. "Starts" is a fact in the store, not a guess: another lock's task
+ * baseline, captured after this lock's last attempt finished. From then on
+ * the live tree holds that lock's work too, and judging this lock against it
+ * blames it for changes it never made — a sibling's sealed files read as
+ * OUT-OF-BUDGET, a later change as a broken KEEP — and wrote FAILED onto a
+ * lock that was verified when it ran.
+ *
+ * A lock whose own task baseline is the newer one is open again: `cdir lock
+ * rebase` is the human pointing it at the present tree. The earliest
+ * closing lock is the one named, because that is where this lock's
+ * answerability ended.
+ *
+ * Not covered, and said in the README: two locks running at once (each
+ * still sees the other's files), and an edit made between this lock's last
+ * attempt and the next lock's start (no report judges it once that lock
+ * exists).
+ */
+export function closingLock(
+  rootDir: string,
+  lockId: string,
+  lastAttempt: Pick<RunRecord, "finishedAt">,
+  taskBaseline: Baseline | null,
+): ClosingLock | null {
+  const since = Math.max(
+    Date.parse(lastAttempt.finishedAt),
+    taskBaseline ? Date.parse(taskBaseline.capturedAt) : Number.NEGATIVE_INFINITY,
+  );
+  if (!Number.isFinite(since)) return null; // an unreadable date closes nothing
+  const dir = baselinesDir(rootDir);
+  if (!fs.existsSync(dir)) return null;
+
+  const suffix = taskBaselineFileName("");
+  let closing: ClosingLock | null = null;
+  for (const file of fs.readdirSync(dir)) {
+    if (!file.endsWith(suffix)) continue;
+    const other = file.slice(0, -suffix.length);
+    if (other === lockId) continue;
+    const capturedAt = loadTaskBaseline(rootDir, other)?.capturedAt;
+    if (capturedAt === undefined) continue;
+    const at = Date.parse(capturedAt);
+    if (!(at > since)) continue;
+    if (closing === null || at < Date.parse(closing.capturedAt)) closing = { lockId: other, capturedAt };
+  }
+  return closing;
+}
+
 export async function buildReport(
   rootDir: string,
   lockId: string,
@@ -206,9 +270,9 @@ export async function buildReport(
   const taskBaseline = loadTaskBaseline(rootDir, lockId);
 
   // Which attempt the report is bound to: the explicit one, the live run, or
-  // the latest recorded. `--attempt N` renders that attempt as recorded;
-  // everything else measures the CURRENT tree and says so.
-  const view: ChangeReport["view"] = opts.attempt !== undefined && !opts.run ? "attempt" : "current";
+  // the latest recorded. `--attempt N` renders that attempt as recorded, and
+  // so does a lock that a later lock has closed; everything else measures
+  // the CURRENT tree and says so.
   let latest: { record: RunRecord; recordPath: string } | null = null;
   if (opts.run) {
     latest = { record: opts.run, recordPath: opts.runRecordPath ?? "" };
@@ -226,6 +290,12 @@ export async function buildReport(
   }
   const run = latest?.record;
 
+  // The live tree is this lock's only until the next lock starts. After
+  // that the report is the last attempt as recorded (see closingLock).
+  const closedBy = run && !opts.run && opts.attempt === undefined ? closingLock(rootDir, lockId, run, taskBaseline) : null;
+  const view: ChangeReport["view"] =
+    (opts.attempt !== undefined && !opts.run) || closedBy !== null ? "attempt" : "current";
+
   // When re-verifying standalone, hold the task baseline to its capture-time
   // hash (baseline tamper detection).
   const integrity =
@@ -235,7 +305,19 @@ export async function buildReport(
           expectedBaselineSha256: run.baselineSha256,
         }
       : {};
-  const verification = opts.verification ?? (await verifyLock(rootDir, lockId, { ...integrity, ...opts }));
+  // A closed lock's checks are the ones its last attempt recorded. Run
+  // again, they would test a tree that holds the later lock's work.
+  const recorded: VerificationReport | undefined =
+    closedBy !== null && run
+      ? (run.verification ?? {
+          lockId,
+          verifiedAt: run.finishedAt,
+          items: [],
+          violations: [],
+          counts: countByClass([]),
+        })
+      : undefined;
+  const verification = opts.verification ?? recorded ?? (await verifyLock(rootDir, lockId, { ...integrity, ...opts }));
   const runRecordPath = latest?.recordPath
     ? path.isAbsolute(latest.recordPath)
       ? path.relative(rootDir, latest.recordPath).split(path.sep).join("/")
@@ -291,6 +373,8 @@ export async function buildReport(
   const incompleteReason =
     view === "current" && !taskBaseline
       ? `no task baseline for ${lockId} — scope could not be judged; run \`cdir run\` or \`cdir checkpoint ${lockId}\` first`
+      : closedBy !== null && run && !run.verification
+        ? `the last attempt of ${lockId} recorded no checks, and ${closedBy.lockId} has started since — they cannot be run again on a tree that is no longer this lock's own`
       : unrunnable.length > 0
         ? `declared check(s) could not run: ${unrunnable
             .slice(0, 2)
@@ -327,6 +411,7 @@ export async function buildReport(
     generatedAt: new Date().toISOString(),
     ...(run ? { command: run.command } : {}),
     ...(run?.attemptId ? { attemptId: run.attemptId } : {}),
+    ...(closedBy !== null ? { closedBy } : {}),
     ...(runRecordPath !== undefined ? { runRecordPath } : {}),
     ...(taskBaseline
       ? { taskBaselinePath: path.relative(rootDir, taskBaselineFile).split(path.sep).join("/") }
@@ -346,10 +431,17 @@ export async function buildReport(
 /**
  * Persist the report's verdict onto the Lock: verified when everything
  * passed, failed on any violation. `cdir lock show` reflects it.
+ *
+ * Only a judgment of the live tree is the lock's verdict. A recorded attempt
+ * shown again — an old one asked for by number, or the last one of a lock
+ * that a later lock has closed — is history: it is rendered, and nothing is
+ * written. Decided here, once, for the CLI's report and verify and for the
+ * MCP tool alike.
  */
 export function finalizeLockStatus(rootDir: string, report: ChangeReport): VibeCheck {
   const lock = loadLock(rootDir, report.lockId);
   if (!lock) throw new ReportError(`no such lock: ${report.lockId}`);
+  if (report.view !== "current") return lock;
   lock.status = report.verdict;
   saveLock(rootDir, lock);
   return lock;

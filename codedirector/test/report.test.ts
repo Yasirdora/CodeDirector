@@ -15,7 +15,8 @@ import { sealLock } from "../src/lock/seal";
 import { VibeCheck, KeepClause } from "../src/lock/types";
 import { runWithLock } from "../src/run/run";
 import { scopeViolations } from "../src/run/classify";
-import { buildReport, finalizeLockStatus } from "../src/report/report";
+import { buildReport, closingLock, finalizeLockStatus } from "../src/report/report";
+import { loadTaskBaseline, rebaseTaskBaseline } from "../src/run/baseline";
 import { formatReport, formatReportJson, formatReportMarkdown, summarizeReport } from "../src/report/format";
 import { enforceArtifactRule, VerificationItem } from "../src/verify/types";
 import { stableStringify } from "../src/core/store";
@@ -49,6 +50,23 @@ async function setup(keep: KeepClause[], customize?: (lock: VibeCheck) => void):
   saveLock(root, lock);
   sealLock(root, lock);
   return { root, lock };
+}
+
+/** A second lock on the same repository, drafted once the first has run. */
+async function laterLock(root: string, files: string[]): Promise<VibeCheck> {
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "tidy the other file", {
+    now: "2026-09-12T00:00:00.000Z",
+    createdBy: "test",
+  });
+  lock.keep = [];
+  lock.budget = { files, symbols: [], maxFiles: 3, maxLines: 400 };
+  lock.change = "the other file only";
+  lock.goal = "tidy";
+  lock.status = "active";
+  saveLock(root, lock);
+  sealLock(root, lock);
+  return lock;
 }
 
 /** Re-approve a Lock after editing it, the way a human would. */
@@ -438,6 +456,95 @@ test("report summary: deny lead, broken KEEP lead, and command-failure lead", as
   const cSum = summarizeReport(cReport);
   assert.ok(cSum.startsWith("The command itself failed."), cSum);
   assert.ok(!cSum.includes("verified"));
+});
+
+test("report: a later lock's work is not this lock's — a closed lock is shown as recorded and keeps its status", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.budget.files = ["src/math.js"];
+  });
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  assert.equal(loadLock(root, lock.id)!.status, "verified");
+
+  // The next lock starts, and changes a file the first lock never had in budget.
+  const next = await laterLock(root, ["src/untested.js"]);
+  const second = await runWithLock(root, next.id, [NODE, "-e", append("src/untested.js", "// y\n")], { stdio: "pipe" });
+  assert.equal(second.exitCode, 0);
+
+  const report = await buildReport(root, lock.id);
+  assert.equal(report.verdict, "verified", report.violations.join("; "));
+  assert.deepEqual(report.changed.map((c) => c.path), ["src/math.js"], "the later lock's file is not in this lock's delta");
+  assert.equal(report.view, "attempt", "shown from its last attempt, not measured again");
+  assert.equal(JSON.parse(formatReportJson(report)).closedBy?.lockId, next.id);
+  const text = formatReport(report);
+  assert.ok(text.includes("Closed by " + next.id), text.slice(0, 600));
+  assert.ok(summarizeReport(report).includes(next.id), summarizeReport(report));
+  assert.ok(formatReportMarkdown(report).includes("**Closed by:**"), "markdown names it too");
+
+  finalizeLockStatus(root, report);
+  assert.equal(loadLock(root, lock.id)!.status, "verified", "a closed lock's status is not rewritten");
+
+  // The later lock is open: its own report still measures the live tree.
+  assert.equal((await buildReport(root, next.id)).view, "current");
+});
+
+test("report: a closed lock's checks are the ones it recorded — a later lock's breakage is not re-run against it", async () => {
+  const { root, lock } = await setup([{ kind: "tests-pass", glob: "test/*.test.js" }], (l) => {
+    l.budget.files = ["src/untested.js"];
+  });
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/untested.js", "// x\n")], { stdio: "pipe" });
+  assert.equal(loadLock(root, lock.id)!.status, "verified");
+
+  // The next lock breaks what the first lock promised to keep. That is the
+  // next lock's to answer for, in its own report.
+  const next = await laterLock(root, ["src/math.js"]);
+  const breakAdd =
+    'const fs=require("fs");fs.writeFileSync("src/math.js",fs.readFileSync("src/math.js","utf8").replace("a + b","a - b"))';
+  await runWithLock(root, next.id, [NODE, "-e", breakAdd], { stdio: "pipe" });
+
+  const report = await buildReport(root, lock.id);
+  assert.equal(report.verdict, "verified", report.violations.join("; "));
+  assert.ok(
+    report.items.some((i) => i.verdict === "held" && i.subject.includes("tests-pass")),
+    "the held claim is the recorded one: " + JSON.stringify(report.items.map((i) => [i.subject, i.verdict])),
+  );
+});
+
+test("report: a rebased lock is open again, and the first lock to start is the one that closed it", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.budget.files = ["src/math.js"];
+  });
+  const first = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  assert.equal(closingLock(root, lock.id, first.record, loadTaskBaseline(root, lock.id)), null, "nothing has started since");
+
+  const second = await laterLock(root, ["src/untested.js"]);
+  await runWithLock(root, second.id, [NODE, "-e", append("src/untested.js", "// y\n")], { stdio: "pipe" });
+  const third = await laterLock(root, ["src/untested.js"]);
+  await runWithLock(root, third.id, [NODE, "-e", append("src/untested.js", "// z\n")], { stdio: "pipe" });
+
+  const closed = closingLock(root, lock.id, first.record, loadTaskBaseline(root, lock.id));
+  assert.equal(closed?.lockId, second.id, "the earliest later lock, not the newest");
+  assert.equal(closingLock(root, third.id, first.record, loadTaskBaseline(root, third.id)), null, "the newest lock is open");
+
+  // The human points the first lock at the present tree: it is open again,
+  // and its report measures the live tree once more.
+  await rebaseTaskBaseline(root, loadLock(root, lock.id)!);
+  assert.equal(closingLock(root, lock.id, first.record, loadTaskBaseline(root, lock.id)), null);
+  const report = await buildReport(root, lock.id);
+  assert.equal(report.view, "current");
+  assert.equal(report.closedBy, undefined);
+});
+
+test("report: showing an old attempt does not rewrite the lock's status", async () => {
+  const { root, lock } = await setup([]);
+  const failed = await runWithLock(root, lock.id, [NODE, "-e", "process.exit(1)"], { stdio: "pipe" });
+  assert.equal(failed.exitCode, 1);
+  await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  assert.equal(loadLock(root, lock.id)!.status, "verified");
+
+  const old = await buildReport(root, lock.id, { attempt: 1 });
+  assert.equal(old.verdict, "failed", "the old attempt is still what it was");
+  finalizeLockStatus(root, old);
+  assert.equal(loadLock(root, lock.id)!.status, "verified", "history is shown, not written back");
 });
 
 test("report: a fixed re-verification refreshes the verdict, not the failed attempt's", async () => {

@@ -564,6 +564,38 @@ test("mcp: a report refreshes the lock's verdict instead of leaving the last FAI
   }
 });
 
+test("mcp: a report on a lock that a later lock has closed shows it as recorded and leaves its status", async () => {
+  const root = makeGitRepo(FILES);
+  const { client, close } = await connect(root);
+  try {
+    const call = (name: string, args: Record<string, unknown>) => client.callTool({ name, arguments: args });
+    const append = (file: string) => [NODE, "-e", "require('fs').appendFileSync('" + file + "','// x\\n')"];
+    const start = async (utterance: string, file: string): Promise<string> => {
+      const draft = await call("lock_draft", { utterance, budgetFiles: [file] });
+      const lockId = JSON.parse(resultText(draft)).lockId as string;
+      await call("lock_check", { lockId });
+      const act = await call("lock_activate", { lockId });
+      assert.ok(!isError(act), resultText(act));
+      const ran = await call("run_locked", { lockId, command: append(file) });
+      assert.ok(!isError(ran), resultText(ran));
+      return lockId;
+    };
+    const first = await start("keep math tidy", "src/math.js");
+    const second = await start("rotate the secret", "src/secret.js");
+
+    const lockDir = path.join(root, ".codedirector", "locks");
+    const lockFile = path.join(lockDir, fs.readdirSync(lockDir).find((n) => n.startsWith(first))!);
+    assert.match(fs.readFileSync(lockFile, "utf8"), /^status: verified$/m);
+
+    const rep = JSON.parse(resultText(await call("report", { lockId: first, format: "json" })));
+    assert.equal(rep.verdict, "verified", JSON.stringify(rep.violations));
+    assert.equal(rep.closedBy?.lockId, second);
+    assert.match(fs.readFileSync(lockFile, "utf8"), /^status: verified$/m, "the second lock's file did not fail the first");
+  } finally {
+    await close();
+  }
+});
+
 test("mcp: lock_draft carries verifyTimeoutMs and lock_amend can set it", async () => {
   const root = makeGitRepo(FILES);
   const { client, close } = await connect(root);

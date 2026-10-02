@@ -1,0 +1,66 @@
+schemaVersion: 1
+id: IL-0039
+status: verified
+utterance: now regarding code director, tell me how to fix it — I do agree please proceed with highest level of professionalism
+goal: "A lock answers for the tree only until the next lock starts. Once another lock's task baseline has been captured after this lock's last attempt (and after its own task baseline, so a rebased lock is open again), `cdir report`, `cdir verify` and the MCP report tool show this lock's last attempt as recorded, name the lock that closed it, run no check again, and do not rewrite its status. With no later lock, nothing changes: the live tree is judged, a post-run edit is caught, and a fixed re-verification still refreshes the verdict (IL-0037). `cdir report --attempt N` shows an old attempt and writes nothing onto the lock. README says the rule and names the two cases it does not reach: locks running at the same time, and an edit made between one lock's last attempt and the next lock's start."
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: api-unchanged
+    symbols:
+      - src/report/report.ts#buildReport
+      - src/report/report.ts#finalizeLockStatus
+  - kind: custom
+    text: "The live run's own report (cdir run, run_locked) is untouched: a run is always judged on the tree it just changed, whatever other locks exist."
+  - kind: custom
+    text: "A closed lock can never read better than its last attempt recorded: the verdict, the scope and the checks are that attempt's, and an attempt that recorded no checks reads incomplete, never verified."
+  - kind: custom
+    text: Whether a recorded verdict is written onto the lock is decided in one place (finalizeLockStatus), for the CLI's report and verify and for the MCP tool alike.
+deny:
+  - src/run/**
+  - src/verify/**
+  - src/lock/**
+  - src/core/**
+  - src/checkpoint/**
+  - src/hook/**
+  - package.json
+  - package-lock.json
+  - eval/**
+  - docs/**
+change: TODO — one-line scope description
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 1200000
+budget:
+  files:
+    - src/report/report.ts
+    - src/report/format.ts
+    - src/mcp/worker.ts
+    - src/cli-main.ts
+    - README.md
+    - test/report.test.ts
+    - test/mcp.test.ts
+  symbols: []
+  maxFiles: 7
+  maxLines: 400
+accept:
+  - "Lock A verified, then lock B changes another file: report A reads VERIFIED, names 'Closed by B', and A's lock file still says verified."
+  - "Lock B breaks something A promised to keep: report A still shows A's recorded checks; B's own report is where the breakage is judged."
+  - With no later lock, a forbidden file edited after the run still makes report read FAILED, as before.
+  - report --attempt 1 on an old failed attempt leaves a verified lock verified.
+  - After cdir lock rebase, a closed lock's report measures the live tree again.
+  - The README section on cdir report states the rule and its two limits in plain words.
+assumptions:
+  - text: 'low confidence — confirm territory with the human: every anchor matched only as a fragment of a symbol name ("level" in <toplevel>, "level" in <toplevel>, "level" in <toplevel>, "level" in <toplevel>, "level" in StructuralParser.extractTopLevel) — an incidental word can do this'
+    source: system
+    confirmed: false
+  - text: Anchors defended — <toplevel> — eval/mcp-drive.ts (TypeScript); "level" only occurs inside "<toplevel>" · <toplevel> — eval/run.ts (TypeScript); "level" only occurs inside "<toplevel>" · <toplevel> — examples/demo-repo/test/pipeline.test.ts (TypeScript); "level" only occurs inside "<toplevel>" · <toplevel> — src/cli-main.ts (TypeScript); "level" only occurs inside "<toplevel>" · StructuralParser.extractTopLevel — src/core/parser.ts (TypeScript); "level" only occurs inside "extractTopLevel"
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: <toplevel>, <toplevel>, <toplevel>, <toplevel>, StructuralParser.extractTopLevel (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-10-02T10:42:18.263Z
+createdBy: Yasirdora

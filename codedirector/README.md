@@ -440,8 +440,22 @@ belongs to, so a fixed re-verification is never left reading FAILED. The
 verdict is `verified`, `failed`, or `incomplete` — the last when there is no
 task baseline to judge scope against, or a declared check could not run, and
 it is never written as verified.
-`--attempt N` renders a recorded attempt as it was, labeled with its id. It
-opens with a plain-language summary generated from the same data as the
+`--attempt N` renders a recorded attempt as it was, labeled with its id, and
+writes nothing onto the lock: an old attempt is history, not the verdict.
+
+**A lock answers for the tree only until the next lock starts.** Once
+another lock's task baseline has been captured after this lock's last
+attempt, the live tree holds that lock's work too, and judging the older
+lock against it would blame it for changes it never made. So for a lock that
+a later one has closed, `cdir report` — and `cdir verify`, and the MCP
+`report` tool — show its last attempt as recorded, name the lock that closed
+it ("Closed by IL-0042"), re-run nothing, and leave its status as it was.
+`cdir lock rebase` opens it again, on the present tree. Two things this rule
+does not reach: two locks running at the same time still see each other's
+files, and an edit made between one lock's last attempt and the next lock's
+start is not judged by any report once that lock exists.
+
+The report opens with a plain-language summary generated from the same data as the
 detail ("Done — verified. Only src/preview.ts changed, within the agreed
 scope. 2 promises held (checked). 1 thing needs your judgment…" — or, on
 failure, "Blocked: src/export.ts was outside the agreed scope. Nothing was

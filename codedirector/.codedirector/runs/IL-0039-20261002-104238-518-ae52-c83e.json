@@ -1,0 +1,177 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261002-104238-518-ae51-c83e",
+  "baselinePath": ".codedirector/baselines/IL-0039-task.json",
+  "baselineSha256": "aa8ba354ca91532fe63460fddc1aff1eac0e9c8c5b453aedfb26b936d756c505",
+  "budget": {
+    "filesChanged": 2,
+    "linesChanged": 113,
+    "maxFiles": 7,
+    "maxLines": 400
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "test/mcp.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/report.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261002T104231826",
+    "createdAt": "2026-10-02T10:42:32.023Z",
+    "dirty": true,
+    "id": "ckpt-20261002T104231826",
+    "ref": "9e64cc00b832ff3396c6a08a25bd1a7f547f490c",
+    "statusHash": "fe69d847ab97330f753508d880bf5259b0a7900670210f2fe62ac2e2290a5221",
+    "tag": "cdir/ckpt-20261002T104231826"
+  },
+  "command": [
+    "node",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/d1ccff10-ca0a-438e-8b2b-c9174cb981eb/scratchpad/cdir-red.mjs"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-10-02T10:42:38.549Z",
+  "keepResults": [
+    {
+      "detail": "signature unchanged: src/report/report.ts#buildReport",
+      "kind": "api-unchanged",
+      "status": "ok"
+    },
+    {
+      "detail": "signature unchanged: src/report/report.ts#finalizeLockStatus",
+      "kind": "api-unchanged",
+      "status": "ok"
+    },
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "The live run's own report (cdir run, run_locked) is untouched: a run is always judged on the tree it just changed, whatever other locks exist. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "A closed lock can never read better than its last attempt recorded: the verdict, the scope and the checks are that attempt's, and an attempt that recorded no checks reads incomplete, never verified. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "Whether a recorded verdict is written onto the lock is decided in one place (finalizeLockStatus), for the CLI's report and verify and for the MCP tool alike. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0039",
+  "startedAt": "2026-10-02T10:42:38.518Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0039-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 5,
+      "unchecked": 3
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0039-task.json#signatures[src/report/report.ts#buildReport]",
+        "clauseKind": "api-unchanged",
+        "detail": "signature unchanged: src/report/report.ts#buildReport",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "api-unchanged · src/report/report.ts#buildReport",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0039-task.json#signatures[src/report/report.ts#finalizeLockStatus]",
+        "clauseKind": "api-unchanged",
+        "detail": "signature unchanged: src/report/report.ts#finalizeLockStatus",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "api-unchanged · src/report/report.ts#finalizeLockStatus",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0039-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0039-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 1 · stdout sha256 f47e6d5016c36ff8eabf268fdb0d1ab0987ec35b8cae371a35a7080aa8ef1d2e · stderr sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "detail": "verifyCommand failed (exit 1): npm test && npm run eval — output: at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) { · generatedMessage: false, · code: 'ERR_ASSERTION', · actual: 'failed', · expected: 'verified', · operator: 'strictEqual', · diff: 'simple' · }",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "violated"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · The live run's own report (cdir run, run_locked) is untouched: a run is always judged on the tree it just changed, whatever other locks exist.",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · A closed lock can never read better than its last attempt recorded: the verdict, the scope and the checks are that attempt's, and an attempt that recorded no checks reads incomplete, never verified.",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Whether a recorded verdict is written onto the lock is decided in one place (finalizeLockStatus), for the CLI's report and verify and for the MCP tool alike.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0039",
+    "verifiedAt": "2026-10-02T10:44:27.874Z",
+    "violations": [
+      "VERIFY verify-command: verifyCommand failed (exit 1): npm test && npm run eval — output: at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) { · generatedMessage: false, · code: 'ERR_ASSERTION', · actual: 'failed', · expected: 'verified', · operator: 'strictEqual', · diff: 'simple' · }"
+    ]
+  },
+  "violations": [
+    "VERIFY verify-command: verifyCommand failed (exit 1): npm test && npm run eval — output: at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) { · generatedMessage: false, · code: 'ERR_ASSERTION', · actual: 'failed', · expected: 'verified', · operator: 'strictEqual', · diff: 'simple' · }"
+  ]
+}

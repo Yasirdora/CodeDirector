@@ -97,7 +97,25 @@ export function summarizeReport(report: ChangeReport): string {
     sentences.push(`${plural(report.findings.length, "observation")} noted along the way (not verified).`);
   }
 
+  // 6. A closed lock: what is shown is its last attempt, not today's tree.
+  if (report.closedBy) {
+    sentences.push(
+      `Shown as last recorded: ${report.closedBy.lockId} has started since, and the tree is that lock's to answer for now.`,
+    );
+  }
+
   return sentences.join(" ");
+}
+
+/**
+ * Why a closed lock's report is its last attempt — one wording for the
+ * terminal and for markdown, after the label each puts in front of it.
+ */
+function closedNote(closedBy: NonNullable<ChangeReport["closedBy"]>): string {
+  return (
+    `${closedBy.lockId}, which started ${closedBy.capturedAt} — after this lock's last attempt. ` +
+    `The tree since then is that lock's to answer for: nothing here was judged again, and this lock's status is as it was.`
+  );
 }
 
 // ---------------------------------------------------------------------
@@ -117,6 +135,7 @@ export function formatReport(report: ChangeReport): string {
   } else {
     lines.push(`Basis  current tree (no task baseline — scope not judged)`);
   }
+  if (report.closedBy) lines.push(`Closed by ${closedNote(report.closedBy)}`);
   if (report.command) {
     lines.push(
       `Run    ${report.command.join(" ")} · record ${report.runRecordPath ?? "(unknown)"}`,
@@ -215,6 +234,7 @@ export function formatReportMarkdown(report: ChangeReport): string {
   } else if (report.taskBaselineCapturedAt) {
     lines.push(`- **Basis:** current tree vs task baseline (captured ${report.taskBaselineCapturedAt})`);
   }
+  if (report.closedBy) lines.push(`- **Closed by:** ${closedNote(report.closedBy)}`);
   if (report.command) lines.push(`- **Run:** \`${report.command.join(" ")}\` (record: \`${report.runRecordPath ?? "?"}\`)`);
   if (report.baselinePath) lines.push(`- **Baseline:** \`${report.baselinePath}\``);
   lines.push(`- **Evidence counts:** proven ${report.counts.proven} · measured ${report.counts.measured} · asserted ${report.counts.asserted} · unchecked ${report.counts.unchecked}`);
