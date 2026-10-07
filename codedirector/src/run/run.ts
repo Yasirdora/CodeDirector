@@ -9,7 +9,9 @@
  *   4. Execute the command with inherited stdio.
  *   5. Classify every changed file against the Lock; diff the baseline.
  *      Denied / out-of-budget changes are violations (unless --allow-expand,
- *      a logged override). Nothing is auto-reverted — the human decides.
+ *      a logged override). A check the repo requires for a changed file and
+ *      the verifyCommand leaves out is a violation too, and no override.
+ *      Nothing is auto-reverted — the human decides.
  *   6. Write the run record to .codedirector/runs/.
  *
  * Exit code: 0 only if the command succeeded AND no violations.
@@ -44,8 +46,10 @@ import {
   changedLineCount,
   ClassifiedChange,
   classifyChanges,
+  requiredCheckViolations,
   scopeViolations,
 } from "./classify";
+import { loadChecks } from "../config/checks";
 import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
 import { declaredButUnrunnable, ProbePutBack, VerificationReport } from "../verify/types";
 
@@ -340,6 +344,7 @@ export async function runWithLock(
   // One wording, one place: a standalone verify rebuilds these from the same
   // function when it judges this run against a Lock that has since changed.
   const scope = scopeViolations(changed, budget);
+  const checks = requiredCheckViolations(changed, lock.verifyCommand, loadChecks(rootDir));
   const keepViolations = verification
     ? verification.violations
     : keepResults
@@ -348,8 +353,9 @@ export async function runWithLock(
 
   const allowExpand = opts.allowExpand === true;
   // --allow-expand is the logged override for SCOPE growth only; a broken
-  // KEEP clause is never overridden (the rule that gives the Lock teeth).
-  const violations = allowExpand ? keepViolations : [...scope, ...keepViolations];
+  // KEEP clause is never overridden (the rule that gives the Lock teeth), and
+  // neither is a check the repo requires that the verifyCommand leaves out.
+  const violations = allowExpand ? [...checks, ...keepViolations] : [...scope, ...checks, ...keepViolations];
 
   const record: RunRecord = {
     lockId: lock.id,

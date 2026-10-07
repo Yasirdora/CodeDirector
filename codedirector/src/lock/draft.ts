@@ -18,6 +18,8 @@ import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
 import { buildRepoMap, resolveAnchorsDetailed, type AnchorMatch, type AnchorStrength } from "../core/map";
 import { INDEXABLE_EXTENSIONS } from "../core/walk";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
+import { checksNeededBy, joinRuns, loadChecks } from "../config/checks";
+import { hasGlobChars } from "./glob";
 import { VibeCheck, KeepClause, LOCK_SCHEMA_VERSION, DEFAULT_VERIFY_TIMEOUT_MS } from "./types";
 import { nextLockId, saveLock } from "./store";
 
@@ -395,6 +397,21 @@ export function draftLock(
     });
   }
 
+  // No verifyCommand given: the repo's rules file says which checks these
+  // files need. A given one is never touched. A glob names no file, so (as
+  // in checkLock) it is not judged here. A bad rules file fills nothing and
+  // says so; checkLock refuses it when the lock is activated.
+  let verifyCommand = opts.verifyCommand;
+  if (verifyCommand === undefined) {
+    const rulesFile = loadChecks(rootDir);
+    if (rulesFile.status === "invalid") {
+      assumptions.push({ text: `verifyCommand left empty: ${rulesFile.error}`, source: "system", confirmed: false });
+    } else if (rulesFile.status === "rules") {
+      const needed = checksNeededBy(rulesFile.rules, budgetFiles.filter((f) => !hasGlobChars(f)));
+      if (needed.length > 0) verifyCommand = joinRuns(needed);
+    }
+  }
+
   const lock: VibeCheck = {
     schemaVersion: LOCK_SCHEMA_VERSION,
     id: nextLockId(rootDir),
@@ -405,11 +422,11 @@ export function draftLock(
     keep: opts.keep ?? [],
     deny: opts.deny && opts.deny.length > 0 ? opts.deny : suggestedDeny,
     change: "TODO — one-line scope description",
-    ...(opts.verifyCommand !== undefined ? { verifyCommand: opts.verifyCommand } : {}),
+    ...(verifyCommand !== undefined ? { verifyCommand } : {}),
     ...(opts.verifyTimeoutMs !== undefined
       ? { verifyTimeoutMs: opts.verifyTimeoutMs }
-      : opts.verifyCommand !== undefined
-        ? { verifyTimeoutMs: estimateVerifyTimeoutMs(opts.verifyCommand, domains) }
+      : verifyCommand !== undefined
+        ? { verifyTimeoutMs: estimateVerifyTimeoutMs(verifyCommand, domains) }
         : {}),
     ...(opts.verifyCovers !== undefined ? { verifyCovers: opts.verifyCovers } : {}),
     budget: {

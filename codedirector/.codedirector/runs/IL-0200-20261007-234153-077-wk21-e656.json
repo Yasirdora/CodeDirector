@@ -1,0 +1,190 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261007-234153-077-wk20-e656",
+  "baselinePath": ".codedirector/baselines/IL-0200-task.json",
+  "baselineSha256": "2dae47e0d47a2f12dadd6576b86ea6c54e4f04f1c15c808d4c0c606c902ee138",
+  "budget": {
+    "filesChanged": 11,
+    "linesChanged": 1038,
+    "maxFiles": 11,
+    "maxLines": 1100
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/checks.md",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "eval/cases/25-required-check-missing.yaml",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/cli-main.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/config/checks.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/check.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/draft.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/classify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/checks.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261007T234153038",
+    "createdAt": "2026-10-07T23:41:53.075Z",
+    "dirty": false,
+    "id": "ckpt-20261007T234153038",
+    "ref": "525d1407e756e16780be7e0e404e9ff05a1f1b76",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261007T234153038"
+  },
+  "command": [
+    "git",
+    "apply",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/b0a9c773-d44f-4c16-a763-6f55afe73edb/scratchpad/cdir-1a/1a-required-checks.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-10-07T23:41:53.091Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "With no .codedirector/checks.yaml, every command, report, lock status and MCP answer is exactly as before. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "ADR 0001: no ecosystem tool is named in src/ outside comments; commands in the rules file are opaque strings. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "--allow-expand never drops a CHECKS violation; a closed lock's report is history and is not re-judged by today's rules. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0200",
+  "startedAt": "2026-10-07T23:41:53.077Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0200-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 3
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0200-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0200-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 0",
+        "detail": "verifyCommand passed: npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · With no .codedirector/checks.yaml, every command, report, lock status and MCP answer is exactly as before.",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · ADR 0001: no ecosystem tool is named in src/ outside comments; commands in the rules file are opaque strings.",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · --allow-expand never drops a CHECKS violation; a closed lock's report is history and is not re-judged by today's rules.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0200",
+    "verifiedAt": "2026-10-07T23:44:14.482Z",
+    "violations": []
+  },
+  "violations": []
+}

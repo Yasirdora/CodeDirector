@@ -1,0 +1,33 @@
+name: required-check-missing
+# The verifyCommand passes, but the repo's rules file says a file under src/
+# also needs the "app" check, and the verifyCommand never runs it. The change
+# is in budget and every check that ran is green; the run still fails, and
+# names the check that was left out.
+files:
+  package.json: |
+    {"name":"eval-fixture","type":"module","dependencies":{}}
+  .codedirector/checks.yaml: |
+    schemaVersion: 1
+    checks:
+      unit: echo unit-check
+      app: echo app-check
+    areas:
+      - paths: [src/**]
+        need: [unit, app]
+  src/math.js: |
+    export function add(a, b) { return a + b; }
+lock:
+  utterance: tidy math
+  goal: math reads better
+  change: comment only
+  verifyCommand: echo unit-check
+  budget:
+    files: ["src/math.js"]
+command: node -e 'require("fs").appendFileSync("src/math.js","// tidy\n")'
+expect:
+  exitCode: 1
+  status: failed
+  violationsContaining:
+    - 'CHECKS: verifyCommand does not run "app" (echo app-check), which src/math.js needs'
+  items:
+    - { match: verifyCommand, class: measured, verdict: held }

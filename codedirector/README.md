@@ -300,6 +300,10 @@ tree — the explicit revision, for a legacy lock or a reference that must
 change. The replaced baseline is archived beside the new one; nothing moves
 silently, and re-running never moves it.
 
+### `cdir checks [paths...] [--json]`
+
+Reads the optional `.codedirector/checks.yaml` — which checks each area of the repo needs — and says what it requires. Drafting fills the verifyCommand from it, `lock check` refuses a verifyCommand that leaves a needed check out, and a run or report fails on one (a `CHECKS` violation): see [docs/checks.md](docs/checks.md).
+
 ### `cdir checkpoint [<lock-id>]` · `cdir undo [--force] [--keep-untracked]`
 
 Git-native safety net (blueprint §19): `checkpoint` records a lightweight

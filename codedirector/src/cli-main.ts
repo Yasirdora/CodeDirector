@@ -11,6 +11,7 @@
  *   cdir lock show <id>                Render a Lock with checkability markers
  *   cdir lock check <id>               Validate a Lock (non-zero exit on invalid)
  *   cdir lock activate <id>            draft → active (only if check passes)
+ *   cdir checks [paths...] [--json]    The checks .codedirector/checks.yaml requires
  *   cdir checkpoint                    Git checkpoint (tag + dirty-state record)
  *   cdir undo [--force] [--keep-untracked]
  *                                       Restore the latest checkpoint
@@ -35,6 +36,7 @@ import { getProfile, mergeDraftOptions, PROFILE_NAMES } from "./lock/profiles";
 import { listLocks, loadLock, saveLock } from "./lock/store";
 import { sealLock } from "./lock/seal";
 import { checkLock } from "./lock/check";
+import { CHECKS_FILE, checksNeededBy, joinRuns, loadChecks } from "./config/checks";
 import { formatLock, formatLockLine } from "./lock/show";
 import { createCheckpoint, latestCheckpoint, undo, CheckpointError } from "./checkpoint";
 import { formatRunReport, runWithLock, RunError } from "./run/run";
@@ -74,6 +76,12 @@ Usage:
   cdir lock check <id> [--root DIR]       Validate against the current index;
                                           exit 1 when invalid
   cdir lock activate <id> [--root DIR]    draft → active (requires check to pass)
+
+  cdir checks [paths...] [--root DIR]     The checks ${CHECKS_FILE} requires.
+          [--json]                        No paths: validate the file and list its
+                                          checks and areas. With paths: the checks
+                                          those files need, and the command that
+                                          runs them. Exit 1 when the file is invalid.
 
   cdir checkpoint [--root DIR]            Git checkpoint: tag cdir/ckpt-<ts> at
                                           HEAD + record dirty state
@@ -383,6 +391,43 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
   }
 }
 
+/** `cdir checks [paths...]`: validate the rules file, or ask what some files need. */
+function checksCommand(root: string, positional: string[], flags: Map<string, Array<string | true>>): number {
+  const json = flags.has("json");
+  const print = (text: string, data: object) => process.stdout.write(json ? stableStringify(data) : text + "\n");
+  const file = loadChecks(root);
+  if (file.status === "absent") {
+    print(`no rules file (${CHECKS_FILE}) — no checks are required`, { status: "absent" });
+    return 0;
+  }
+  if (file.status === "invalid") {
+    if (json) process.stdout.write(stableStringify({ status: "invalid", error: file.error }));
+    else process.stderr.write(`cdir: error: ${file.error}\n`);
+    return 1;
+  }
+  const { rules } = file;
+  if (positional.length === 0) {
+    const lines = [`checks (${CHECKS_FILE}):`];
+    for (const c of rules.checks) {
+      const contains = c.match === c.run ? "" : `   [a verifyCommand must contain: ${c.match}]`;
+      lines.push(`  ${c.name}: ${c.run}${contains}`);
+    }
+    lines.push(`areas:`);
+    for (const a of rules.areas) lines.push(`  ${a.paths.join(", ")}  need  ${a.need.join(", ")}`);
+    print(lines.join("\n"), { status: "rules", ...rules });
+    return 0;
+  }
+  // Paths are root-relative, the space the rules are written in.
+  const files = positional.map((p) => path.relative(root, path.resolve(root, p)).split(path.sep).join("/"));
+  const needed = checksNeededBy(rules, files);
+  const command = joinRuns(needed);
+  const lines = needed.map((n) => `${n.check.name}: ${n.check.run}   (${n.files.join(", ")})`);
+  lines.push(needed.length > 0 ? `a verifyCommand that runs them: ${command}` : `no check is needed for these paths`);
+  const checks = needed.map((n) => ({ name: n.check.name, run: n.check.run, match: n.check.match, files: n.files }));
+  print(lines.join("\n"), { status: "rules", needed: checks, command });
+  return 0;
+}
+
 async function main(): Promise<number> {
   // Everything after a bare `--` is the command for `cdir run`.
   const argv = process.argv.slice(2);
@@ -440,6 +485,9 @@ async function main(): Promise<number> {
 
     case "lock":
       return lockCommand(root, positional, flags);
+
+    case "checks":
+      return checksCommand(root, positional, flags);
 
     case "checkpoint": {
       try {

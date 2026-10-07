@@ -13,6 +13,7 @@ import * as path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { VibeCheck } from "../lock/types";
 import { matchPath } from "../lock/glob";
+import { ChecksFile, checksNeededBy, runsCheck } from "../config/checks";
 import { gitPrefix, gitStatusPorcelain, porcelainLinePaths, toRootRelative } from "../checkpoint";
 import { Baseline } from "./baseline";
 // Type-only, so nothing is imported at runtime and run.ts -> classify.ts
@@ -215,6 +216,31 @@ export function scopeViolations(changed: ClassifiedChange[], budget: BudgetStats
     out.push(`BUDGET: ${budget.linesChanged} lines changed > maxLines ${budget.maxLines}`);
   }
   return out;
+}
+
+/**
+ * The required-checks half of a verdict, in words: one violation for each
+ * check the changed files need and the verifyCommand does not run.
+ *
+ * Kept beside `scopeViolations` for the same reason — the live run and the
+ * report both judge, and one wording must not become two. Unlike scope it is
+ * not something `--allow-expand` can accept. An unreadable rules file fails
+ * closed: the run cannot be shown to have run what the repo requires.
+ */
+export function requiredCheckViolations(
+  changed: ClassifiedChange[],
+  verifyCommand: string | undefined,
+  rulesFile: ChecksFile,
+): string[] {
+  if (rulesFile.status === "absent") return [];
+  if (rulesFile.status === "invalid") return [`CHECKS: ${rulesFile.error}`];
+  const files = changed.map((c) => c.path);
+  return checksNeededBy(rulesFile.rules, files)
+    .filter((n) => !runsCheck(verifyCommand ?? "", n.check))
+    .map((n) => {
+      const more = n.files.length > 1 ? ` (+${n.files.length - 1} more)` : "";
+      return `CHECKS: verifyCommand does not run "${n.check.name}" (${n.check.match}), which ${n.files[0]} needs${more}`;
+    });
 }
 
 /** A recorded run, judged again against a Lock that may have moved on. */

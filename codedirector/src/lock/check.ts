@@ -4,7 +4,8 @@
  * Checks everything that can be checked without executing anything:
  * budget files exist, budget/api-unchanged symbols resolve in the current
  * index, deny globs are valid, custom clauses carry the "human judges"
- * warning, and budget.maxFiles >= budget.files.length.
+ * warning, budget.maxFiles >= budget.files.length, and the verifyCommand
+ * runs every check the repo's rules file requires for the budget's files.
  */
 
 import * as fs from "node:fs";
@@ -15,7 +16,8 @@ import { buildGraph } from "../core/graph";
 import { VibeCheck, KeepClause, clauseCheckability } from "./types";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
 import type { ToolchainReach } from "../domain/types";
-import { validateGlob } from "./glob";
+import { hasGlobChars, validateGlob } from "./glob";
+import { checksNeededBy, joinRuns, loadChecks, runsCheck } from "../config/checks";
 // `languageOf` lives in draft.ts because IL-0001 needed it there first.
 // A fundamental module importing from the drafter is the wrong direction and
 // the table belongs in a shared file; duplicating it here would be worse, so
@@ -253,6 +255,26 @@ export function checkLock(
             `${language} check to verifyCommand, or declare it with verifyCovers: ["${language}"]`,
         );
       }
+    }
+  }
+
+  // Required checks. The repo's rules file says which checks a file needs;
+  // a verifyCommand that leaves one out is a refusal, and the message gives
+  // the command that would do. Like coverage, a glob names no file, so a
+  // budget of globs is not judged here — the run catches it by the files it
+  // actually changes. A bad rules file refuses too: nothing can be judged.
+  const rulesFile = loadChecks(rootDir);
+  if (rulesFile.status === "invalid") {
+    errors.push(rulesFile.error);
+  } else if (rulesFile.status === "rules") {
+    const needed = checksNeededBy(rulesFile.rules, lock.budget.files.filter((f) => !hasGlobChars(f)));
+    const missing = needed.filter((n) => !runsCheck(lock.verifyCommand ?? "", n.check));
+    if (missing.length > 0) {
+      errors.push(
+        `verifyCommand does not run the check(s) the budget needs: ` +
+          `${missing.map((n) => `${n.check.name} (${n.files.join(", ")})`).join(", ")} — ` +
+          `a verifyCommand that runs them: ${joinRuns(needed)}`,
+      );
     }
   }
 

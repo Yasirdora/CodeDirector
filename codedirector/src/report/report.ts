@@ -34,8 +34,10 @@ import {
   ClassifiedChange,
   classifyChanges,
   rejudgeRun,
+  requiredCheckViolations,
   scopeViolations,
 } from "../run/classify";
+import { loadChecks } from "../config/checks";
 import { Baseline, baselinesDir, loadTaskBaseline, taskBaselineFileName, taskBaselinePath } from "../run/baseline";
 import { verifyLock, VerifyOptions } from "../verify/verify";
 import {
@@ -358,6 +360,12 @@ export async function buildReport(
     scope = run?.allowExpand ? [] : scopeViolations(changed, budget);
   }
 
+  // The required checks are judged on whatever `changed` holds, as the
+  // lock's verifyCommand stands, and --allow-expand does not excuse them. A
+  // closed lock is history, as above: today's rules are not applied to it.
+  const checks =
+    closedBy === null ? requiredCheckViolations(changed, lock.verifyCommand, loadChecks(rootDir)) : [];
+
   const items = enforceArtifactRule(verification.items);
 
   let findings: Finding[] = [];
@@ -382,7 +390,7 @@ export async function buildReport(
             .join("; ")}${unrunnable.length > 2 ? `; +${unrunnable.length - 2} more` : ""}`
         : undefined;
 
-  const violations = [...scope, ...verification.violations];
+  const violations = [...scope, ...checks, ...verification.violations];
   // The recorded command outcome is an attempt's history. It decides the
   // verdict only when this report IS that attempt — an explicit attempt view,
   // or the live run's own report. A current-tree re-verification judges the

@@ -1,0 +1,68 @@
+schemaVersion: 1
+id: IL-0200
+status: verified
+utterance: '"Yes, this order (Recommended)" — to "Start the Code Director work in this order?" (option text: "Rules file + taking turns first, then clean test settings, closing failed locks and the warnings, lock numbers, and the reviewed mark. Separate cdir folder; your installed cdir stays as it is until you say yes.") — this lock is the first half of item 1: the rules file (required checks by changed area).'
+goal: "Brief 1a (~/codedirector-briefs/1a-required-checks.md): an optional repo rules file, .codedirector/checks.yaml, names checks and which areas of the repo need which. Code Director fills a drafted lock's verifyCommand from it, refuses to activate a lock whose verifyCommand leaves out a check its budget files need, and fails a run or report (a CHECKS violation that --allow-expand does not drop) when a changed file needs a check the verifyCommand does not run. `cdir checks [paths]` validates and answers. With no rules file, everything is exactly as today."
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: With no .codedirector/checks.yaml, every command, report, lock status and MCP answer is exactly as before.
+  - kind: custom
+    text: "ADR 0001: no ecosystem tool is named in src/ outside comments; commands in the rules file are opaque strings."
+  - kind: custom
+    text: --allow-expand never drops a CHECKS violation; a closed lock's report is history and is not re-judged by today's rules.
+deny:
+  - src/mcp/**
+  - src/domains/**
+  - src/domain/**
+  - src/lock/types.ts
+  - src/lock/yaml.ts
+  - src/lock/seal.ts
+  - test/mcp.test.ts
+  - test/domains.test.ts
+  - package.json
+  - package-lock.json
+  - dist/**
+  - eval/cases/0*.yaml
+  - eval/cases/1*.yaml
+  - eval/cases/20-*.yaml
+  - eval/cases/21-*.yaml
+  - eval/cases/22-*.yaml
+  - eval/cases/23-*.yaml
+  - eval/cases/24-*.yaml
+change: TODO — one-line scope description
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 1800000
+budget:
+  files:
+    - src/config/checks.ts
+    - src/run/classify.ts
+    - src/run/run.ts
+    - src/report/report.ts
+    - src/lock/check.ts
+    - src/lock/draft.ts
+    - src/cli-main.ts
+    - test/checks.test.ts
+    - eval/cases/25-required-check-missing.yaml
+    - docs/checks.md
+    - README.md
+  symbols: []
+  maxFiles: 11
+  maxLines: 1100
+accept:
+  - Brief 1a's tests 1-8 exist in test/checks.test.ts and pass; eval case 25 expects failed with the CHECKS line.
+  - lock_check refuses a lock whose verifyCommand leaves out a needed check, and its message gives the command to use.
+  - docs/checks.md explains the format, the four behaviours and the matching rule.
+assumptions:
+  - text: Anchors defended — Item — test/fixtures/basic-repo/src/service.ts (TypeScript); "item" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: Item (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-10-07T23:20:36.103Z
+createdBy: Yasirdora
