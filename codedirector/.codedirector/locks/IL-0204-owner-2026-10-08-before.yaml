@@ -1,0 +1,45 @@
+schemaVersion: 1
+id: IL-0204
+status: verified
+utterance: "Owner, 2026-10-08 before class: \"please feel free to continue working on eDraft or the code director tasks ... Fix any errors, bugs, over engineering/ unnecessary complication, or issues you find—whatever you feel is right.\" — this lock: a failed run's message offers --allow-expand even when the failure is not about scope."
+goal: A failed run's message offers `cdir run <id> --allow-expand -- ...` only when the scope grew (denied, out-of-budget or over a ceiling) — the only thing that override accepts. For a failed verifyCommand, a CHECKS line or a broken KEEP clause it is no longer offered; `cdir undo` still is. One new test in test/run.test.ts.
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: Only the hint line changes; every other line of the run message is as before.
+deny:
+  - src/mcp/**
+  - src/domains/**
+  - src/domain/**
+  - src/lock/**
+  - src/config/**
+  - src/verify/**
+  - src/report/**
+  - package.json
+  - package-lock.json
+  - dist/**
+  - eval/cases/**
+change: TODO — one-line scope description
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 1800000
+budget:
+  files:
+    - src/run/run.ts
+    - test/run.test.ts
+  symbols: []
+  maxFiles: 2
+  maxLines: 60
+accept: []
+assumptions:
+  - text: Anchors defended — Service.run — test/fixtures/basic-repo/src/service.ts (TypeScript); "run" is its whole name · Indexer.run — test/fixtures/swift-repo/Surface.swift (Swift); "run" is its whole name · run — test/turns.test.ts (TypeScript); "run" is its whole name · find — test/verify.test.ts (TypeScript); "find" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: Service.run, Indexer.run, run, find (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-10-08T06:41:46.347Z
+createdBy: Yasirdora

@@ -1,0 +1,118 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261008-064221-098-wk21-bf7a",
+  "baselinePath": ".codedirector/baselines/IL-0204-task.json",
+  "baselineSha256": "f377837755c36b651368f7c13af36bbece9a1072bb9b2fc45325603f9e32c646",
+  "budget": {
+    "filesChanged": 2,
+    "linesChanged": 26,
+    "maxFiles": 2,
+    "maxLines": 60
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/run.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261008T064156125",
+    "createdAt": "2026-10-08T06:41:56.218Z",
+    "dirty": false,
+    "id": "ckpt-20261008T064156125",
+    "ref": "63089530e718da100ce4678b62865569fc5a971e",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261008T064156125"
+  },
+  "command": [
+    "git",
+    "apply",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/b0a9c773-d44f-4c16-a763-6f55afe73edb/scratchpad/cdir-hint/hint.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-10-08T06:42:21.131Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "Only the hint line changes; every other line of the run message is as before. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0204",
+  "startedAt": "2026-10-08T06:42:21.098Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0204-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0204-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0204-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 0",
+        "detail": "verifyCommand passed: npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Only the hint line changes; every other line of the run message is as before.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0204",
+    "verifiedAt": "2026-10-08T06:45:33.033Z",
+    "violations": []
+  },
+  "violations": []
+}

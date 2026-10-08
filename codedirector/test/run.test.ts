@@ -16,7 +16,7 @@ import { loadLock, lockPathFor, saveLock } from "../src/lock/store";
 import { sealLock, sealViolation } from "../src/lock/seal";
 import { loadTaskBaseline, rebaseTaskBaseline } from "../src/run/baseline";
 import { VibeCheck } from "../src/lock/types";
-import { runWithLock, RunError } from "../src/run/run";
+import { formatRunReport, runWithLock, RunError } from "../src/run/run";
 import { runIsolated } from "../src/run/tree";
 import { undo } from "../src/checkpoint";
 import { git, makeDemoGitRepo, makeGitRepo, makeSubfolderDemoGitRepo } from "./helpers";
@@ -666,4 +666,21 @@ test("run: a probe hands back the tree it took — a dirty file byte-identical, 
     "export const b = 2;\n",
     "a file that was clean before the probe comes back at HEAD",
   );
+});
+
+test("run: the --allow-expand hint is offered only when the scope grew", async () => {
+  const failing = await setup((l) => {
+    l.verifyCommand = "exit 1";
+  });
+  const checked = await runWithLock(failing.root, failing.lock.id, [NODE, "-e", append("src/preview.ts", "// faster\n")], {
+    stdio: "pipe",
+  });
+  assert.ok(checked.record.violations.length > 0, "the verifyCommand failed");
+  assert.ok(!formatRunReport(checked).includes("--allow-expand"), "an override cannot help a failed check");
+
+  const grew = await setup();
+  const denied = await runWithLock(grew.root, grew.lock.id, [NODE, "-e", append("src/export.ts", "// out\n")], {
+    stdio: "pipe",
+  });
+  assert.ok(formatRunReport(denied).includes("--allow-expand"), "scope growth may be accepted, logged");
 });

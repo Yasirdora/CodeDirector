@@ -455,8 +455,13 @@ export function formatRunReport(outcome: RunOutcome): string {
       ``,
       `Nothing was reverted automatically — you decide:`,
       `  cdir undo            restore the checkpoint (${r.checkpoint.tag})`,
-      `  cdir run ${r.lockId} --allow-expand -- ...   re-run accepting the expanded scope (logged override)`,
     );
+    // --allow-expand accepts scope growth and nothing else: offered for a
+    // failed check or a broken promise, it points at an override that
+    // cannot help.
+    if (scopeViolations(r.changed, r.budget).length > 0) {
+      lines.push(`  cdir run ${r.lockId} --allow-expand -- ...   re-run accepting the expanded scope (logged override)`);
+    }
   } else if (r.allowExpand) {
     lines.push(``, `note: --allow-expand was passed; out-of-budget scope was accepted (logged override).`);
   }
