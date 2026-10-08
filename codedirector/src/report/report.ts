@@ -27,7 +27,8 @@ import { defaultDomains, DomainRegistry } from "../domain/registry";
 import { VibeCheck } from "../lock/types";
 import { languageOf } from "../lock/draft";
 import { loadLock, saveLock } from "../lock/store";
-import { BudgetStats, RunRecord, runsDir } from "../run/run";
+import { uncommittedAmong } from "../lock/leftovers";
+import { BudgetStats, latestRunRecord, listRunRecords, RunRecord } from "../run/run";
 import {
   changedFiles,
   changedLineCount,
@@ -49,6 +50,9 @@ import {
   VerificationItem,
   VerificationReport,
 } from "../verify/types";
+
+// They live beside the run record's type now; callers of this module still find them here.
+export { latestRunRecord, listRunRecords };
 
 export class ReportError extends Error {}
 
@@ -113,26 +117,6 @@ export interface BuildReportOptions extends VerifyOptions {
   index?: RepoIndex;
   /** Compute incidental findings (default true). */
   findings?: boolean;
-}
-
-/** All run records for a lock, oldest first (the filename embeds the attempt id). */
-export function listRunRecords(rootDir: string, lockId: string): { record: RunRecord; recordPath: string }[] {
-  const dir = runsDir(rootDir);
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.startsWith(`${lockId}-`) && f.endsWith(".json"))
-    .sort()
-    .map((f) => {
-      const p = path.join(dir, f);
-      return { record: JSON.parse(fs.readFileSync(p, "utf8")) as RunRecord, recordPath: p };
-    });
-}
-
-/** Latest run record for a lock, or null when none was recorded. */
-export function latestRunRecord(rootDir: string, lockId: string): { record: RunRecord; recordPath: string } | null {
-  const all = listRunRecords(rootDir, lockId);
-  return all.length > 0 ? all[all.length - 1] : null;
 }
 
 /**
@@ -405,6 +389,28 @@ export async function buildReport(
         ? "incomplete"
         : "verified";
 
+  // Notes about the work, never about the verdict (a Finding is asserted).
+  // The report that ends a live run does not ask: its files are uncommitted
+  // by definition. A later report does.
+  if (verdict === "verified" && view === "current" && !opts.run) {
+    const uncommitted = uncommittedAmong(rootDir, changed.map((c) => c.path));
+    if (uncommitted.length > 0) {
+      findings.push({
+        text: `Verified, not committed yet: ${uncommitted.length} file(s) — commit them with the lock's records.`,
+        evidenceClass: "asserted",
+      });
+    }
+  }
+  // A patch applied from the wrong folder skips every file and still exits 0.
+  if (run?.exitCode === 0 && changed.length === 0) {
+    findings.push({
+      text:
+        "The command changed no file. If it should have, the run proves nothing about the change " +
+        "(a patch applied from the wrong folder is skipped silently).",
+      evidenceClass: "asserted",
+    });
+  }
+
   const counts = countByClass(items);
   counts.asserted += findings.length;
 
@@ -450,6 +456,8 @@ export function finalizeLockStatus(rootDir: string, report: ChangeReport): VibeC
   const lock = loadLock(rootDir, report.lockId);
   if (!lock) throw new ReportError(`no such lock: ${report.lockId}`);
   if (report.view !== "current") return lock;
+  // A lock closed by `cdir lock abandon` stays closed, whatever a report finds.
+  if (lock.status === "abandoned") return lock;
   lock.status = report.verdict;
   saveLock(rootDir, lock);
   return lock;

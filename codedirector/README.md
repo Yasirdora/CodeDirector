@@ -286,7 +286,7 @@ A Lock **rejects** clauses it cannot even in principle check, unless
 `tests-pass:<glob>`, `output-unchanged:<command>`, `no-new-dependency`,
 `custom:<text>`.
 
-### `cdir lock ls` · `cdir lock show <id>` · `cdir lock check <id>` · `cdir lock activate <id>` · `cdir lock rebase <id> --accept-current`
+### `cdir lock ls` · `cdir lock show <id>` · `cdir lock check <id>` · `cdir lock activate <id>` · `cdir lock abandon <id> --reason "<text>"` · `cdir lock rebase <id> --accept-current`
 
 `show` renders the Lock with per-clause checkability markers (✓ machine-checkable / ? human judges).
 `check` validates against the current index — budget files exist, symbols
@@ -294,6 +294,25 @@ resolve, deny globs valid, `maxFiles >= files.length` — and exits non-zero
 on invalid. `activate` moves draft → active only when check passes; it is also
 the re-approval of an active, verified or failed Lock whose content changed
 (it re-seals). An abandoned Lock cannot be activated.
+
+`abandon` closes a Lock for good — from any status except abandoned. It sets
+`status: abandoned`, records the required `--reason` as a confirmed user
+assumption (`abandoned: <reason>`), and re-pins the seal; an abandoned Lock never
+runs again, and a report on it does not reopen it. It never touches the work
+tree: if the Lock's last run changed files that are still uncommitted, it lists
+them and says how to keep (commit) or drop (`git checkout -- <files>`, `cdir undo`) them.
+It is a CLI command only; the MCP tool list does not change.
+
+**Work left behind.** A new Lock takes the tree as it stands as "already there",
+so an earlier Lock's uncommitted changes would go unmentioned in its report.
+`lock new` and `lock activate` (and the MCP `lock_draft` and `lock_activate`)
+therefore warn — never refuse — about every other Lock that is `failed`,
+`incomplete`, `active` or `verified` and whose latest run changed files that are
+still uncommitted (differ from HEAD, or untracked), newest first, at most five
+files named. A file is blamed on the newest Lock, of any status, whose latest
+run changed it — an older Lock is not named for a file a later one changed
+again. A failed, incomplete or active one "left changes in the tree"; a
+verified one "is verified but not committed". Abandoned Locks are never listed.
 
 `rebase --accept-current` moves the lock's **task baseline** to the present
 tree — the explicit revision, for a legacy lock or a reference that must
@@ -477,7 +496,11 @@ when violations exist; the detail follows underneath:
   and counted in the summary's judgment line;
 - findings: incidental observations (e.g. "src/x.ts changed in-budget but no
   test file references it — behavioral coverage unknown"), always Asserted
-  and labeled;
+  and labeled. Two more never change the verdict: "Verified, not committed yet"
+  (a verified report of the current tree whose changed files are still
+  uncommitted; not added to the report that ends a live run) and "The command
+  changed no file" (a run that exited 0 and changed nothing — a patch applied
+  from the wrong folder is skipped silently, and the run proves nothing);
 - a footer with counts per evidence class.
 
 `--format=md` is PR-postable markdown; `--format=json` is deterministic
@@ -587,6 +610,7 @@ src/
     yaml.ts         stable YAML round-trip + strict validation
     glob.ts         glob matching/validation for deny, budget, test globs
     store.ts        .codedirector/locks/IL-NNNN-slug.yaml persistence
+    leftovers.ts    earlier locks' uncommitted changes — the warnings when work starts
     draft.ts        lock new — anchors + blast radius propose budget/deny
     check.ts        lock check — validation + signature-hash primitive
     show.ts         lock show — blueprint-style rendering, ✓ / ~ / ? markers

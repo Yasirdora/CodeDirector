@@ -1,0 +1,170 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261008-060024-041-wk20-1eaf",
+  "baselinePath": ".codedirector/baselines/IL-0202-task.json",
+  "baselineSha256": "64f7998ad5db79ea6070f468b8e14ef7949219638c2a41088b3ee1f41f4ffe04",
+  "budget": {
+    "filesChanged": 7,
+    "linesChanged": 685,
+    "maxFiles": 7,
+    "maxLines": 850
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/cli-main.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/leftovers.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/server.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/leftovers.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261008T060023917",
+    "createdAt": "2026-10-08T06:00:24.039Z",
+    "dirty": true,
+    "id": "ckpt-20261008T060023917",
+    "ref": "a1b1bed9900dd96bf2b1e16804e7b1e2b1e55499",
+    "statusHash": "00619285ba1fc5158a7476f30fd8ab1fe46820826ccd44cb817c335951f4dd35",
+    "tag": "cdir/ckpt-20261008T060023917"
+  },
+  "command": [
+    "git",
+    "apply",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/b0a9c773-d44f-4c16-a763-6f55afe73edb/scratchpad/cdir-3/cdir-3b.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-10-08T06:00:24.050Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "No MCP tool is added or renamed, no lock status or lock-file field is added, and no existing report wording or JSON field changes; new notes go in the existing findings list. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "None of these commands changes the work tree; warnings and notes never change a verdict. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "Paths are root-relative even when the repo is a subfolder of the git root. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0202",
+  "startedAt": "2026-10-08T06:00:24.041Z",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0202-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 3
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0202-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0202-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 0",
+        "detail": "verifyCommand passed: npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · No MCP tool is added or renamed, no lock status or lock-file field is added, and no existing report wording or JSON field changes; new notes go in the existing findings list.",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · None of these commands changes the work tree; warnings and notes never change a verdict.",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Paths are root-relative even when the repo is a subfolder of the git root.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0202",
+    "verifiedAt": "2026-10-08T06:02:50.886Z",
+    "violations": []
+  },
+  "violations": []
+}

@@ -98,6 +98,26 @@ export function runsDir(rootDir: string): string {
   return path.join(indexDir(rootDir), "runs");
 }
 
+/** All run records for a lock, oldest first (the filename embeds the attempt id). */
+export function listRunRecords(rootDir: string, lockId: string): { record: RunRecord; recordPath: string }[] {
+  const dir = runsDir(rootDir);
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.startsWith(`${lockId}-`) && f.endsWith(".json"))
+    .sort()
+    .map((f) => {
+      const p = path.join(dir, f);
+      return { record: JSON.parse(fs.readFileSync(p, "utf8")) as RunRecord, recordPath: p };
+    });
+}
+
+/** Latest run record for a lock, or null when none was recorded. */
+export function latestRunRecord(rootDir: string, lockId: string): { record: RunRecord; recordPath: string } | null {
+  const all = listRunRecords(rootDir, lockId);
+  return all.length > 0 ? all[all.length - 1] : null;
+}
+
 export interface RunOptions {
   allowExpand?: boolean;
   /** stdio for the child command (default "inherit"; tests may use "pipe"). */

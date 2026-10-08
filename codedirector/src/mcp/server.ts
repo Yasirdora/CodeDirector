@@ -26,6 +26,7 @@ import { describeProfiles, getProfile, mergeDraftOptions, PROFILE_NAMES } from "
 import { checkLock } from "../lock/check";
 import { loadLock, saveLock } from "../lock/store";
 import { sealLock } from "../lock/seal";
+import { leftBehindWarnings } from "../lock/leftovers";
 import { latestCheckpoint, undo } from "../checkpoint";
 import { recordCall, type CallOutcome } from "./log";
 import { runJob, WorktreeGuard, type ToolResult } from "./jobs";
@@ -282,7 +283,8 @@ const TOOLS: ToolDef[] = [
       "there — and a draft whose anchors are only name fragments, or which all land outside the repo's own " +
       "language, comes back with confidence \"low\": confirm the territory with the human before you trust the " +
       "budget. Pass the promises with the draft — keep clauses, verifyCommand, accept, budget, deny — so the " +
-      "report can verify something. ALWAYS show the proposal to the human before activating. " +
+      "report can verify something. A \"warnings\" field names earlier locks that left changes in the tree: tell " +
+      "the human. ALWAYS show the proposal to the human before activating. " +
       WORKFLOW,
     inputSchema: {
       type: "object",
@@ -310,7 +312,9 @@ const TOOLS: ToolDef[] = [
       const explicit = draftArgsFrom(a);
       if (goal) explicit.goal = goal;
       const result = draftLock(root, index, str(a, "utterance"), mergeDraftOptions(base, explicit));
+      const warnings = leftBehindWarnings(root, result.lock.id);
       return json({
+        ...(warnings.length > 0 ? { warnings } : {}),
         ...(result.confidence.low
           ? { confidence: "low", confirmTerritory: result.confidence.reasons }
           : {}),
@@ -419,7 +423,8 @@ const TOOLS: ToolDef[] = [
     name: "lock_activate",
     description:
       "Move a draft Lock to active after the human has seen and accepted the proposed scope. " +
-      "Only active Locks can run. Refuses when validation fails.",
+      "Only active Locks can run. Refuses when validation fails. Lines marked ⚠ after the answer name earlier " +
+      "locks that left changes in the tree: tell the human.",
     inputSchema: {
       type: "object",
       properties: { lockId: { type: "string", description: "e.g. IL-0001" } },
@@ -440,7 +445,8 @@ const TOOLS: ToolDef[] = [
       lock.status = "active";
       saveLock(root, lock);
       sealLock(root, lock); // the approval seals the contract
-      return ok(`${lockId} is now active — execute ONLY via run_locked ${lockId}`);
+      const warnings = leftBehindWarnings(root, lockId).map((w) => `⚠ ${w}`);
+      return ok([`${lockId} is now active — execute ONLY via run_locked ${lockId}`, ...warnings].join("\n"));
     },
   },
   {

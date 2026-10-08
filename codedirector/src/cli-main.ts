@@ -11,6 +11,7 @@
  *   cdir lock show <id>                Render a Lock with checkability markers
  *   cdir lock check <id>               Validate a Lock (non-zero exit on invalid)
  *   cdir lock activate <id>            draft → active (only if check passes)
+ *   cdir lock abandon <id> --reason T  Close a Lock for good (the tree is untouched)
  *   cdir checks [paths...] [--json]    The checks .codedirector/checks.yaml requires
  *   cdir checkpoint                    Git checkpoint (tag + dirty-state record)
  *   cdir undo [--force] [--keep-untracked]
@@ -36,6 +37,7 @@ import { getProfile, mergeDraftOptions, PROFILE_NAMES } from "./lock/profiles";
 import { listLocks, loadLock, saveLock } from "./lock/store";
 import { sealLock } from "./lock/seal";
 import { checkLock } from "./lock/check";
+import { lastRunPaths, leftBehindWarnings, uncommittedAmong } from "./lock/leftovers";
 import { CHECKS_FILE, checksNeededBy, joinRuns, loadChecks } from "./config/checks";
 import { formatLock, formatLockLine } from "./lock/show";
 import { createCheckpoint, latestCheckpoint, undo, CheckpointError } from "./checkpoint";
@@ -75,7 +77,12 @@ Usage:
                                           ? human judges)
   cdir lock check <id> [--root DIR]       Validate against the current index;
                                           exit 1 when invalid
-  cdir lock activate <id> [--root DIR]    draft → active (requires check to pass)
+  cdir lock activate <id> [--root DIR]    draft → active (requires check to pass).
+                                          This and "lock new" warn about earlier Locks
+                                          whose changes are still uncommitted.
+  cdir lock abandon <id> --reason "TEXT"  Close a Lock for good: status abandoned, the
+          [--root DIR]                    reason recorded. Never touches the work tree;
+                                          lists the Lock's changes still uncommitted.
 
   cdir checks [paths...] [--root DIR]     The checks ${CHECKS_FILE} requires.
           [--json]                        No paths: validate the file and list its
@@ -300,6 +307,7 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
           lines.push(`  (+${result.denyOmitted} more omitted for readability — see the lock's assumptions)`);
         }
       }
+      for (const w of leftBehindWarnings(root, result.lock.id)) lines.push(``, `⚠ ${w}`);
       lines.push(``, `next: edit the file, then \`cdir lock check ${result.lock.id}\` and \`cdir lock activate ${result.lock.id}\``);
       process.stdout.write(lines.join("\n") + "\n");
       return 0;
@@ -361,6 +369,32 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
       saveLock(root, lock);
       sealLock(root, lock); // the approval seals the contract
       process.stdout.write(`${id} is now active — run inside it with \`cdir run ${id} -- <command...>\`\n`);
+      for (const w of leftBehindWarnings(root, id)) process.stdout.write(`⚠ ${w}\n`);
+      return 0;
+    }
+
+    case "abandon": {
+      const id = positional[1];
+      if (!id) fail('lock abandon requires an id and a reason, e.g. cdir lock abandon IL-0001 --reason "why"', 2);
+      const reason = flagStr(flags, "reason")?.trim();
+      if (!reason) fail(`lock abandon requires --reason "<why it is closed>" — the lock keeps it`, 2);
+      const lock = loadLock(root, id);
+      if (!lock) fail(`no such lock: ${id}`);
+      if (lock.status === "abandoned") fail(`lock ${id} is already abandoned`);
+      lock.status = "abandoned";
+      lock.assumptions.push({ text: `abandoned: ${reason}`, source: "user", confirmed: true });
+      saveLock(root, lock);
+      const lines = [`${id} is now abandoned — it cannot run again (${reason})`];
+      // Closing a lock leaves the tree as it is. What the lock changed is the owner's to keep or drop.
+      const left = uncommittedAmong(root, lastRunPaths(root, id));
+      if (left.length > 0) {
+        lines.push(`its last run changed files that are still uncommitted:`, ...left.map((f) => `  ${f}`));
+        lines.push(
+          `nothing was changed in the tree. To keep them, commit them. To drop them, ` +
+            `\`git checkout -- <files>\` for tracked files, or \`cdir undo\` (it deletes untracked files too).`,
+        );
+      }
+      process.stdout.write(lines.join("\n") + "\n");
       return 0;
     }
 
@@ -387,7 +421,7 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
     }
 
     default:
-      fail(`lock: unknown subcommand "${sub ?? ""}" (new · ls · show · check · activate · rebase)`, 2);
+      fail(`lock: unknown subcommand "${sub ?? ""}" (new · ls · show · check · activate · abandon · rebase)`, 2);
   }
 }
 

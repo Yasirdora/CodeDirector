@@ -1,0 +1,59 @@
+schemaVersion: 1
+id: IL-0202
+status: verified
+utterance: '"Yes, this order (Recommended)" — to "Start the Code Director work in this order?" (option text: "Rules file + taking turns first, then clean test settings, closing failed locks and the warnings, lock numbers, and the reviewed mark. Separate cdir folder; your installed cdir stays as it is until you say yes.") — this lock is item 3: closing failed locks and the warnings.'
+goal: 'Brief 3 (~/codedirector-briefs/3-close-and-leftovers.md): `cdir lock abandon <id> --reason` closes a lock properly (status abandoned, reason recorded, the tree untouched, its uncommitted changes listed); when work starts (CLI lock new / lock activate, MCP lock_draft / lock_activate) cdir warns about earlier locks whose changes are still uncommitted — failed, incomplete or active ones ("left changes in the tree") and verified ones ("verified but not committed"); a verified report notes files not committed yet; a run whose command changed no file says so. Warnings and notes never change a verdict or the tree.'
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: No MCP tool is added or renamed, no lock status or lock-file field is added, and no existing report wording or JSON field changes; new notes go in the existing findings list.
+  - kind: custom
+    text: None of these commands changes the work tree; warnings and notes never change a verdict.
+  - kind: custom
+    text: Paths are root-relative even when the repo is a subfolder of the git root.
+deny:
+  - src/domains/**
+  - src/domain/**
+  - src/lock/types.ts
+  - src/lock/yaml.ts
+  - src/lock/seal.ts
+  - src/config/**
+  - src/verify/**
+  - test/mcp.test.ts
+  - test/domains.test.ts
+  - package.json
+  - package-lock.json
+  - dist/**
+  - eval/cases/**
+change: TODO — one-line scope description
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 1800000
+budget:
+  files:
+    - src/lock/leftovers.ts
+    - src/cli-main.ts
+    - src/mcp/server.ts
+    - src/report/report.ts
+    - src/run/run.ts
+    - test/leftovers.test.ts
+    - README.md
+  symbols: []
+  maxFiles: 7
+  maxLines: 850
+accept:
+  - Brief 3's tests 1-6 exist in test/leftovers.test.ts and pass.
+  - "`cdir lock abandon` is in HELP and refuses without --reason or on an abandoned lock."
+  - The warnings appear in CLI lock new / lock activate and in the MCP lock_draft / lock_activate answers, with the wording of the brief.
+assumptions:
+  - text: Anchors defended — Item — test/fixtures/basic-repo/src/service.ts (TypeScript); "item" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: Item (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-10-08T05:29:16.050Z
+createdBy: Yasirdora
