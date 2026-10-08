@@ -248,6 +248,14 @@ omission is counted in the lock's assumptions, never silent. The draft is
 written with `status: draft` — edit it, then
 `cdir lock check IL-XXXX` and `cdir lock activate IL-XXXX`.
 
+Lock numbers are unique across every worktree of a clone. Inside git, each
+number is reserved as an empty file in the clone's git common dir
+(`<common dir>/cdir/lock-ids/IL-NNNN`, never deleted), which all worktrees
+share; the next number is one above the highest lock file in this worktree
+and the highest number the clone has handed out. Outside git, or when that
+folder cannot be written, the reservation is a file in the locks folder, as
+before. Ids order by their number, so `IL-10000` comes after `IL-9999`.
+
 The Lock schema (v1): `utterance` (your exact words, immutable), `goal`,
 `interpretation` (the system's operationalization — editable), `keep[]`,
 `deny[]`, `change`, `verifyCommand` (optional user test harness, e.g.

@@ -3,7 +3,7 @@
  *
  * Locks are data, versioned in-repo (note: .codedirector is gitignored by
  * default; teams that want Locks in git can un-ignore the locks/ subdir).
- * Ids are sequential (IL-0001, IL-0002, ...) per repo, allocated
+ * Ids are sequential (IL-0001, IL-0002, ...) per clone, allocated
  * exclusively: a create-or-fail reservation (see nextLockId), not
  * read-max-then-write, so two sessions drafting at once cannot pick the
  * same id. Writes go through writeFileAtomic.
@@ -11,6 +11,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 import { VibeCheck } from "./types";
 import { lockFromYaml, lockToYaml } from "./yaml";
 import { refreshSeal } from "./seal";
@@ -36,6 +37,11 @@ interface LockFileEntry {
   file: string;
 }
 
+/** "IL-0042" -> 42. Ids order by this number, not as text: IL-10000 comes after IL-9999. */
+function idNumber(id: string): number {
+  return parseInt(id.slice(3), 10);
+}
+
 function scanLockFiles(rootDir: string): LockFileEntry[] {
   const dir = locksDir(rootDir);
   if (!fs.existsSync(dir)) return [];
@@ -46,7 +52,7 @@ function scanLockFiles(rootDir: string): LockFileEntry[] {
       return m ? { id: m[1], file: f } : null;
     })
     .filter((e): e is LockFileEntry => e !== null)
-    .sort((a, b) => a.id.localeCompare(b.id));
+    .sort((a, b) => idNumber(a.id) - idNumber(b.id));
 }
 
 /** Reservation files (`.reserve-IL-XXXX`) never match LOCK_FILE_RE; they only hold an id. */
@@ -55,31 +61,69 @@ function reservePath(rootDir: string, id: string): string {
 }
 
 /**
- * Allocate the next sequential lock id — EXCLUSIVELY.
+ * The clone's record of every id it handed out: <git common dir>/cdir/lock-ids,
+ * one empty file per id. All worktrees of a clone share the common dir, so an
+ * id taken in one is taken in all. Null outside git, or when the folder
+ * cannot be made or read: ids then use the local reservation, quietly.
+ */
+function sharedReservations(rootDir: string): { dir: string; highest: number } | null {
+  try {
+    const common = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd: rootDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 5000,
+    }).trim();
+    const dir = path.join(path.resolve(rootDir, common), "cdir", "lock-ids");
+    fs.mkdirSync(dir, { recursive: true });
+    const highest = fs
+      .readdirSync(dir)
+      .filter((f) => /^IL-\d{4,}$/.test(f))
+      .reduce((acc, f) => Math.max(acc, idNumber(f)), 0);
+    return { dir, highest };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Allocate the next sequential lock id — EXCLUSIVELY, across every worktree
+ * of the clone.
  *
  * Read-max-then-write raced: two sessions drafting at the same moment both
  * computed IL-0032 and both wrote locks under it. Allocation is a
  * create-or-fail loop over a per-id reservation file; a loser advances to
- * the next id. saveLock removes the reservation once the lock file carries
- * the id; the post-reservation check covers the one remaining window — a
- * previous holder that finished (lock written, reservation released)
- * between our scan and our reservation. A crashed reservation costs one
- * skipped id, never a duplicate.
+ * the next id. A worktree sees only its own lock files, so inside git the
+ * reservations live in the clone's shared folder (sharedReservations) and
+ * are never deleted: the next id is above every lock file here AND every id
+ * the clone has handed out. Outside git, or when that folder cannot be
+ * written, the reservation is a local file instead: saveLock removes it once
+ * the lock file carries the id, and the post-reservation check covers the
+ * one remaining window — a previous holder that finished (lock written,
+ * reservation released) between our scan and our reservation. A crashed
+ * reservation costs one skipped id, never a duplicate.
  */
 export function nextLockId(rootDir: string): string {
   fs.mkdirSync(locksDir(rootDir), { recursive: true });
-  let n = scanLockFiles(rootDir).reduce((acc, e) => Math.max(acc, parseInt(e.id.slice(3), 10)), 0) + 1;
+  let shared = sharedReservations(rootDir);
+  const local = scanLockFiles(rootDir).reduce((acc, e) => Math.max(acc, idNumber(e.id)), 0);
+  let n = Math.max(local, shared?.highest ?? 0) + 1;
   for (;;) {
     const id = `IL-${String(n).padStart(4, "0")}`;
+    const reservation = shared ? path.join(shared.dir, id) : reservePath(rootDir, id);
     try {
-      fs.closeSync(fs.openSync(reservePath(rootDir, id), "wx"));
+      fs.closeSync(fs.openSync(reservation, "wx"));
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-      n++;
+      if ((e as NodeJS.ErrnoException).code === "EEXIST") {
+        n++;
+        continue;
+      }
+      if (!shared) throw e;
+      shared = null; // the shared folder cannot be written: reserve locally
       continue;
     }
     if (!scanLockFiles(rootDir).some((e) => e.id === id)) return id;
-    fs.rmSync(reservePath(rootDir, id), { force: true });
+    if (!shared) fs.rmSync(reservation, { force: true });
     n++;
   }
 }

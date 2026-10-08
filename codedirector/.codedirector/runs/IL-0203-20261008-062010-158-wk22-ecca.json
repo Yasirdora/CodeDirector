@@ -1,0 +1,137 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261008-062010-158-wk21-ecca",
+  "baselinePath": ".codedirector/baselines/IL-0203-task.json",
+  "baselineSha256": "c7d11d93f2f283f15132a505ebc3fd3b6b0cc00d3cc2c8b5750fba0cf557a6e6",
+  "budget": {
+    "filesChanged": 3,
+    "linesChanged": 276,
+    "maxFiles": 3,
+    "maxLines": 450
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/store.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/lock-ids.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261008T062003850",
+    "createdAt": "2026-10-08T06:20:03.886Z",
+    "dirty": false,
+    "id": "ckpt-20261008T062003850",
+    "ref": "353508168574da567bc02bfb9b217fd1fd957de2",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261008T062003850"
+  },
+  "command": [
+    "git",
+    "apply",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/b0a9c773-d44f-4c16-a763-6f55afe73edb/scratchpad/cdir-4/lock-ids.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-10-08T06:20:10.168Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "Outside git, ids and reservations are exactly as before; existing locks and files are untouched (no migration). — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "Nothing new appears in git status of any worktree; reservations live only in the git common dir. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0203",
+  "startedAt": "2026-10-08T06:20:10.158Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0203-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 2
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0203-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0203-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 0",
+        "detail": "verifyCommand passed: npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Outside git, ids and reservations are exactly as before; existing locks and files are untouched (no migration).",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Nothing new appears in git status of any worktree; reservations live only in the git common dir.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0203",
+    "verifiedAt": "2026-10-08T06:22:33.533Z",
+    "violations": []
+  },
+  "violations": []
+}
