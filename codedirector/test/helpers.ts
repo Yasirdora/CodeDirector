@@ -6,6 +6,17 @@ import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 
 /**
+ * Every temp folder a test makes — and every one a process it starts makes
+ * (cdir, its checks, git), since they inherit TMPDIR — goes under one folder
+ * of this test process, removed when the process ends. Tests kill cdir
+ * processes on purpose, and each run of the suite left thousands of folders
+ * behind in the machine's temp folder.
+ */
+const TEST_TMP = fs.mkdtempSync(path.join(os.tmpdir(), "cdir-tests-"));
+process.env.TMPDIR = TEST_TMP;
+process.on("exit", () => fs.rmSync(TEST_TMP, { recursive: true, force: true }));
+
+/**
  * Every test process runs git with an empty global configuration and no
  * system one, so what a developer's machine has set cannot change what the
  * tests observe. Found on a Mac: a global excludes file listing

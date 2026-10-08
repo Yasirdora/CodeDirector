@@ -1,0 +1,39 @@
+schemaVersion: 1
+id: IL-0205
+status: verified
+utterance: 'Owner, 2026-10-08 before class: "please feel free to continue working on eDraft or the code director tasks ... Fix any errors, bugs, over engineering/ unnecessary complication, or issues you find—whatever you feel is right." — this lock: the test suite leaves thousands of temp folders behind on every run.'
+goal: Every temp folder a test process makes — and every one made by the cdir, check and git processes it starts, which inherit TMPDIR — goes under one folder of that test process (test/helpers.ts sets TMPDIR at load), removed when the process ends. One run of the suite leaves nothing in the machine's temp folder (it left hundreds). A new test proves a test process's folder and its child's are gone after it exits.
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: No product code changes; every existing test passes unchanged.
+deny:
+  - src/**
+  - package.json
+  - package-lock.json
+  - dist/**
+  - eval/**
+change: TODO — one-line scope description
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 1800000
+budget:
+  files:
+    - test/helpers.ts
+    - test/tmp-cleanup.test.ts
+  symbols: []
+  maxFiles: 2
+  maxLines: 60
+accept: []
+assumptions:
+  - text: Anchors defended — Service.run — test/fixtures/basic-repo/src/service.ts (TypeScript); "run" is its whole name · Indexer.run — test/fixtures/swift-repo/Surface.swift (Swift); "run" is its whole name · run — test/turns.test.ts (TypeScript); "run" is its whole name · find — test/verify.test.ts (TypeScript); "find" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: Service.run, Indexer.run, run, find (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-10-08T06:57:12.343Z
+createdBy: Yasirdora
