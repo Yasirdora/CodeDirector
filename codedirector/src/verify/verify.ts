@@ -40,12 +40,13 @@ import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
 import { Baseline, baselineFileHash, loadBaseline, taskBaselinePath } from "../run/baseline";
-import { probeArtifactRef, probeExcerpt, runArgvProbe, runShellProbe } from "../run/probe";
+import { probeArtifactRef, probeExcerpt, ProbeResult, runArgvProbe, runShellProbe } from "../run/probe";
 import { runIsolated } from "../run/tree";
 import { diagnosticsExcerpt, newDiagnostics, probeDiagnostics } from "../run/diagnostics";
 import { CORE_SKIP_DIRS } from "../core/walk";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
 import type { DiagnosticsCheck } from "../domain/types";
+import { takeTurn } from "./turns";
 import {
   countByClass,
   ProbePutBack,
@@ -398,11 +399,21 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): V
   if (!lock.verifyCommand) return [];
   const subject = `verifyCommand · ${lock.verifyCommand}`;
   const timeout = resolveVerifyTimeoutMs(lock, opts);
-  const probe = runIsolated(
-    rootDir,
-    () => runShellProbe(rootDir, lock.verifyCommand!, timeout, opts.env),
-    (p) => opts.putBack?.push({ probe: subject, ...p }),
-  );
+  // When the repo's rules ask for turns, wait for ours first: the wait is not
+  // part of the timeout, which starts when the command does.
+  const taken = takeTurn(rootDir, lock.verifyCommand, opts.env);
+  if ("refused" in taken) return [uncheckedItem("verify-command", subject, taken.refused)];
+  const { turn } = taken;
+  let probe: ProbeResult;
+  try {
+    probe = runIsolated(
+      rootDir,
+      () => runShellProbe(rootDir, lock.verifyCommand!, timeout, opts.env),
+      (p) => opts.putBack?.push({ probe: subject, ...p }),
+    );
+  } finally {
+    turn.release();
+  }
   const artifactRef = `sh -c ${JSON.stringify(lock.verifyCommand)} → exit ${probe.exitCode ?? "?"}`;
   if (probe.timedOut) {
     return [uncheckedItem("verify-command", subject, `verifyCommand timed out after ${timeout}ms`)];
@@ -411,7 +422,7 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): V
     return [uncheckedItem("verify-command", subject, `verifyCommand could not run: ${probe.error ?? "spawn failed"}`)];
   }
   if (probe.exitCode === 0) {
-    return [{ source: "verify-command", subject, verdict: "held", evidenceClass: "measured", detail: `verifyCommand passed: ${lock.verifyCommand}`, artifactRef }];
+    return [{ source: "verify-command", subject, verdict: "held", evidenceClass: "measured", detail: `verifyCommand passed: ${lock.verifyCommand}${turn.waitNote}`, artifactRef }];
   }
   // A failure has to be diagnosable from the report alone: the command's own
   // last words, and the hashes of everything it said, as the evidence pointer.
@@ -423,7 +434,7 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): V
       subject,
       verdict: "violated",
       evidenceClass: "measured",
-      detail: `verifyCommand failed (exit ${probe.exitCode}): ${lock.verifyCommand}${excerpt ? ` — output: ${excerpt}` : ""}`,
+      detail: `verifyCommand failed (exit ${probe.exitCode}): ${lock.verifyCommand}${excerpt ? ` — output: ${excerpt}` : ""}${turn.waitNote}`,
       artifactRef: probeArtifactRef(`sh -c ${JSON.stringify(lock.verifyCommand)}`, probe),
     },
   ];

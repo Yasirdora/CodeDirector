@@ -1,0 +1,58 @@
+schemaVersion: 1
+id: IL-0201
+status: verified
+utterance: '"Yes, this order (Recommended)" — to "Start the Code Director work in this order?" (option text: "Rules file + taking turns first, then clean test settings, closing failed locks and the warnings, lock numbers, and the reviewed mark. Separate cdir folder; your installed cdir stays as it is until you say yes.") — this lock is the second half of item 1: taking turns.'
+goal: "Brief 1b (~/codedirector-briefs/1b-taking-turns.md): when .codedirector/checks.yaml names a `turns` command prefix (short form, or { run, waitMs }), cdir holds that turn — through a holder process that frees it if cdir dies — while a lock's verifyCommand runs, so check runs from any worktree or agent sharing the rules take turns. Waiting is not counted against the verify timeout and is recorded when over a second; a verifyCommand that already takes the turn is not wrapped again; a failed turns command or an over-long wait is unchecked (incomplete). Without `turns`, everything is as before."
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: Without `turns` in .codedirector/checks.yaml (or without the file), every verify, report and status is exactly as before.
+  - kind: custom
+    text: No holder process outlives the verify on any path, and a SIGKILLed cdir frees the turn within seconds.
+  - kind: custom
+    text: "ADR 0001: no lock tool or ecosystem tool is named in src/ outside comments."
+deny:
+  - src/mcp/**
+  - src/domains/**
+  - src/domain/**
+  - src/lock/**
+  - src/run/**
+  - src/report/**
+  - src/cli-main.ts
+  - test/mcp.test.ts
+  - test/domains.test.ts
+  - package.json
+  - package-lock.json
+  - dist/**
+  - eval/cases/**
+change: TODO — one-line scope description
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 1800000
+budget:
+  files:
+    - src/config/checks.ts
+    - src/verify/verify.ts
+    - src/verify/turns.ts
+    - test/turns.test.ts
+    - test/checks.test.ts
+    - docs/checks.md
+  symbols: []
+  maxFiles: 6
+  maxLines: 750
+accept:
+  - Brief 1b's tests 1-7 exist in test/turns.test.ts and pass, each in a few seconds.
+  - Waiting for the turn never counts against the verify timeout; the item detail says how long it waited.
+  - docs/checks.md has a 'Taking turns' section with the format, the skip rule, the untimed wait and the known limit.
+assumptions:
+  - text: Anchors defended — Item — test/fixtures/basic-repo/src/service.ts (TypeScript); "item" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: Item (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-10-07T23:48:40.638Z
+createdBy: Yasirdora

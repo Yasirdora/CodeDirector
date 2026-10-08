@@ -13,7 +13,15 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { defaultDomains } from "../src/domain/registry";
-import { checksNeededBy, joinRuns, loadChecks, runsCheck, CHECKS_FILE, ChecksRules } from "../src/config/checks";
+import {
+  checksNeededBy,
+  joinRuns,
+  loadChecks,
+  runsCheck,
+  CHECKS_FILE,
+  ChecksRules,
+  DEFAULT_TURN_WAIT_MS,
+} from "../src/config/checks";
 import { draftLock, estimateVerifyTimeoutMs } from "../src/lock/draft";
 import { checkLock } from "../src/lock/check";
 import { loadLock, saveLock } from "../src/lock/store";
@@ -49,7 +57,6 @@ areas:
     need: [unit, app]
   - paths: [web/**]
     need: [unit]
-turns: "echo turn"
 `;
 
 const UNIT_AND_APP = "echo unit-check && echo app-check OUT=/tmp/app";
@@ -100,7 +107,7 @@ async function activeLock(
 // ---------------------------------------------------------------------
 // 1. The loader
 
-test("loader: short and long forms; match defaults to run; order and turns kept", () => {
+test("loader: short and long forms; match defaults to run; order kept", () => {
   const rules = rulesOf(RULES);
   assert.deepEqual(rules.checks, [
     { name: "unit", run: "echo unit-check", match: "echo unit-check" },
@@ -110,7 +117,23 @@ test("loader: short and long forms; match defaults to run; order and turns kept"
     { paths: ["src/core/**", "src/shared/**"], need: ["unit", "app"] },
     { paths: ["web/**"], need: ["unit"] },
   ]);
-  assert.equal(rules.turns, "echo turn");
+  assert.equal(rules.turns, undefined, "no turns unless the file asks");
+});
+
+test("loader: turns in its short form (the default wait) and its long form", () => {
+  assert.deepEqual(rulesOf('schemaVersion: 1\nturns: "flock /tmp/x.lock"\n').turns, {
+    run: "flock /tmp/x.lock",
+    waitMs: DEFAULT_TURN_WAIT_MS,
+  });
+  assert.equal(DEFAULT_TURN_WAIT_MS, 2 * 60 * 60 * 1000, "two hours");
+  assert.deepEqual(rulesOf("schemaVersion: 1\nturns:\n  run: flock /tmp/x.lock\n").turns, {
+    run: "flock /tmp/x.lock",
+    waitMs: DEFAULT_TURN_WAIT_MS,
+  });
+  assert.deepEqual(rulesOf("schemaVersion: 1\nturns:\n  run: flock /tmp/x.lock\n  waitMs: 90000\n").turns, {
+    run: "flock /tmp/x.lock",
+    waitMs: 90_000,
+  });
 });
 
 test("loader: no file is not an error, and a file with only a version asks for nothing", () => {
@@ -135,6 +158,16 @@ const INVALID: Array<[string, string, string]> = [
   ["nothing needed", "schemaVersion: 1\nchecks:\n  unit: echo x\nareas:\n  - paths: [src]\n    need: []\n", "areas[0].need must be a non-empty list"],
   ["an area that is not a mapping", "schemaVersion: 1\nareas: [src]\n", "areas[0] must be a mapping"],
   ["turns that is not a string", "schemaVersion: 1\nturns: 5\n", "turns must be a non-empty string"],
+  ["turns that is a list", "schemaVersion: 1\nturns: [flock]\n", "turns must be a non-empty string, or a mapping"],
+  ["turns that is empty", 'schemaVersion: 1\nturns: ""\n', "turns must be a non-empty string"],
+  ["turns without a run", "schemaVersion: 1\nturns:\n  waitMs: 5000\n", "turns.run must be a non-empty string"],
+  ["a blank turns.run", 'schemaVersion: 1\nturns:\n  run: "  "\n', "turns.run must be a non-empty string"],
+  ["an unknown key under turns", "schemaVersion: 1\nturns:\n  run: flock x\n  wait: 5\n", 'turns has unknown key "wait"'],
+  ["a zero waitMs", "schemaVersion: 1\nturns:\n  run: flock x\n  waitMs: 0\n", "turns.waitMs must be a positive integer"],
+  ["a negative waitMs", "schemaVersion: 1\nturns:\n  run: flock x\n  waitMs: -5\n", "turns.waitMs must be a positive integer"],
+  ["a fractional waitMs", "schemaVersion: 1\nturns:\n  run: flock x\n  waitMs: 1.5\n", "turns.waitMs must be a positive integer"],
+  ["a waitMs that is text", 'schemaVersion: 1\nturns:\n  run: flock x\n  waitMs: "5000"\n', "turns.waitMs must be a positive integer"],
+  ["an empty waitMs", "schemaVersion: 1\nturns:\n  run: flock x\n  waitMs:\n", "turns.waitMs must be a positive integer"],
   ["a duplicate check name", "schemaVersion: 1\nchecks:\n  unit: a\n  unit: b\n", "invalid YAML"],
   ["YAML that does not parse", "schemaVersion: 1\nchecks: [\n", "invalid YAML"],
   ["a top level that is not a mapping", "- schemaVersion\n", "top level must be a mapping"],

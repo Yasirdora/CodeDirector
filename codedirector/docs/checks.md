@@ -42,8 +42,8 @@ areas:
 - `paths` are relative to the repo root and use the same globs as a lock's
   budget and deny list. A plain path is a directory: `web` means everything
   under `web/`.
-- `turns` (a string) is accepted and checked, but required checks do not
-  use it.
+- `turns` makes check runs take turns. It is optional and has its own section
+  below.
 
 ## The matching rule
 
@@ -118,6 +118,55 @@ example) and the run changes `src/core/a.ts`, the run fails with
 ```
 CHECKS: verifyCommand does not run "app" (make test-app), which src/core/a.ts needs
 ```
+
+## Taking turns
+
+Two agents in two worktrees of one machine can start their checks at the same
+moment. Checks that share a display, a keyboard or a settings file spoil each
+other, and both runs fail for no reason in the code. A verdict from an
+overlapped run is noise.
+
+`turns` names a **command prefix that takes a shared turn**: a file lock, for
+example `flock /tmp/x.lock` on Linux or `/usr/bin/lockf -k /tmp/x.lock` on
+macOS. Code Director does not care which. It holds the turn while a lock's
+verifyCommand runs, so runs that share the rules go one at a time, from any
+worktree or agent.
+
+```yaml
+turns: /usr/bin/lockf -k /tmp/x.lock      # short form
+# or
+turns:
+  run: /usr/bin/lockf -k /tmp/x.lock
+  waitMs: 7200000                         # optional; default 2 hours
+```
+
+`run` must not be empty. `waitMs` must be a positive integer. An unknown key
+under `turns` is an error.
+
+How it works:
+
+- The turn is taken before the verifyCommand starts and let go when it ends,
+  however it ends. It is held by a small helper process that your command
+  wraps, so it is a real OS lock: if Code Director is killed, the turn is free
+  again within a second or two.
+- **The skip rule.** If the verifyCommand already contains the `run` text (read
+  with whitespace collapsed, as in the matching rule), Code Director does not
+  take the turn. The command takes it itself, and taking it twice would wait
+  for ourselves, forever.
+- **Waiting is not timed.** The verify timeout starts when the turn is taken,
+  not before. If the wait was over a second, the report says so after the
+  verifyCommand's result: `(waited 12s for the turn)`.
+- **No turn is a gap, not a pass.** If the `turns` command fails (it exits at
+  once), the check is Unchecked: `could not take the turn: "<run>" exited
+  <code>`, with the first line of what it said. If `waitMs` passes first, it is
+  Unchecked too: `no turn within <n>s: another check run held it`. The
+  verdict is `incomplete`, as for a verify timeout.
+- Without a rules file, or without `turns`, nothing changes. A rules file that
+  is invalid takes no turn: the run already answers for it (see Run).
+
+The known limit: only the lock's verifyCommand takes a turn. The `tests-pass`
+and `output-unchanged` clauses and the compiler check run as before, without
+one. Put checks that must not overlap into the verifyCommand.
 
 ## What it does not do
 

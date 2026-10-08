@@ -1,0 +1,166 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261008-052042-137-wk21-a5fb",
+  "baselinePath": ".codedirector/baselines/IL-0201-task.json",
+  "baselineSha256": "59a853c82eab3ebfd29c907dceb494aa5a7d7becbdd0a90b4646f3583ea91244",
+  "budget": {
+    "filesChanged": 6,
+    "linesChanged": 697,
+    "maxFiles": 6,
+    "maxLines": 750
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/checks.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/config/checks.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/turns.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/checks.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/turns.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261008T052033171",
+    "createdAt": "2026-10-08T05:20:33.219Z",
+    "dirty": false,
+    "id": "ckpt-20261008T052033171",
+    "ref": "fcbf8996ac3cf0a8f3cb14048f1c610db2fd9170",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261008T052033171"
+  },
+  "command": [
+    "git",
+    "apply",
+    "/private/tmp/claude-501/-Users-x-Documents-edraft/b0a9c773-d44f-4c16-a763-6f55afe73edb/scratchpad/cdir-1b/1b-taking-turns.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-10-08T05:20:42.153Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "Without `turns` in .codedirector/checks.yaml (or without the file), every verify, report and status is exactly as before. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "No holder process outlives the verify on any path, and a SIGKILLed cdir frees the turn within seconds. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    },
+    {
+      "detail": "ADR 0001: no lock tool or ecosystem tool is named in src/ outside comments. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0201",
+  "startedAt": "2026-10-08T05:20:42.137Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0201-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 3
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0201-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0201-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 0",
+        "detail": "verifyCommand passed: npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Without `turns` in .codedirector/checks.yaml (or without the file), every verify, report and status is exactly as before.",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · No holder process outlives the verify on any path, and a SIGKILLed cdir frees the turn within seconds.",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · ADR 0001: no lock tool or ecosystem tool is named in src/ outside comments.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0201",
+    "verifiedAt": "2026-10-08T05:23:47.337Z",
+    "violations": []
+  },
+  "violations": []
+}

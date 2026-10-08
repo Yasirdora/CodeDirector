@@ -36,12 +36,22 @@ export interface CheckArea {
   need: string[];
 }
 
+/** How long a check run waits for its turn before it gives up: two hours. */
+export const DEFAULT_TURN_WAIT_MS = 2 * 60 * 60 * 1000;
+
+export interface TurnsRule {
+  /** A command prefix that takes the shared turn for as long as the command it wraps runs. */
+  run: string;
+  /** How long to wait for the turn. */
+  waitMs: number;
+}
+
 export interface ChecksRules {
   /** In the order the file lists them — the order of every answer. */
   checks: CheckDef[];
   areas: CheckArea[];
-  /** A command prefix for taking turns. Only checked to be a string here. */
-  turns?: string;
+  /** Set when the file asks check runs to take turns. */
+  turns?: TurnsRule;
 }
 
 /**
@@ -114,6 +124,18 @@ function parseArea(raw: unknown, i: number, known: Set<string>): CheckArea {
   return { paths, need };
 }
 
+function parseTurns(def: unknown): TurnsRule {
+  if (typeof def === "string") return { run: reqString(def, "turns"), waitMs: DEFAULT_TURN_WAIT_MS };
+  if (!isObj(def)) err("turns must be a non-empty string, or a mapping with run (and optionally waitMs)");
+  onlyKeys(def, ["run", "waitMs"], "turns");
+  const run = reqString(def.run, "turns.run");
+  const waitMs = def.waitMs === undefined ? DEFAULT_TURN_WAIT_MS : def.waitMs;
+  if (typeof waitMs !== "number" || !Number.isInteger(waitMs) || waitMs <= 0) {
+    err("turns.waitMs must be a positive integer");
+  }
+  return { run, waitMs };
+}
+
 function parseChecks(text: string): ChecksRules {
   let raw: unknown;
   try {
@@ -139,7 +161,7 @@ function parseChecks(text: string): ChecksRules {
   return {
     checks,
     areas,
-    ...(raw.turns !== undefined ? { turns: reqString(raw.turns, "turns") } : {}),
+    ...(raw.turns !== undefined ? { turns: parseTurns(raw.turns) } : {}),
   };
 }
 
@@ -189,12 +211,17 @@ export function checksNeededBy(rules: ChecksRules, files: string[]): NeededCheck
 const squash = (s: string): string => s.replace(/\s+/g, " ").trim();
 
 /**
- * Whether a verifyCommand runs a check: its `match` text appears in the
- * command, both read with whitespace collapsed. Nothing cleverer — the
- * command is a string, not a manifest.
+ * Whether `text` appears in `command`, both read with whitespace collapsed.
+ * Nothing cleverer — a command is a string, not a manifest. This one rule
+ * decides both "the verifyCommand runs a check" and "it takes the turn itself".
  */
+export function containsCommand(command: string, text: string): boolean {
+  return squash(command).includes(squash(text));
+}
+
+/** Whether a verifyCommand runs a check: the check's `match` text is in it. */
 export function runsCheck(verifyCommand: string, check: CheckDef): boolean {
-  return squash(verifyCommand).includes(squash(check.match));
+  return containsCommand(verifyCommand, check.match);
 }
 
 /** One verifyCommand that runs every one of these checks. */
