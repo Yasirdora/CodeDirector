@@ -244,6 +244,24 @@ export function closingLock(
   return closing;
 }
 
+/**
+ * The checks an attempt recorded, as they were written down: what `--attempt
+ * N` and a closed lock both show. An old record may carry none — the report
+ * then says incomplete rather than run today's checks on a tree that is no
+ * longer that attempt's own.
+ */
+function recordedChecks(lockId: string, run: RunRecord): VerificationReport {
+  return (
+    run.verification ?? {
+      lockId,
+      verifiedAt: run.finishedAt,
+      items: [],
+      violations: [],
+      counts: countByClass([]),
+    }
+  );
+}
+
 export async function buildReport(
   rootDir: string,
   lockId: string,
@@ -291,18 +309,11 @@ export async function buildReport(
           expectedBaselineSha256: run.baselineSha256,
         }
       : {};
-  // A closed lock's checks are the ones its last attempt recorded. Run
-  // again, they would test a tree that holds the later lock's work.
+  // An attempt view shows the checks that attempt recorded — the same rule
+  // for `--attempt N` and for a lock a later lock has closed. Run again,
+  // they would test a tree that is no longer that attempt's own.
   const recorded: VerificationReport | undefined =
-    closedBy !== null && run
-      ? (run.verification ?? {
-          lockId,
-          verifiedAt: run.finishedAt,
-          items: [],
-          violations: [],
-          counts: countByClass([]),
-        })
-      : undefined;
+    view === "attempt" && run ? recordedChecks(lockId, run) : undefined;
   const verification = opts.verification ?? recorded ?? (await verifyLock(rootDir, lockId, { ...integrity, ...opts }));
   const runRecordPath = latest?.recordPath
     ? path.isAbsolute(latest.recordPath)
@@ -362,11 +373,16 @@ export async function buildReport(
   findings.push(...(verification.putBack ?? []).map(putBackFinding));
 
   const unrunnable = declaredButUnrunnable(verification.items);
+  // An attempt whose record carries no checks is incomplete, never a fresh
+  // run: a closed lock names the lock that took the tree over, `--attempt N`
+  // names the attempt.
   const incompleteReason =
     view === "current" && !taskBaseline
       ? `no task baseline for ${lockId} — scope could not be judged; run \`cdir run\` or \`cdir checkpoint ${lockId}\` first`
-      : closedBy !== null && run && !run.verification
-        ? `the last attempt of ${lockId} recorded no checks, and ${closedBy.lockId} has started since — they cannot be run again on a tree that is no longer this lock's own`
+      : view === "attempt" && run && !run.verification
+        ? closedBy !== null
+          ? `the last attempt of ${lockId} recorded no checks, and ${closedBy.lockId} has started since — they cannot be run again on a tree that is no longer this lock's own`
+          : `attempt ${opts.attempt} of ${lockId} recorded no checks — showing an attempt does not run them again on today's tree`
       : unrunnable.length > 0
         ? `declared check(s) could not run: ${unrunnable
             .slice(0, 2)

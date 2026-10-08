@@ -1,0 +1,118 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261008-134607-428-1sxa1-66b8",
+  "baselinePath": ".codedirector/baselines/IL-0206-task.json",
+  "baselineSha256": "4535f07f74865bf73a40b6252ae4bfec43ef002cd17176139bae95ec7d5da309",
+  "budget": {
+    "filesChanged": 2,
+    "linesChanged": 190,
+    "maxFiles": 3,
+    "maxLines": 400
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/report-attempt.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261008T134601379",
+    "createdAt": "2026-10-08T13:46:01.408Z",
+    "dirty": false,
+    "id": "ckpt-20261008T134601379",
+    "ref": "ab834f00353656a4b2cdb91c4a7f07641c9ea7d6",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261008T134601379"
+  },
+  "command": [
+    "git",
+    "apply",
+    "/Users/x/.cache/cdir-IL-0206-scratch/IL-0206.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-10-08T13:46:07.437Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "The current-tree report runs the checks live exactly as before; an attempt view runs nothing. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0206",
+  "startedAt": "2026-10-08T13:46:07.428Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0206-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0206-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0206-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 0",
+        "detail": "verifyCommand passed: npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · The current-tree report runs the checks live exactly as before; an attempt view runs nothing.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0206",
+    "verifiedAt": "2026-10-08T13:48:28.011Z",
+    "violations": []
+  },
+  "violations": []
+}

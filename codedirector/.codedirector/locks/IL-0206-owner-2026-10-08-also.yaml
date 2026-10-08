@@ -1,0 +1,44 @@
+schemaVersion: 1
+id: IL-0206
+status: verified
+utterance: "Owner, 2026-10-08: \"I also have another ai agent if you want to test it's capabilities\" — \"it is saying I am a very strong coder test me, and yes it can run command\". The trial task: cdir report --attempt N shows that attempt as recorded."
+goal: "Trial brief (~/codedirector-briefs/trial-attempt-view.md): cdir report --attempt N renders attempt N's recorded checks instead of running them again on today's tree; an attempt that recorded none is incomplete with a reason naming it; the closed-lock path and the attempt path share one piece of code for the recorded checks; the current-tree report still runs live; scope rejudge, the CHECKS rule, the verdict binding and status are unchanged."
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: The current-tree report runs the checks live exactly as before; an attempt view runs nothing.
+deny:
+  - src/mcp/**
+  - src/domain/**
+  - src/domains/**
+  - src/lock/**
+  - src/config/**
+  - package.json
+  - package-lock.json
+  - dist/**
+  - eval/**
+change: TODO — one-line scope description
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 1800000
+budget:
+  files:
+    - src/report/report.ts
+    - test/report.test.ts
+    - test/report-attempt.test.ts
+  symbols: []
+  maxFiles: 3
+  maxLines: 400
+accept: []
+assumptions:
+  - text: Anchors defended — Service.run — test/fixtures/basic-repo/src/service.ts (TypeScript); "run" is its whole name · Indexer.run — test/fixtures/swift-repo/Surface.swift (Swift); "run" is its whole name · cdir — test/leftovers.test.ts (TypeScript); "cdir" is its whole name · run — test/turns.test.ts (TypeScript); "run" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: Service.run, Indexer.run, cdir, run (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-10-08T13:23:08.173Z
+createdBy: Yasirdora
