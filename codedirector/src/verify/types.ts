@@ -37,6 +37,12 @@ export interface VerificationItem {
   /** What was found (e.g. "signature changed: src/util.js#add"). */
   detail: string;
   /**
+   * The tests a failed verifyCommand named, each `name (file:line)` when the
+   * output gave a location. Only a failing verify-command item carries it;
+   * `detail` names a bounded, possibly shortened subset of this list.
+   */
+  failedTests?: string[];
+  /**
    * Pointer to the evidence: which baseline file, which command, which exit
    * code. A held claim without an artifactRef is downgraded to Asserted by
    * enforceArtifactRule — schema-enforced, not voluntary.

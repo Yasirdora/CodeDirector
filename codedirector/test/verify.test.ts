@@ -662,9 +662,8 @@ test("verify: a failing verifyCommand names its failed tests from the whole outp
   const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
   assert.equal(outcome.exitCode, 1, "a failing verifyCommand fails the run");
   const item = outcome.record.verification!.items.find((i) => i.source === "verify-command")!;
-  const named = item as VerificationItem & { failedTests?: string[] };
   assert.equal(item.verdict, "violated");
-  assert.deepEqual(named.failedTests, [
+  assert.deepEqual(item.failedTests, [
     "The speech runs on across the page break, as the English page's does (GermanImportTests.swift:102)",
     "The German page comes back as the screenplay it was, its furniture gone (GermanImportTests.swift:85)",
   ]);
@@ -684,11 +683,34 @@ test("verify: a failing verifyCommand names its failed tests from the whole outp
   // The run record on disk and the Change Report both carry the list.
   const recorded = JSON.parse(fs.readFileSync(outcome.recordPath, "utf8"));
   const recordedItem = recorded.verification.items.find((i: VerificationItem) => i.source === "verify-command");
-  assert.deepEqual(recordedItem.failedTests, named.failedTests, "the record on disk names the tests");
+  assert.deepEqual(recordedItem.failedTests, item.failedTests, "the record on disk names the tests");
   const report = await buildReport(root, lock.id, { run: outcome.record, verification: outcome.record.verification });
-  const reportItem = report.items.find((i) => i.source === "verify-command") as VerificationItem & { failedTests?: string[] };
-  assert.deepEqual(reportItem.failedTests, named.failedTests, "the Change Report names the tests");
+  const reportItem = report.items.find((i) => i.source === "verify-command")!;
+  assert.deepEqual(reportItem.failedTests, item.failedTests, "the Change Report names the tests");
   assert.equal(reportItem.detail, item.detail);
+});
+
+test("verify: a failed verifyCommand's names are bounded — a long label cannot blow up the detail", async () => {
+  // One test with a 5,000-character label: the record keeps the whole name;
+  // the detail names its head, cuts it visibly, and stays short.
+  const label = "Ein sehr langer Testname ".repeat(220).trim();
+  const sample = `✘ Test "${label}" recorded an issue at LongTests.swift:12\n`;
+  const command = `${JSON.stringify(NODE)} -e "process.stdout.write(require('fs').readFileSync('long.log','utf8'));process.exit(65)"`;
+  const { root, lock } = await setup([], (l) => {
+    l.verifyCommand = command;
+  });
+  fs.writeFileSync(path.join(root, "long.log"), sample);
+  git(root, ["add", "long.log"]);
+  git(root, ["commit", "-qm", "the failed run's own output"]);
+
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 1);
+  const item = outcome.record.verification!.items.find((i) => i.source === "verify-command")!;
+  assert.deepEqual(item.failedTests, [`${label} (LongTests.swift:12)`], "the record keeps the whole name");
+  assert.ok(item.detail.length < 1100, `bounded: the item is ${item.detail.length} chars`);
+  const named = item.detail.slice(0, item.detail.indexOf(" — output: "));
+  assert.ok(named.includes("Ein sehr langer Testname"), "the head of the name is still readable");
+  assert.ok(named.endsWith("…"), `the names are cut, not the excerpt: ${named.slice(-40)}`);
 });
 
 test("verify: a failing verifyCommand that names no test keeps the old detail and gains no field", async () => {

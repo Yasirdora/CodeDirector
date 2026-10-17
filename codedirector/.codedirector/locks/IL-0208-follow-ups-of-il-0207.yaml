@@ -1,0 +1,35 @@
+schemaVersion: 1
+id: IL-0208
+status: verified
+utterance: Follow-ups of IL-0207 from DeepSeek's review (accept with notes), decided by the lead
+goal: "The failed-test names are a typed, bounded, precise part of the record: failedTests declared on VerificationItem, the verify detail's added names bounded in length, a vitest '× ' line counted as a test only when it is one (not '× 2 files changed'), and the shared reader in a neutral module both the verify layer and the node domain import."
+interpretation: One-line type, a length bound with a count of the rest, a stricter vitest row rule with a test for '× 2 files changed', and the reader moved to a neutral module (src/core/testNames.ts or the existing neutral place the builder finds) imported by both; tests first.
+keep:
+  - kind: no-new-dependency
+deny:
+  - src/lock/**
+  - src/mcp/**
+  - package.json
+  - package-lock.json
+change: "cdir: failed test names typed, bounded and precise (IL-0207 follow-ups)."
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - src/verify/types.ts
+    - src/verify/failedTests.ts
+    - src/verify/verify.ts
+    - src/domains/node/tests.ts
+    - src/core/testNames.ts
+    - test/failed-tests.test.ts
+    - test/verify.test.ts
+  symbols: []
+  maxFiles: 7
+  maxLines: 300
+accept: []
+assumptions:
+  - text: From DeepSeek's review of IL-0207 (reviews/IL-0207.review.md); same worktree, branch cdir/failed-test-names at 6229b66.
+    source: system
+    confirmed: true
+createdAt: 2026-10-17T13:50:32.790Z
+createdBy: Yasirdora

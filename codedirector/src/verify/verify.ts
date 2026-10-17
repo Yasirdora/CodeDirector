@@ -396,13 +396,6 @@ function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions, 
 }
 
 /**
- * A verify-command item that names the tests its command failed. The field
- * is carried by this rung alone: a passing command has no failed tests, and
- * its item keeps exactly the shape it had before.
- */
-type VerifyCommandItem = VerificationItem & { failedTests?: string[] };
-
-/**
  * What a failed verifyCommand says: the tests it named first — read from the
  * whole output, not the kept tail — then the tail excerpt as the command's
  * own last words. With no recognisable test name it is the old detail, word
@@ -445,7 +438,7 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): V
   // failed, the command's own last words, and the hashes of everything it
   // said. A pass needs none of it — its exit code is the whole story.
   const { detail, failedTests } = failedVerifyCommandDetail(lock.verifyCommand, probe.exitCode, probe);
-  const item: VerifyCommandItem = {
+  const item: VerificationItem = {
     source: "verify-command",
     subject,
     verdict: "violated",

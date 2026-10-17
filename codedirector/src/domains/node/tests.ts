@@ -4,7 +4,7 @@
  */
 
 import type { TestRunnerDescription } from "../../domain/types";
-import { tapFailedTestNames } from "../../verify/failedTests";
+import { tapFailedTestNames } from "../../core/testNames";
 
 const TEST_FILE_RE = /(__tests__\/|\.(test|spec)\.[cm]?[tj]sx?$)/;
 
@@ -59,8 +59,8 @@ export const NODE_TEST_FILE = /\.(?:[cm]?js|[cm]?ts)$/;
 
 /**
  * Failing test names from TAP output (the first five — what the tests-pass
- * detail shows). The parser is the verify layer's, so a node test is named
- * the same way here and in a failing verifyCommand's record.
+ * detail shows). The parser is the core's, so a node test is named the same
+ * way here and in a failing verifyCommand's record.
  */
 export function failingTestNames(output: string): string[] {
   return tapFailedTestNames(output, 5);

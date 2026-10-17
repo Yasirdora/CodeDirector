@@ -15,12 +15,15 @@
  *   Swift Testing Test "name" recorded an issue at File.swift:12
  *                 Test "name" failed after ...
  *   vitest        FAIL  file > describe > name
- *                 × name
+ *                 × name          (only under its "❯ file (N tests…)" header)
  *   TAP           not ok 3 - name
  *
  * The error line carries the file and line; the other forms do not, so a
- * test named by both keeps the location the output gave it.
+ * test named by both keeps the location the output gave it. The TAP reader
+ * lives in src/core/testNames.ts: the node domain reads it too.
  */
+
+import { tapFailureName } from "../core/testNames";
 
 export interface FailedTest {
   /** The test as the runner names it. */
@@ -39,33 +42,22 @@ export interface FailedTestsRead {
 /** How many failed tests a record names; the rest is one number. */
 export const MAX_FAILED_TESTS = 10;
 
-/** The failing test a TAP line names (`not ok 3 - name`), or null. */
-export function tapFailureName(line: string): string | null {
-  const m = /^\s*not ok \d+ - (.+)$/.exec(line);
-  return m ? m[1].trim() : null;
-}
+/** How many characters of test names one report line carries; the rest is one count. */
+export const MAX_NAMES_CHARS = 400;
 
-/**
- * Failing test names from TAP output, deduplicated, at most `limit`. The
- * tests-pass runner reads its output through this, so a node test is named
- * the same way wherever it is reported.
- */
-export function tapFailedTestNames(output: string, limit = Number.POSITIVE_INFINITY): string[] {
-  const names: string[] = [];
-  for (const line of output.split("\n")) {
-    const name = tapFailureName(line);
-    if (name === null || names.includes(name)) continue;
-    names.push(name);
-    if (names.length >= limit) break;
-  }
-  return names;
-}
+/** Below this a cut name says nothing recognisable; that label is counted instead. */
+const MIN_CUT_CHARS = 24;
+
+/** The separator between names on the report line. */
+const NAMES_SEP = " · ";
 
 const XCTEST_CASE = /^\s*Test Case ['"]-\[([^\]]+)\]['"] failed/;
 const XCTEST_ERROR = /^\s*(?:(\S+):(\d+):\s*)?error: -\[([^\]]+)\]\s*:/;
 const SWIFT_ISSUE = /^\s*[^\w\s]*\s*Test "(.+?)" recorded an issue at ([^\s:]+):(\d+)/;
 const SWIFT_FAILED = /^\s*[^\w\s]*\s*Test "(.+?)" failed after/;
 const VITEST_FAIL = /^\s*FAIL\s+(\S.*? > .+?)\s*$/;
+/** The header vitest prints above a file's rows: "❯ src/a.test.ts (2 tests | 1 failed) 12ms". */
+const VITEST_FILE = /^\s*❯\s+\S+\s+\(/;
 const VITEST_ROW = /^\s*×\s+(.+?)\s*$/;
 /** vitest appends the duration to a test row: "… cannot split 180ms". */
 const VITEST_DURATION = /\s+\d+(?:\.\d+)?(?:ms|s)$/;
@@ -87,8 +79,20 @@ interface Candidate {
 function candidates(output: string): Candidate[] {
   const found: Candidate[] = [];
   const lines = output.split("\n");
+  // A vitest row names a test only inside the block its file header opens;
+  // a blank line ends that block. A "× " line anywhere else (a summary such
+  // as "× 2 files changed") belongs to no file and to no test.
+  let inVitestFile = false;
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
+    if (line.trim().length === 0) {
+      inVitestFile = false;
+      continue;
+    }
+    if (VITEST_FILE.test(line)) {
+      inVitestFile = true;
+      continue;
+    }
     let m = XCTEST_CASE.exec(line);
     if (m) {
       found.push({ kind: "xctest", name: m[1], index });
@@ -118,9 +122,9 @@ function candidates(output: string): Candidate[] {
     m = VITEST_ROW.exec(line);
     if (m) {
       const name = m[1].replace(VITEST_DURATION, "").trim();
-      // A row is a test only when it reads like a name, not a bare number
-      // (any script's letters count — the names here are often German).
-      if (/\p{L}/u.test(name)) found.push({ kind: "vitest-row", name, index });
+      // Inside a file block, a row is a test unless the text is only a bare
+      // count (any script's letters count — the names here are often German).
+      if (inVitestFile && /\p{L}/u.test(name)) found.push({ kind: "vitest-row", name, index });
       continue;
     }
     const tap = tapFailureName(line);
@@ -168,8 +172,35 @@ export function failedTestLabels(read: FailedTestsRead): string[] {
   return read.tests.map((t) => (t.location !== undefined ? `${t.name} (${t.location})` : t.name));
 }
 
-/** The names as one line for the report; past the cap it ends "(and N more)". */
-export function formatFailedTests(read: FailedTestsRead): string {
+/**
+ * The names as one line for the report. Labels are kept whole while they fit
+ * `maxChars`; the first that does not is cut with "…", and every label after
+ * it — with those past MAX_FAILED_TESTS — is one count. A label that fits
+ * exactly is kept whole. Names and count together stay within `maxChars`
+ * whenever a label can be named at all, which the default budget always can.
+ */
+export function formatFailedTests(read: FailedTestsRead, maxChars = MAX_NAMES_CHARS): string {
   const labels = failedTestLabels(read);
-  return read.omitted > 0 ? `${labels.join(" · ")} (and ${read.omitted} more)` : labels.join(" · ");
+  const total = labels.length + read.omitted;
+  const kept: string[] = [];
+  let used = 0;
+  const line = (): string => {
+    const rest = total - kept.length;
+    return `${kept.join(NAMES_SEP)}${rest > 0 ? `${kept.length > 0 ? " " : ""}(and ${rest} more)` : ""}`;
+  };
+  for (let index = 0; index < labels.length; index++) {
+    const label = labels[index];
+    const sep = kept.length > 0 ? NAMES_SEP.length : 0;
+    const rest = total - kept.length - 1;
+    const more = rest > 0 ? ` (and ${rest} more)`.length : 0;
+    if (used + sep + label.length + more <= maxChars) {
+      kept.push(label);
+      used += sep + label.length;
+      continue;
+    }
+    const room = maxChars - used - sep - more - 1; // one char for the "…"
+    if (room >= MIN_CUT_CHARS) kept.push(`${label.slice(0, room).trimEnd()}…`);
+    return line();
+  }
+  return line();
 }
