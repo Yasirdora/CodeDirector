@@ -1,0 +1,36 @@
+schemaVersion: 1
+id: IL-0207
+status: verified
+utterance: "\"regarding idevelop I really do not know. I want you to decide\" — owner, 2026-10-17; the lead's decision: fold iDevelop's first idea into Code Director — a failed verify names the tests that failed"
+goal: When a lock's verifyCommand fails, the run record and the Change Report name every test that failed — XCTest (xcodebuild and swift test), Swift Testing, vitest and node:test — read from the whole output, not only the kept tail; a passing run is unchanged.
+interpretation: A failed-test reader for each output format (XCTest from xcodebuild and swift test, Swift Testing, vitest, node:test) in one module, applied to the WHOLE verify output before it is cut to a tail; the names go into the verify-command item's detail and a failedTests list; tests with real output samples saved from today's eDraft runs; a passing run's record unchanged.
+keep:
+  - kind: no-new-dependency
+deny:
+  - src/lock/**
+  - src/mcp/**
+  - package.json
+  - package-lock.json
+change: "cdir: a failed verify names the failed tests."
+verifyCommand: npm test && npm run eval
+verifyTimeoutMs: 900000
+budget:
+  files:
+    - src/verify/verify.ts
+    - src/verify/failedTests.ts
+    - src/domains/node/tests.ts
+    - test/verify.test.ts
+    - test/failed-tests.test.ts
+    - test/fixtures/failed-tests/xcodebuild.txt
+    - test/fixtures/failed-tests/swift-test.txt
+    - test/fixtures/failed-tests/vitest.txt
+  symbols: []
+  maxFiles: 8
+  maxLines: 700
+accept: []
+assumptions:
+  - text: The lead's decision for iDevelop's first piece (owner delegated, 2026-10-17); built in a separate worktree so the live cdir (~/codedirector/codedirector/dist) is untouched until the lead deploys it.
+    source: system
+    confirmed: true
+createdAt: 2026-10-17T10:54:29.514Z
+createdBy: Yasirdora

@@ -40,7 +40,7 @@ import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
 import { Baseline, baselineFileHash, loadBaseline, taskBaselinePath } from "../run/baseline";
-import { probeArtifactRef, probeExcerpt, runArgvProbe, runShellProbe } from "../run/probe";
+import { probeArtifactRef, probeExcerpt, runArgvProbe, runShellProbe, type ProbeResult } from "../run/probe";
 import { runIsolated } from "../run/tree";
 import { diagnosticsExcerpt, newDiagnostics, probeDiagnostics } from "../run/diagnostics";
 import { CORE_SKIP_DIRS } from "../core/walk";
@@ -52,6 +52,7 @@ import {
   VerificationItem,
   VerificationReport,
 } from "./types";
+import { failedTestLabels, formatFailedTests, readFailedTests } from "./failedTests";
 
 export class VerifyError extends Error {}
 
@@ -394,6 +395,33 @@ function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions, 
   return items;
 }
 
+/**
+ * A verify-command item that names the tests its command failed. The field
+ * is carried by this rung alone: a passing command has no failed tests, and
+ * its item keeps exactly the shape it had before.
+ */
+type VerifyCommandItem = VerificationItem & { failedTests?: string[] };
+
+/**
+ * What a failed verifyCommand says: the tests it named first — read from the
+ * whole output, not the kept tail — then the tail excerpt as the command's
+ * own last words. With no recognisable test name it is the old detail, word
+ * for word.
+ */
+function failedVerifyCommandDetail(command: string, exitCode: number, probe: ProbeResult): { detail: string; failedTests?: string[] } {
+  const failed = readFailedTests(`${probe.stdout}\n${probe.stderr}`);
+  const names = formatFailedTests(failed);
+  const excerpt = probeExcerpt(probe);
+  const head = `verifyCommand failed (exit ${exitCode}): ${command}`;
+  const tail = excerpt ? ` — output: ${excerpt}` : "";
+  if (names.length === 0) return { detail: `${head}${tail}` };
+  const total = failed.tests.length + failed.omitted;
+  return {
+    detail: `${head} — ${total} failed test${total === 1 ? "" : "s"}: ${names}${tail}`,
+    failedTests: failedTestLabels(failed),
+  };
+}
+
 function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): VerificationItem[] {
   if (!lock.verifyCommand) return [];
   const subject = `verifyCommand · ${lock.verifyCommand}`;
@@ -413,20 +441,20 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): V
   if (probe.exitCode === 0) {
     return [{ source: "verify-command", subject, verdict: "held", evidenceClass: "measured", detail: `verifyCommand passed: ${lock.verifyCommand}`, artifactRef }];
   }
-  // A failure has to be diagnosable from the report alone: the command's own
-  // last words, and the hashes of everything it said, as the evidence pointer.
-  // A pass needs neither — its exit code is the whole story.
-  const excerpt = probeExcerpt(probe);
-  return [
-    {
-      source: "verify-command",
-      subject,
-      verdict: "violated",
-      evidenceClass: "measured",
-      detail: `verifyCommand failed (exit ${probe.exitCode}): ${lock.verifyCommand}${excerpt ? ` — output: ${excerpt}` : ""}`,
-      artifactRef: probeArtifactRef(`sh -c ${JSON.stringify(lock.verifyCommand)}`, probe),
-    },
-  ];
+  // A failure has to be diagnosable from the report alone: the tests that
+  // failed, the command's own last words, and the hashes of everything it
+  // said. A pass needs none of it — its exit code is the whole story.
+  const { detail, failedTests } = failedVerifyCommandDetail(lock.verifyCommand, probe.exitCode, probe);
+  const item: VerifyCommandItem = {
+    source: "verify-command",
+    subject,
+    verdict: "violated",
+    evidenceClass: "measured",
+    detail,
+    artifactRef: probeArtifactRef(`sh -c ${JSON.stringify(lock.verifyCommand)}`, probe),
+    ...(failedTests !== undefined ? { failedTests } : {}),
+  };
+  return [item];
 }
 
 // ---------------------------------------------------------------------

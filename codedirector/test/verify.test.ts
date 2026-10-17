@@ -17,7 +17,7 @@ import { sealLock } from "../src/lock/seal";
 import { VibeCheck, KeepClause } from "../src/lock/types";
 import { captureBaseline, saveBaseline, taskBaselinePath, loadBaseline } from "../src/run/baseline";
 import { runWithLock } from "../src/run/run";
-import { runShellProbe } from "../src/run/probe";
+import { PROBE_EXCERPT_LINES, probeExcerpt, runShellProbe } from "../src/run/probe";
 import { verifyLock, verifyWithBaseline, resolveVerifyTimeoutMs } from "../src/verify/verify";
 import { DEFAULT_VERIFY_TIMEOUT_MS } from "../src/lock/types";
 import { declaredButUnrunnable, VerificationItem } from "../src/verify/types";
@@ -644,4 +644,78 @@ test("verify: a failing verifyCommand's item carries the command's own output, n
   assert.ok(loudItem.detail.includes("loud-299"), `the excerpt keeps the tail; item ends: ${loudItem.detail.slice(-120)}`);
   assert.ok(!loudItem.detail.includes("loud-0-"), "and drops the head — it is an excerpt, not the log");
   assert.ok(loudItem.detail.length < 700, `bounded: the item is ${loudItem.detail.length} chars`);
+});
+
+test("verify: a failing verifyCommand names its failed tests from the whole output, before the excerpt", async () => {
+  // The command's own output is a real swift test log (red-swift-engine.log,
+  // lines 40-113) whose last lines name no test — the report's kept tail
+  // alone would say only that a run failed.
+  const sample = fs.readFileSync(path.join(__dirname, "..", "..", "test", "fixtures", "failed-tests", "swift-test.txt"), "utf8");
+  const command = `${JSON.stringify(NODE)} -e "process.stdout.write(require('fs').readFileSync('sample.log','utf8'));process.exit(65)"`;
+  const { root, lock } = await setup([], (l) => {
+    l.verifyCommand = command;
+  });
+  fs.writeFileSync(path.join(root, "sample.log"), sample);
+  git(root, ["add", "sample.log"]);
+  git(root, ["commit", "-qm", "the failed run's own output"]);
+
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 1, "a failing verifyCommand fails the run");
+  const item = outcome.record.verification!.items.find((i) => i.source === "verify-command")!;
+  const named = item as VerificationItem & { failedTests?: string[] };
+  assert.equal(item.verdict, "violated");
+  assert.deepEqual(named.failedTests, [
+    "The speech runs on across the page break, as the English page's does (GermanImportTests.swift:102)",
+    "The German page comes back as the screenplay it was, its furniture gone (GermanImportTests.swift:85)",
+  ]);
+  const speech = "The speech runs on across the page break, as the English page's does";
+  assert.ok(item.detail.includes("2 failed tests: "), item.detail);
+  assert.ok(item.detail.indexOf(speech) < item.detail.indexOf(" — output: "), "the names come first, the excerpt after");
+  // What the item carried before this change — the last eight lines — names
+  // neither test: the names came from the whole output.
+  const tail = sample
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .slice(-PROBE_EXCERPT_LINES)
+    .join("\n");
+  for (const name of [speech, "The German page comes back"]) assert.ok(!tail.includes(name), `the kept tail already names "${name}"`);
+
+  // The run record on disk and the Change Report both carry the list.
+  const recorded = JSON.parse(fs.readFileSync(outcome.recordPath, "utf8"));
+  const recordedItem = recorded.verification.items.find((i: VerificationItem) => i.source === "verify-command");
+  assert.deepEqual(recordedItem.failedTests, named.failedTests, "the record on disk names the tests");
+  const report = await buildReport(root, lock.id, { run: outcome.record, verification: outcome.record.verification });
+  const reportItem = report.items.find((i) => i.source === "verify-command") as VerificationItem & { failedTests?: string[] };
+  assert.deepEqual(reportItem.failedTests, named.failedTests, "the Change Report names the tests");
+  assert.equal(reportItem.detail, item.detail);
+});
+
+test("verify: a failing verifyCommand that names no test keeps the old detail and gains no field", async () => {
+  const write = 'console.log("linker: 1 error");process.exit(3)';
+  const command = `${JSON.stringify(NODE)} -e ${JSON.stringify(write)}`;
+  const { root, lock } = await setup([], (l) => {
+    l.verifyCommand = command;
+  });
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 1);
+  const item = outcome.record.verification!.items.find((i) => i.source === "verify-command")!;
+  // The same command run directly: the detail is pinned to the probe's own
+  // output, not to a string this test made up.
+  const probe = runShellProbe(root, command, 60_000);
+  assert.equal(item.detail, `verifyCommand failed (exit 3): ${command} — output: ${probeExcerpt(probe)}`);
+  assert.ok(!("failedTests" in item), "no failed tests were named, so no list is added");
+});
+
+test("verify: a passing verifyCommand item is unchanged — the same detail, no failedTests field", async () => {
+  const command = `${JSON.stringify(NODE)} -e "process.exit(0)"`;
+  const { root, lock } = await setup([], (l) => {
+    l.verifyCommand = command;
+  });
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0);
+  const item = outcome.record.verification!.items.find((i) => i.source === "verify-command")!;
+  assert.equal(item.verdict, "held");
+  assert.equal(item.detail, `verifyCommand passed: ${command}`);
+  assert.ok(!("failedTests" in item));
 });

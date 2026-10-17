@@ -1,0 +1,51 @@
+
+ RUN  v4.1.10 /private/tmp/il0695-scratch/packages/edraft
+
+ ❯ src/paginate.test.ts (56 tests | 3 failed | 48 skipped) 349ms
+     × moves a heading when the next action has three lines and cannot split 180ms
+     × moves a heading when the next speech cannot keep its cue 24ms
+     × moves an earlier heading when the next heading would itself be left last 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/paginate.test.ts > paginate · a scene heading never ends a page > moves a heading when the next action has three lines and cannot split
+AssertionError: expected 'INT. SHED - NIGHT' not to be 'INT. SHED - NIGHT' // Object.is equality
+ ❯ src/paginate.test.ts:569:37
+    567|    { linesPerPage: 11 }
+    568|   );
+    569|   expect(lastPrinted(pages, 1)).not.toBe(heading);
+       |                                     ^
+    570|   expect(pages[1].lines[0].text).toBe(heading);
+    571|   expect(pageText(pages, 2)).toContain(full);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/paginate.test.ts > paginate · a scene heading never ends a page > moves a heading when the next speech cannot keep its cue
+AssertionError: expected 'INT. SHED - NIGHT' not to be 'INT. SHED - NIGHT' // Object.is equality
+ ❯ src/paginate.test.ts:585:37
+    583|    { linesPerPage: 11 }
+    584|   );
+    585|   expect(lastPrinted(pages, 1)).not.toBe(heading);
+       |                                     ^
+    586|   expect(pages[1].lines[0].text).toBe(heading);
+    587|   expect(pageText(pages, 2)).toContain('MOLLY');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/paginate.test.ts > paginate · a scene heading never ends a page > moves an earlier heading when the next heading would itself be left last
+AssertionError: expected [ 'Beat 0.', '', 'Beat 1.', '', …(5) ] to not include 'INT. SHED - NIGHT'
+ ❯ src/paginate.test.ts:600:34
+    598|    { linesPerPage: 12 }
+    599|   );
+    600|   expect(pageText(pages, 1)).not.toContain(heading);
+       |                                  ^
+    601|   expect(pageText(pages, 1)).not.toContain('EXT. YARD - DAY');
+    602|   expect(pages[1].lines[0].text).toBe(heading);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 5 passed | 48 skipped (56)
+   Start at  10:47:28
+   Duration  6.06s (transform 2.90s, setup 0ms, import 3.18s, tests 349ms, environment 0ms)

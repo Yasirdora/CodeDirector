@@ -1,0 +1,134 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261017-132815-913-o4h1-82a0",
+  "baselinePath": ".codedirector/baselines/IL-0207-task.json",
+  "baselineSha256": "dada773b1b8cf20276f416643b342c58e4c24d4e9017341ca6090ccb53d5aa06",
+  "budget": {
+    "filesChanged": 8,
+    "linesChanged": 627,
+    "maxFiles": 8,
+    "maxLines": 700
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/domains/node/tests.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/failedTests.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/failed-tests.test.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/fixtures/failed-tests/swift-test.txt",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/fixtures/failed-tests/vitest.txt",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/fixtures/failed-tests/xcodebuild.txt",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/verify.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261017T132754943",
+    "createdAt": "2026-10-17T13:27:55.129Z",
+    "dirty": false,
+    "id": "ckpt-20261017T132754943",
+    "ref": "525d1407e756e16780be7e0e404e9ff05a1f1b76",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261017T132754943"
+  },
+  "command": [
+    "git",
+    "apply",
+    "/Users/x/codedirector-briefs/cdir/failed-test-names/patch.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-10-17T13:28:15.932Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0207",
+  "startedAt": "2026-10-17T13:28:15.913Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0207-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0207-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0207-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"npm test && npm run eval\" → exit 0",
+        "detail": "verifyCommand passed: npm test && npm run eval",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · npm test && npm run eval",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0207",
+    "verifiedAt": "2026-10-17T13:33:47.646Z",
+    "violations": []
+  },
+  "violations": []
+}
