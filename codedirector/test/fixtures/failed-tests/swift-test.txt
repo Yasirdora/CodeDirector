@@ -1,0 +1,74 @@
+Build complete! (33.03 sec)
+􀟈  Test run started.
+􀄵  Testing Library Version: 2084
+􀄵  Target Platform: arm64e-apple-macos14.0
+􀟈  Suite "German import (Empfehlung §4)" started.
+􀟈  Test "The German page comes back as the screenplay it was, its furniture gone" started.
+􀟈  Test "The speech runs on across the page break, as the English page's does" started.
+􀟈  Test "The German words that are only German words are not furniture" started.
+􀟈  Test "A character called MEHR keeps his name" started.
+􁁛  Test "The German words that are only German words are not furniture" passed after 0.002 seconds.
+􁁛  Test "A character called MEHR keeps his name" passed after 0.002 seconds.
+􀢄  Test "The speech runs on across the page break, as the English page's does" recorded an issue at GermanImportTests.swift:102:9: Expectation failed: german.elements.map(\.type) == english.elements.map(\.type)
+􀄵  german.elements.map(\.type) == english.elements.map(\.type) → false
+􀄵    german.elements.map(\.type) → [EDraftEngine.ElementKind.scene, EDraftEngine.ElementKind.character, EDraftEngine.ElementKind.dialogue, EDraftEngine.ElementKind.parenthetical, EDraftEngine.ElementKind.action, EDraftEngine.ElementKind.character, EDraftEngine.ElementKind.dialogue, EDraftEngine.ElementKind.parenthetical]
+􀄵    english.elements.map(\.type) → [EDraftEngine.ElementKind.scene, EDraftEngine.ElementKind.character, EDraftEngine.ElementKind.dialogue, EDraftEngine.ElementKind.character, EDraftEngine.ElementKind.dialogue]
+􀢄  Test "The German page comes back as the screenplay it was, its furniture gone" recorded an issue at GermanImportTests.swift:85:9: Expectation failed: screenplay.elements.map(\.type) == [
+            .scene, .character, .dialogue, .character, .dialogue,
+        ]
+􀄵  screenplay.elements.map(\.type) == [
+               .scene, .character, .dialogue, .character, .dialogue,
+           ] → false
+􀄵    screenplay.elements.map(\.type) → [EDraftEngine.ElementKind.scene, EDraftEngine.ElementKind.character, EDraftEngine.ElementKind.dialogue, EDraftEngine.ElementKind.parenthetical, EDraftEngine.ElementKind.action, EDraftEngine.ElementKind.character, EDraftEngine.ElementKind.dialogue, EDraftEngine.ElementKind.parenthetical]
+􀄵    [
+                 .scene, .character, .dialogue, .character, .dialogue,
+             ] → [EDraftEngine.ElementKind.scene, EDraftEngine.ElementKind.character, EDraftEngine.ElementKind.dialogue, EDraftEngine.ElementKind.character, EDraftEngine.ElementKind.dialogue]
+􀢄  Test "The German page comes back as the screenplay it was, its furniture gone" recorded an issue at GermanImportTests.swift:88:9: Expectation failed: screenplay.elements.map(\.text) == [
+            "INNEN. KÜCHE - TAG",
+            "JONAS",
+            "Brötchen jeden Morgen eine",
+            "JONAS (FORTS.)",
+            "Viertelstunde länger brauchen, weil meine Oma mit dem Teig redet.",
+        ]
+􀄵  screenplay.elements.map(\.text) == [
+               "INNEN. KÜCHE - TAG",
+               "JONAS",
+               "Brötchen jeden Morgen eine",
+               "JONAS (FORTS.)",
+               "Viertelstunde länger brauchen, weil meine Oma mit dem Teig redet.",
+           ] → false
+􀄵    screenplay.elements.map(\.text) → ["INNEN. KÜCHE - TAG", "JONAS", "Brötchen jeden Morgen eine", "(MEHR)", "WEITER:", "JONAS (FORTS.)", "Viertelstunde länger brauchen, weil meine Oma mit dem Teig redet.", "(WEITER)"]
+􀄵    [
+                 "INNEN. KÜCHE - TAG",
+                 "JONAS",
+                 "Brötchen jeden Morgen eine",
+                 "JONAS (FORTS.)",
+                 "Viertelstunde länger brauchen, weil meine Oma mit dem Teig redet.",
+             ] → ["INNEN. KÜCHE - TAG", "JONAS", "Brötchen jeden Morgen eine", "JONAS (FORTS.)", "Viertelstunde länger brauchen, weil meine Oma mit dem Teig redet."]
+􀢄  Test "The German page comes back as the screenplay it was, its furniture gone" failed after 0.004 seconds with 2 issues.
+􀢄  Test "The speech runs on across the page break, as the English page's does" recorded an issue at GermanImportTests.swift:103:9: Expectation failed: german.elements.count == english.elements.count
+􀄵  german.elements.count == english.elements.count → false
+􀄵    german.elements.count → 8
+􀄵    english.elements.count → 5
+􀢄  Test "The speech runs on across the page break, as the English page's does" recorded an issue at GermanImportTests.swift:106:9: Expectation failed: german.elements.last?.text == english.elements.last?.text
+􀄵  /* the second half of the speech is one paragraph under JONAS (FORTS.),
+      exactly as it is under JONAS (CONT'D) */
+􀄵  german.elements.last?.text == english.elements.last?.text → false
+􀄵    german.elements.last?.text → "(WEITER)"
+􀄵      some → "(WEITER)"
+􀄵    english.elements.last?.text → "Viertelstunde länger brauchen, weil meine Oma mit dem Teig redet."
+􀄵      some → "Viertelstunde länger brauchen, weil meine Oma mit dem Teig redet."
+􀢄  Test "The speech runs on across the page break, as the English page's does" failed after 0.004 seconds with 3 issues.
+􀢄  Suite "German import (Empfehlung §4)" failed after 0.005 seconds with 5 issues.
+􀄵  /// The German page read back from a printed or scanned page (U9, Empfehlung
+􀄵  /// §4): `(MEHR)` at the foot of a page, `WEITER` / `(WEITER)` / `WEITER:` at
+􀄵  /// its head, the page number — and the ordinary German words that are not
+􀄵  /// furniture at all.
+􀄵  ///
+􀄵  /// The page here is invented, never a real script: the repository is public.
+􀄵  /// The same invented page stands in the TypeScript engine's tests
+􀄵  /// (`packages/edraft/src/plaintext.test.ts` and `classify.test.ts`), so the
+􀄵  /// two engines can be held to the same elements — U9's sixth hard question.
+􀢄  Test run with 4 tests in 1 suite failed after 0.005 seconds with 5 issues.
+Note: Some test targets reported failures:
+  - EDraftEngineTests (Swift Testing)

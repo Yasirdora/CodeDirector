@@ -1,0 +1,33 @@
+2026-10-17 03:23:38.410843+0200 eDraft[7131:5797954]         MP4_BoxParser.cpp:1103   DataSource read insufficient amount
+2026-10-17 03:23:38.411070+0200 eDraft[7131:5797954]         MP4_BoxParser.cpp:1103   DataSource read insufficient amount
+2026-10-17 03:23:38.411210+0200 eDraft[7131:5797954]         MP4_BoxParser.cpp:1103   DataSource read insufficient amount
+2026-10-17 03:23:38.428269+0200 eDraft[7131:5797954]         MP4_BoxParser.cpp:1103   DataSource read insufficient amount
+2026-10-17 03:23:38.428511+0200 eDraft[7131:5797954]         MP4_BoxParser.cpp:1103   DataSource read insufficient amount
+2026-10-17 03:23:38.428612+0200 eDraft[7131:5797954]         MP4_BoxParser.cpp:1103   DataSource read insufficient amount
+2026-10-17 03:23:38.428711+0200 eDraft[7131:5797954]         MP4_BoxParser.cpp:1103   DataSource read insufficient amount
+2026-10-17 03:23:38.428806+0200 eDraft[7131:5797954]         MP4_BoxParser.cpp:1103   DataSource read insufficient amount
+2026-10-17 03:23:38.428880+0200 eDraft[7131:5797954]         MP4_BoxParser.cpp:1103   DataSource read insufficient amount
+/tmp/edraft-i3e-base1/apple/eDraftTests/IdeasSheetAcceptanceTests.swift:914: error: -[eDraftTests.I3cIdeasVisibleControlTests testRealAddReceiptNoteMarkerAndBarUndoCarryTheIdeaBothWays] : XCTUnwrap failed: expected non-nil value of type "NSObject" - the script bar's own Undo
+Test Case '-[eDraftTests.I3cIdeasVisibleControlTests testRealAddReceiptNoteMarkerAndBarUndoCarryTheIdeaBothWays]' failed (7.189 seconds).
+Test Suite 'I3cIdeasVisibleControlTests' failed at 2026-10-17 03:23:39.271.
+	 Executed 1 test, with 1 failure (0 unexpected) in 7.189 (7.190) seconds
+Test Suite 'W1IdeaStoreImportAcceptanceTests' started at 2026-10-17 03:23:39.271.
+Test Suite 'W1IdeaStoreImportAcceptanceTests' passed at 2026-10-17 03:23:39.271.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'eDraftTests.xctest' failed at 2026-10-17 03:23:39.271.
+	 Executed 1 test, with 1 failure (0 unexpected) in 7.189 (7.191) seconds
+Test Suite 'Selected tests' failed at 2026-10-17 03:23:39.272.
+	 Executed 1 test, with 1 failure (0 unexpected) in 7.189 (7.192) seconds
+2026-10-17 03:24:01.593 xcodebuild[7043:5797312] [MT] IDETestOperationsObserverDebug: 35.088 elapsed -- Testing started completed.
+2026-10-17 03:24:01.594 xcodebuild[7043:5797312] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-10-17 03:24:01.594 xcodebuild[7043:5797312] [MT] IDETestOperationsObserverDebug: 35.088 sec, +35.088 sec -- end
+
+Test session results, code coverage, and logs:
+	/tmp/edraft-i3e-base1-dd/Logs/Test/Test-eDraft-2026.10.17_03-23-26-+0200.xcresult
+
+Failing tests:
+	I3cIdeasVisibleControlTests.testRealAddReceiptNoteMarkerAndBarUndoCarryTheIdeaBothWays()
+
+** TEST EXECUTE FAILED **
+
+Testing started
