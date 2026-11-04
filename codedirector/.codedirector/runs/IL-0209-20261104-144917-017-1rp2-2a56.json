@@ -1,0 +1,165 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261104-144917-017-1rp1-2a56",
+  "baselinePath": ".codedirector/baselines/IL-0209-task.json",
+  "baselineSha256": "3acf0638a737f9d8f88128dec649ab33238c59a202d0516f88bf19b555a8e926",
+  "budget": {
+    "filesChanged": 11,
+    "linesChanged": 429,
+    "maxFiles": 11,
+    "maxLines": 450
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/cli-main.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/jobs.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/server.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/mcp/worker.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/format.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/mcp-responsive.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/mcp.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/report-reuse.test.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/report.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261104T144854298",
+    "createdAt": "2026-11-04T14:48:54.355Z",
+    "dirty": false,
+    "id": "ckpt-20261104T144854298",
+    "ref": "9ab12fcceb7a5eb326ec6747606b29c483f62a3c",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261104T144854298"
+  },
+  "command": [
+    "python3",
+    "-I",
+    "/Users/x/codedirector-briefs/tools/apply-blocks.py",
+    "/Users/x/codedirector-briefs/cdir/cd-w4/blocks-root.txt",
+    "."
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-11-04T14:49:17.279Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "verify and run behave as before; the seal and the lock schema are unchanged; existing tests keep their assertions (four now ask for the fresh check with reverify: true). — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0209",
+  "startedAt": "2026-11-04T14:49:17.017Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0209-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0209-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0209-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"/usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'\" → exit 0",
+        "detail": "verifyCommand passed: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · verify and run behave as before; the seal and the lock schema are unchanged; existing tests keep their assertions (four now ask for the fresh check with reverify: true).",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0209",
+    "verifiedAt": "2026-11-04T14:56:53.226Z",
+    "violations": []
+  },
+  "violations": []
+}

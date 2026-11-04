@@ -556,7 +556,7 @@ test("mcp: a report refreshes the lock's verdict instead of leaving the last FAI
     const lockFile = path.join(lockDir, fs.readdirSync(lockDir).find((n) => n.startsWith(lockId))!);
     assert.match(fs.readFileSync(lockFile, "utf8"), /^status: failed$/m);
 
-    const rep = await call("report", { lockId, format: "json" });
+    const rep = await call("report", { lockId, format: "json", reverify: true });
     assert.equal(JSON.parse(resultText(rep)).verdict, "verified");
     assert.match(fs.readFileSync(lockFile, "utf8"), /^status: verified$/m, "the MCP report refreshes the lock's verdict");
   } finally {

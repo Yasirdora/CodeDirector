@@ -49,6 +49,7 @@ import {
   requiredCheckViolations,
   scopeViolations,
 } from "./classify";
+import { sha256Bytes } from "./tree";
 import { loadChecks } from "../config/checks";
 import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
 import { declaredButUnrunnable, ProbePutBack, VerificationReport } from "../verify/types";
@@ -88,6 +89,13 @@ export interface RunRecord {
   violations: string[];
   /** True when --allow-expand downgraded scope violations to logged overrides. */
   allowExpand: boolean;
+  /**
+   * The tree as the attempt left it, after the checks: repo-relative path ->
+   * sha256. A path the attempt deleted has no entry (its absence is the
+   * state). `report` shows these checks again only while every hash holds
+   * and nothing outside this set differs from the task baseline.
+   */
+  afterHashes?: Record<string, string>;
   /** Full verification-ladder result (present unless run with verify disabled). */
   verification?: VerificationReport;
 }
@@ -377,6 +385,18 @@ export async function runWithLock(
   // neither is a check the repo requires that the verifyCommand leaves out.
   const violations = allowExpand ? [...checks, ...keepViolations] : [...scope, ...checks, ...keepViolations];
 
+  // The tree as this attempt leaves it, after the checks: every file the
+  // task baseline now shows, hashed at the state a later report may reuse. A
+  // deleted path has no hash — its absence is the recorded state.
+  const afterHashes: Record<string, string> = {};
+  for (const c of changedFiles(rootDir, baseline)) {
+    try {
+      afterHashes[c.path] = sha256Bytes(fs.readFileSync(path.join(rootDir, c.path)));
+    } catch {
+      // a directory, or a path that vanished between the scan and the hash
+    }
+  }
+
   const record: RunRecord = {
     lockId: lock.id,
     attemptId,
@@ -393,6 +413,7 @@ export async function runWithLock(
     keepResults,
     violations,
     allowExpand,
+    afterHashes,
     ...(verification ? { verification } : {}),
   };
   fs.mkdirSync(runsDir(rootDir), { recursive: true });

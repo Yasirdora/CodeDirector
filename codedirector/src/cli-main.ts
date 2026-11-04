@@ -18,7 +18,7 @@
  *                                       Restore the latest checkpoint
  *   cdir run <lock-id> -- <cmd...>     Verified execution inside the Lock
  *   cdir verify <lock-id>              Re-run the verification ladder
- *   cdir report <lock-id> [--format]   Change Report (terminal · md · json)
+ *   cdir report <lock-id> [--reverify] Change Report (terminal · md · json)
  *   cdir help                          This help
  *
  * Exit codes: 0 success, 1 runtime failure, 2 usage error.
@@ -121,7 +121,8 @@ Usage:
           [--format=terminal|md|json]     first, then verified claims with
                                           evidence classes + artifact refs,
                                           then the Unchecked bucket (always
-                                          visible), then asserted findings
+                                          visible), then asserted findings.
+                                          --reverify runs the checks again
 
   cdir mcp [--root DIR]                   Serve the Code Director workflow over
                                           MCP (stdio) — the supported integration
@@ -646,7 +647,10 @@ async function main(): Promise<number> {
       if (!lockId) fail("verify requires a lock id, e.g. cdir verify IL-0001", 2);
       try {
         const testTimeoutMs = flags.has("test-timeout") ? intFlag(flags, "test-timeout", 60_000) : undefined;
-        const report = await buildReport(root, lockId, testTimeoutMs !== undefined ? { testTimeoutMs } : {});
+        const report = await buildReport(root, lockId, {
+          ...(testTimeoutMs !== undefined ? { testTimeoutMs } : {}),
+          reverify: true, // verify is the explicit command: it always runs the checks
+        });
         finalizeLockStatus(root, report);
         const fmt = flagStr(flags, "format") ?? "terminal";
         process.stdout.write(renderReport(report, fmt) + "\n");
@@ -662,7 +666,10 @@ async function main(): Promise<number> {
       if (!lockId) fail("report requires a lock id, e.g. cdir report IL-0001", 2);
       try {
         const attempt = flags.has("attempt") ? intFlag(flags, "attempt", 1) : undefined;
-        const report = await buildReport(root, lockId, attempt !== undefined ? { attempt } : {});
+        const report = await buildReport(root, lockId, {
+          ...(attempt !== undefined ? { attempt } : {}),
+          ...(flags.has("reverify") ? { reverify: true } : {}),
+        });
         finalizeLockStatus(root, report);
         const fmt = flagStr(flags, "format") ?? "terminal";
         process.stdout.write(renderReport(report, fmt) + "\n");

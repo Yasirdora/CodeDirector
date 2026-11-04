@@ -118,6 +118,38 @@ function closedNote(closedBy: NonNullable<ChangeReport["closedBy"]>): string {
   );
 }
 
+/**
+ * The one line that says whether the attempt's checks were shown or run now.
+ * The same words in the terminal report and in markdown.
+ */
+export function checksSourceLine(source: NonNullable<ChangeReport["checksFrom"]>): string {
+  const clock = clockTime(source.at);
+  if (source.reused) {
+    return `Checks from attempt ${source.attempt} (${clock}), tree unchanged since — nothing re-run`;
+  }
+  switch (source.reason) {
+    case "reverify":
+      return `Re-verify requested — checks re-run now (attempt ${source.attempt}, ${clock})`;
+    case "no-checks":
+      return `Attempt ${source.attempt} (${clock}) recorded no checks — checks re-run now`;
+    case "no-after-hashes":
+      return `Attempt ${source.attempt} (${clock}) recorded no after-state hashes — checks re-run now`;
+    case "baseline-moved":
+      return `The task baseline moved since attempt ${source.attempt} (${clock}) — checks re-run now`;
+    case "no-baseline":
+      return `No task baseline — checks re-run now (attempt ${source.attempt}, ${clock})`;
+    default:
+      return `Tree changed since attempt ${source.attempt} (${clock}) — checks re-run now`;
+  }
+}
+
+/** HH:MM in the machine's local time; the raw stamp when it cannot be read. */
+function clockTime(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+}
+
 // ---------------------------------------------------------------------
 // Terminal
 
@@ -136,6 +168,7 @@ export function formatReport(report: ChangeReport): string {
     lines.push(`Basis  current tree (no task baseline — scope not judged)`);
   }
   if (report.closedBy) lines.push(`Closed by ${closedNote(report.closedBy)}`);
+  if (report.checksFrom) lines.push(checksSourceLine(report.checksFrom));
   if (report.command) {
     lines.push(
       `Run    ${report.command.join(" ")} · record ${report.runRecordPath ?? "(unknown)"}`,
@@ -235,6 +268,7 @@ export function formatReportMarkdown(report: ChangeReport): string {
     lines.push(`- **Basis:** current tree vs task baseline (captured ${report.taskBaselineCapturedAt})`);
   }
   if (report.closedBy) lines.push(`- **Closed by:** ${closedNote(report.closedBy)}`);
+  if (report.checksFrom) lines.push(`- **Checks:** ${checksSourceLine(report.checksFrom)}`);
   if (report.command) lines.push(`- **Run:** \`${report.command.join(" ")}\` (record: \`${report.runRecordPath ?? "?"}\`)`);
   if (report.baselinePath) lines.push(`- **Baseline:** \`${report.baselinePath}\``);
   lines.push(`- **Evidence counts:** proven ${report.counts.proven} · measured ${report.counts.measured} · asserted ${report.counts.asserted} · unchecked ${report.counts.unchecked}`);

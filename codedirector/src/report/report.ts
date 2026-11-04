@@ -39,7 +39,8 @@ import {
   scopeViolations,
 } from "../run/classify";
 import { loadChecks } from "../config/checks";
-import { Baseline, baselinesDir, loadTaskBaseline, taskBaselineFileName, taskBaselinePath } from "../run/baseline";
+import { Baseline, baselineFileHash, baselinesDir, loadTaskBaseline, taskBaselineFileName, taskBaselinePath } from "../run/baseline";
+import { sha256Bytes } from "../run/tree";
 import { verifyLock, VerifyOptions } from "../verify/verify";
 import {
   countByClass,
@@ -55,6 +56,22 @@ import {
 export { latestRunRecord, listRunRecords };
 
 export class ReportError extends Error {}
+
+/**
+ * How a current-tree report got its checks: shown from the last attempt while
+ * the tree is exactly that attempt's after-state, or run now because it moved
+ * (or because a re-verify was asked for). One line in the report says which.
+ */
+export interface ChecksSource {
+  /** 1-based attempt number, oldest first — the numbering `--attempt` uses. */
+  attempt: number;
+  /** When that attempt finished (ISO 8601); the checks' own time. */
+  at: string;
+  /** True = the attempt's recorded checks were shown; false = the checks ran now. */
+  reused: boolean;
+  /** Why the checks ran now, when they did. */
+  reason?: "reverify" | "tree-changed" | "no-checks" | "no-after-hashes" | "baseline-moved" | "no-baseline";
+}
 
 export interface Finding {
   text: string;
@@ -90,6 +107,8 @@ export interface ChangeReport {
   command?: string[];
   /** Repo-relative path of the run record this report summarizes. */
   runRecordPath?: string;
+  /** Present on a current-tree report: which checks it shows, and whether they ran. */
+  checksFrom?: ChecksSource;
   /** Repo-relative path of the reference the scope delta is measured against. */
   baselinePath?: string;
   /** Repo-relative task baseline (the immutable per-lock reference). */
@@ -113,6 +132,12 @@ export interface BuildReportOptions extends VerifyOptions {
   runRecordPath?: string;
   /** Render a recorded attempt (1-based, oldest first) instead of the current tree. */
   attempt?: number;
+  /**
+   * Run the checks even when the tree is exactly the latest attempt's own
+   * after-state. `cdir verify` always passes this; `cdir report --reverify`
+   * and the MCP `reverify: true` input are the explicit request.
+   */
+  reverify?: boolean;
   /** Prebuilt index for findings — otherwise built incrementally. */
   index?: RepoIndex;
   /** Compute incidental findings (default true). */
@@ -262,6 +287,64 @@ function recordedChecks(lockId: string, run: RunRecord): VerificationReport {
   );
 }
 
+/** sha256 of a repo-relative file, or null when there is no such readable file. */
+function hashAt(rootDir: string, relPath: string): string | null {
+  try {
+    return sha256Bytes(fs.readFileSync(path.join(rootDir, relPath)));
+  } catch {
+    return null;
+  }
+}
+
+/** What the live tree is, relative to the last attempt's recorded after-state. */
+type AfterStateKind = "same" | "no-checks" | "no-after-hashes" | "baseline-moved" | "no-baseline" | "tree-changed";
+
+/**
+ * Whether the tree is exactly the after-state the attempt left.
+ *
+ * "Exactly" is two facts: every file the attempt is responsible for still
+ * holds the bytes the record kept for it (a deleted path is still absent),
+ * and the live delta against the task baseline names no file the attempt was
+ * not already answerable for. A record without checks or without after-hashes,
+ * or a task baseline that has moved since (a rebase, or a tampered file),
+ * cannot prove the state and re-verifies as before.
+ */
+function attemptAfterState(
+  rootDir: string,
+  run: RunRecord,
+  taskBaseline: Baseline | null,
+  taskBaselineFile: string,
+): AfterStateKind {
+  if (!run.verification) return "no-checks";
+  const hashes = run.afterHashes;
+  if (!hashes) return "no-after-hashes";
+  if (!taskBaseline) return "no-baseline";
+  // The task baseline is immutable except through `cdir lock rebase`; the
+  // record carries the hash it was judged against.
+  let baselineNow: string;
+  try {
+    baselineNow = baselineFileHash(taskBaselineFile);
+  } catch {
+    return "baseline-moved";
+  }
+  if (!run.baselineSha256 || run.baselineSha256 !== baselineNow) return "baseline-moved";
+
+  // The attempt answers for what it changed and for whatever its checks left
+  // behind (the hashes were taken after the ladder ran).
+  const attributable = new Set(Object.keys(hashes));
+  for (const c of run.changed) attributable.add(c.path);
+  for (const p of attributable) {
+    const recorded = hashes[p];
+    const current = hashAt(rootDir, p);
+    // Deleted paths have no hash: the recorded state is "still absent".
+    if (recorded === undefined ? current !== null : current !== recorded) return "tree-changed";
+  }
+  for (const c of changedFiles(rootDir, taskBaseline)) {
+    if (!attributable.has(c.path)) return "tree-changed";
+  }
+  return "same";
+}
+
 export async function buildReport(
   rootDir: string,
   lockId: string,
@@ -300,6 +383,21 @@ export async function buildReport(
   const view: ChangeReport["view"] =
     (opts.attempt !== undefined && !opts.run) || closedBy !== null ? "attempt" : "current";
 
+  // The last attempt's checks are shown without running them again only while
+  // the tree is exactly that attempt's after-state. A moved tree, a record
+  // that cannot prove its state, or a rebased baseline is verified as before.
+  const mayReuse =
+    view === "current" && !opts.run && opts.verification === undefined && opts.reverify !== true;
+  let afterState: AfterStateKind | undefined;
+  if (mayReuse && run) {
+    try {
+      afterState = attemptAfterState(rootDir, run, taskBaseline, taskBaselineFile);
+    } catch {
+      afterState = "tree-changed"; // unreadable tree: judge it again
+    }
+  }
+  const reuse = afterState === "same";
+
   // When re-verifying standalone, hold the task baseline to its capture-time
   // hash (baseline tamper detection).
   const integrity =
@@ -313,13 +411,39 @@ export async function buildReport(
   // for `--attempt N` and for a lock a later lock has closed. Run again,
   // they would test a tree that is no longer that attempt's own.
   const recorded: VerificationReport | undefined =
-    view === "attempt" && run ? recordedChecks(lockId, run) : undefined;
+    run && (view === "attempt" || reuse) ? recordedChecks(lockId, run) : undefined;
   const verification = opts.verification ?? recorded ?? (await verifyLock(rootDir, lockId, { ...integrity, ...opts }));
   const runRecordPath = latest?.recordPath
     ? path.isAbsolute(latest.recordPath)
       ? path.relative(rootDir, latest.recordPath).split(path.sep).join("/")
       : latest.recordPath
     : undefined;
+
+  // Which checks this current-tree report shows — said in one line, so a
+  // reused attempt and a fresh run can never be mistaken for each other.
+  let checksFrom: ChecksSource | undefined;
+  if (view === "current" && !opts.run && opts.verification === undefined && run) {
+    const all = listRunRecords(rootDir, lockId);
+    const index = all.findIndex((r) =>
+      latest?.recordPath
+        ? r.recordPath === latest.recordPath
+        : r.record.attemptId !== undefined && r.record.attemptId === run.attemptId,
+    );
+    if (index !== -1) {
+      const reason: ChecksSource["reason"] =
+        opts.reverify === true
+          ? "reverify"
+          : afterState !== undefined && afterState !== "same"
+            ? afterState
+            : "tree-changed";
+      checksFrom = {
+        attempt: index + 1,
+        at: run.finishedAt,
+        reused: reuse,
+        ...(reuse ? {} : { reason }),
+      };
+    }
+  }
 
   // The scope half of the verdict. A live run already classified against the
   // task baseline; an attempt view re-judges the recorded paths against the
@@ -396,7 +520,7 @@ export async function buildReport(
   // or the live run's own report. A current-tree re-verification judges the
   // tree it just measured; otherwise a fixed re-verify kept reading FAILED
   // from the attempt before it (a stale record).
-  const boundToRun = view === "attempt" || opts.run !== undefined;
+  const boundToRun = view === "attempt" || opts.run !== undefined || reuse;
   const commandFailed = boundToRun && run !== undefined && run.exitCode !== 0;
   const verdict: ChangeReport["verdict"] =
     violations.length > 0 || commandFailed
@@ -443,6 +567,7 @@ export async function buildReport(
     ...(run?.attemptId ? { attemptId: run.attemptId } : {}),
     ...(closedBy !== null ? { closedBy } : {}),
     ...(runRecordPath !== undefined ? { runRecordPath } : {}),
+    ...(checksFrom !== undefined ? { checksFrom } : {}),
     ...(taskBaseline
       ? { taskBaselinePath: path.relative(rootDir, taskBaselineFile).split(path.sep).join("/") }
       : {}),

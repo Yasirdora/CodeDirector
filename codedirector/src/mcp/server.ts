@@ -483,19 +483,22 @@ const TOOLS: ToolDef[] = [
     name: "report",
     description:
       "The latest Change Report for a Lock: the plain-language summary, then changed files with their " +
-      "classification, every check with its evidence class, and the Unchecked bucket. Always finish a task with this.",
+      "classification, every check with its evidence class, and the Unchecked bucket. Always finish a task with this. " +
+      "While the tree is exactly the last attempt's after-state, its recorded checks are shown and nothing runs; " +
+      "pass reverify: true to run the checks again on an explicit request.",
     inputSchema: {
       type: "object",
       properties: {
         lockId: { type: "string", description: "e.g. IL-0001" },
         format: { type: "string", enum: ["terminal", "md", "json"], description: "default terminal" },
+        reverify: { type: "boolean", description: "run the checks again even when the tree is unchanged since the last attempt" },
       },
       required: ["lockId"],
     },
     handler: async (root, a) => {
       const lockId = str(a, "lockId");
       const format = str(a, "format", false) || "terminal";
-      return runJob({ kind: "report", root, lockId, format });
+      return runJob({ kind: "report", root, lockId, format, reverify: a.reverify === true });
     },
   },
   {

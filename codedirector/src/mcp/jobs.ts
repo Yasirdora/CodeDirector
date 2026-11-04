@@ -8,7 +8,7 @@ import { Worker } from "node:worker_threads";
 export type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
 export type Job =
   | { kind: "run_locked"; root: string; lockId: string; command: string[]; testTimeoutMs?: number }
-  | { kind: "report"; root: string; lockId: string; format: string };
+  | { kind: "report"; root: string; lockId: string; format: string; reverify?: boolean };
 export type WorkerReply = { result: ToolResult } | { error: string };
 const exec = promisify(execFile);
 

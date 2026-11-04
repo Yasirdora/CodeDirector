@@ -12,7 +12,7 @@ const text = (body: string, isError = false): ToolResult => ({
 async function execute(job: Job): Promise<ToolResult> {
   const { root, lockId } = job;
   if (job.kind === "report") {
-    const report = await buildReport(root, lockId);
+    const report = await buildReport(root, lockId, { reverify: job.reverify === true });
     // The same refresh the CLI does: a completed re-verification writes its
     // verdict onto the lock, so a fixed re-run is never left reading FAILED.
     finalizeLockStatus(root, report);

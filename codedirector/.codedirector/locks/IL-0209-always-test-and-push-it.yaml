@@ -1,0 +1,52 @@
+schemaVersion: 1
+id: IL-0209
+status: verified
+utterance: always test and push it, if you find any weakness in code director also try to update and fix i to get the most out of each model, fine tune it so it become unbeatable that's the ultimate goal
+goal: "W4: a report does not re-run the checks while the tree is exactly the last attempt's after-state. A run records afterHashes (every file changed against the task baseline, hashed after its checks). A current-view report whose last attempt recorded checks and after-hashes, whose task baseline is unchanged, whose recorded files still hash the same and whose live delta names no other file shows that attempt's checks and verdict and runs nothing; otherwise it re-verifies as before. `cdir report --reverify` and MCP `reverify: true` force a re-run; `cdir verify` always runs. One line in the report says which happened."
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: "verify and run behave as before; the seal and the lock schema are unchanged; existing tests keep their assertions (four now ask for the fresh check with reverify: true)."
+deny:
+  - src/lock/**
+  - src/verify/**
+  - src/checkpoint/**
+  - package.json
+  - package-lock.json
+change: TODO — one-line scope description
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - src/cli-main.ts
+    - src/mcp/jobs.ts
+    - src/mcp/server.ts
+    - src/mcp/worker.ts
+    - src/report/format.ts
+    - src/report/report.ts
+    - src/run/run.ts
+    - test/mcp-responsive.test.ts
+    - test/mcp.test.ts
+    - test/report-reuse.test.ts
+    - test/report.test.ts
+  symbols: []
+  maxFiles: 11
+  maxLines: 450
+accept:
+  - Written by DeepSeek V4.1 Flash (max) from a read-only copy of 9ab12fc (brief ~/codedirector-briefs/cdir/BRIEF-CD-W-runs-you-can-see.md, prompt cd-w4/PROMPT-deepseek.md); 29 blocks plus one lead amendment that puts the main test's claim first.
+  - "Lead, measured in scratch under the shared turn: 421/421 three times (two at default concurrency, one at 4), eval 25/25. Red on today's src: the 7 new tests fail; the main one for its stated reason ('the report ran nothing': 2 runs, expected 1)."
+  - "The evidence that asked for it: eDraft IL-0952's passed run (record 14:24) was turned 'failed' by a report's silent re-run under another session's load (Mac surface passed alone: 752, 0 failures)."
+  - "Owner's yes 11-04 14:20: 'if you find any weakness in code director also try to update and fix it'."
+assumptions:
+  - text: Anchors defended — DomainRegistry.get — src/domain/registry.ts (TypeScript); "get" is its whole name · find — test/verify.test.ts (TypeScript); "find" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: DomainRegistry.get, find (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-11-04T14:48:45.614Z
+createdBy: Yasirdora

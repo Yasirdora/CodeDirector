@@ -102,11 +102,11 @@ test("MCP: 65s verification stays responsive, emits token-scoped liveness, and s
   assert.equal(new Set(c.notifications.map((n) => n.params.progressToken)).size, 1);
   assert.equal(records(root).length, 1);
   t.diagnostic(`65s check: ping ${pingMs.toFixed(1)}ms; list ${listMs.toFixed(1)}ms; final ${elapsed.toFixed(1)}ms; ${pulses.length} pulses`);
-  // Standalone report re-runs verification: it needs the same boundary.
+  // A standalone report with reverify re-runs verification: it needs the same boundary.
   fs.writeFileSync(marker(root, "delay"), "2000");
   fs.unlinkSync(marker(root, "checking"));
   const before = c.notifications.length;
-  const report = c.call("report", { lockId, format: "json" });
+  const report = c.call("report", { lockId, format: "json", reverify: true });
   await waitFor(() => fs.existsSync(marker(root, "checking")));
   await responsive(() => c.client.ping());
   await responsive(() => c.client.listTools());
@@ -124,7 +124,7 @@ test("MCP: standalone report sends its own token-scoped liveness", { timeout: 15
   assert.ok(!(await c.call("run_locked", { lockId, command: [NODE, "-e", "void 0"] })).isError);
   fs.writeFileSync(delay, "6000");
   const pulses: number[] = [];
-  const report = await c.client.callTool({ name: "report", arguments: { lockId } }, CallToolResultSchema,
+  const report = await c.client.callTool({ name: "report", arguments: { lockId, reverify: true } }, CallToolResultSchema,
     { onprogress: (p) => { pulses.push(p.progress); assert.equal(p.total, undefined); } });
   assert.ok(!report.isError);
   assert.ok(pulses.length >= 2, "standalone report has both initial and 5s liveness");

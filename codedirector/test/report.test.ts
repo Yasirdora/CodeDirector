@@ -553,9 +553,10 @@ test("report: a fixed re-verification refreshes the verdict, not the failed atte
   assert.equal(failed.exitCode, 1);
   assert.equal(loadLock(root, lock.id)!.status, "failed");
 
-  // The command failed; the tree did not, and no promise broke. A fresh
-  // re-verification judges the tree it just measured, not the attempt before it.
-  const after = await buildReport(root, lock.id);
+  // The command failed; the tree did not, and no promise broke. An unchanged
+  // tree shows that attempt's verdict, so the fresh re-verification is asked
+  // for by name: it judges the tree it just measured, not the attempt before it.
+  const after = await buildReport(root, lock.id, { reverify: true });
   assert.equal(after.verdict, "verified", after.violations.join("; "));
   finalizeLockStatus(root, after);
   assert.equal(loadLock(root, lock.id)!.status, "verified");
