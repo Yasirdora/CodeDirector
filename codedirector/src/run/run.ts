@@ -46,11 +46,10 @@ import {
   changedLineCount,
   ClassifiedChange,
   classifyChanges,
-  requiredCheckViolations,
+  requiredCheckViolationsForRun,
   scopeViolations,
 } from "./classify";
 import { sha256Bytes } from "./tree";
-import { loadChecks } from "../config/checks";
 import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
 import { declaredButUnrunnable, ProbePutBack, VerificationReport } from "../verify/types";
 
@@ -372,7 +371,7 @@ export async function runWithLock(
   // One wording, one place: a standalone verify rebuilds these from the same
   // function when it judges this run against a Lock that has since changed.
   const scope = scopeViolations(changed, budget);
-  const checks = requiredCheckViolations(changed, lock.verifyCommand, loadChecks(rootDir));
+  const checks = requiredCheckViolationsForRun(rootDir, changed, lock.verifyCommand, baseline);
   const keepViolations = verification
     ? verification.violations
     : keepResults

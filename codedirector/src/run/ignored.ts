@@ -23,6 +23,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
+import { isCodedirectorState } from "../core/state";
 
 export interface IgnoreRules {
   /** Git-root-relative path of each .gitignore → its text. */
@@ -79,8 +80,9 @@ export function captureIgnoreRules(rootDir: string): IgnoreRules | null {
   }
   const files: Record<string, string> = {};
   for (const p of [...new Set(listing)].sort()) {
-    // cdir's own rules apply inside .codedirector/ only, which is never judged.
-    if (p.split("/").includes(".codedirector")) continue;
+    // cdir's own state under .codedirector/ is never judged; the rules file
+    // there is configuration, so a changed .gitignore can still reveal it.
+    if (isCodedirectorState(p)) continue;
     const text = readOrNull(path.join(top, p));
     if (text !== null) files[p] = text;
   }
@@ -164,7 +166,7 @@ export function newlyIgnoredPaths(rootDir: string, before: IgnoreRules): string[
   // Ignored now, folders collapsed — an ignored node_modules/ is one entry.
   const entries = nulList(
     git(rootDir, ["ls-files", "-z", "--full-name", "--others", "--ignored", "--exclude-standard", "--directory"]),
-  ).filter((p) => !p.split("/").includes(".codedirector"));
+  ).filter((p) => !isCodedirectorState(p));
   if (entries.length === 0) return [];
 
   const wasIgnored = ignoredUnder(before, entries);

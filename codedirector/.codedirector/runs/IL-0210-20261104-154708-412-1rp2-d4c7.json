@@ -1,0 +1,151 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261104-154708-412-1rp1-d4c7",
+  "baselinePath": ".codedirector/baselines/IL-0210-task.json",
+  "baselineSha256": "7235bbeff0f0991b3ab858afa407b5da4caa63ec820af988cdf969446edddd67",
+  "budget": {
+    "filesChanged": 11,
+    "linesChanged": 480,
+    "maxFiles": 11,
+    "maxLines": 560
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/checkpoint/index.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/config/checks.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/state.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/baseline.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/classify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/ignored.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/tree.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/checks.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/rules-file.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261104T154655153",
+    "createdAt": "2026-11-04T15:46:55.198Z",
+    "dirty": false,
+    "id": "ckpt-20261104T154655153",
+    "ref": "f80110a221a21437b5c97a5f22c0d3bf4a125fa9",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261104T154655153"
+  },
+  "command": [
+    "python3",
+    "-I",
+    "/Users/x/codedirector-briefs/tools/apply-blocks.py",
+    "/Users/x/codedirector-briefs/cdir/cd-w5/blocks-root.txt",
+    "/Users/x/codedirector-deploy/codedirector"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-11-04T15:47:08.493Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    }
+  ],
+  "lockId": "IL-0210",
+  "startedAt": "2026-11-04T15:47:08.412Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0210-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 0
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0210-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0210-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"/usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'\" → exit 0",
+        "detail": "verifyCommand passed: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "verdict": "held"
+      }
+    ],
+    "lockId": "IL-0210",
+    "verifiedAt": "2026-11-04T15:54:18.905Z",
+    "violations": []
+  },
+  "violations": []
+}

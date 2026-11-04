@@ -1,0 +1,51 @@
+schemaVersion: 1
+id: IL-0210
+status: verified
+utterance: always test and push it, if you find any weakness in code director also try to update and fix i to get the most out of each model, fine tune it so it become unbeatable that's the ultimate goal
+goal: "W5: .codedirector/checks.yaml is a project file, not cdir's own state. A run that changes it is classified, counted and denied like any other file, and cannot drop a check for itself: the rules it started under (read from the task baseline — the copy when the file was dirty then, git at the baseline HEAD when clean, absent when it did not exist) apply together with today's. Every other file in a .codedirector/ folder stays cdir's state and is never judged."
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+deny:
+  - src/lock/**
+  - src/verify/**
+  - src/mcp/**
+  - package.json
+  - package-lock.json
+change: TODO — one-line scope description
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - src/checkpoint/index.ts
+    - src/config/checks.ts
+    - src/core/state.ts
+    - src/report/report.ts
+    - src/run/baseline.ts
+    - src/run/classify.ts
+    - src/run/ignored.ts
+    - src/run/run.ts
+    - src/run/tree.ts
+    - test/checks.test.ts
+    - test/rules-file.test.ts
+  symbols: []
+  maxFiles: 11
+  maxLines: 560
+accept:
+  - Written by DeepSeek V4.1 Flash (max) from a read-only copy of f80110a (brief ~/codedirector-briefs/cdir/BRIEF-CD-W-runs-you-can-see.md, prompt cd-w5/PROMPT-deepseek.md); 34 blocks.
+  - "Lead review found two defects the new tests did not: a whitelist of state entries made every other file in .codedirector/ a project change (4 MCP tests red ×2), and `git cat-file -e` was assumed to exit 1 for a missing path (measured 128), so a first checks.yaml read as unreadable. Lead fix cd-w5/lead-fix.txt (5 blocks): state is all of .codedirector/ except its checks.yaml; ls-tree tells absent from a failure; the baseline rules come from the copy or from git (`cat-file --filters`), and either source counts only when its bytes match the hash the baseline recorded."
+  - The lead's first fix wrongly assumed the baseline hashes only dirty files (it hashes every tracked file) and turned 2 tests red; fix v2 replaced it before any lock ran (test-run2.log → test-run3.log).
+  - "The closed-lock test now states the W5 result: a rules file written while the lock is open is that lock's change (OUT-OF-BUDGET, BUDGET) as well as the source of today's rules. Two new tests: a run that writes the first checks.yaml; a note left in .codedirector/ is not judged."
+  - "Rehearsed in a scratch copy (test-run3.log): 430/430 twice, eval 25/25; red on the old code 6 of 9 rules-file tests; red on DeepSeek's first version the 3 targeted tests. blocks-root.txt sha256 d94722b9e8bc68f5 gives that exact tree from f80110a."
+assumptions:
+  - text: Anchors defended — DomainRegistry.get — src/domain/registry.ts (TypeScript); "get" is its whole name · find — test/verify.test.ts (TypeScript); "find" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: DomainRegistry.get, find (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-11-04T15:25:19.600Z
+createdBy: Yasirdora

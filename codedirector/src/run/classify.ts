@@ -13,9 +13,10 @@ import * as path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { VibeCheck } from "../lock/types";
 import { matchPath } from "../lock/glob";
-import { ChecksFile, checksNeededBy, runsCheck } from "../config/checks";
+import { CHECKS_FILE, ChecksFile, checksNeededBy, loadChecks, runsCheck } from "../config/checks";
+import { isCodedirectorState } from "../core/state";
 import { gitPrefix, gitStatusPorcelain, porcelainLinePaths, toRootRelative } from "../checkpoint";
-import { Baseline } from "./baseline";
+import { Baseline, checksAtBaseline } from "./baseline";
 // Type-only, so nothing is imported at runtime and run.ts -> classify.ts
 // stays a one-way edge.
 import type { BudgetStats, RunRecord } from "./run";
@@ -82,7 +83,7 @@ function changedFilesVsHead(rootDir: string): Array<{ path: string; status: stri
     if (!line.trim()) continue;
     const status = line.slice(0, 2).trim();
     for (const p of porcelainLinePaths(line)) {
-      if (p.split("/").includes(".codedirector")) continue;
+      if (isCodedirectorState(p)) continue;
       const rel = displayPath(rootDir, p);
       if (seen.has(rel)) continue;
       seen.add(rel);
@@ -101,7 +102,7 @@ function changedFilesSinceBaseline(
   // skipped because cdir wrote its own block there; since IL-0020 it never
   // does, and the skip let a run hide what it created (ROADMAP 0.4.6).
   const add = (gitPath: string, status: string) => {
-    if (gitPath.split("/").includes(".codedirector")) return;
+    if (isCodedirectorState(gitPath)) return;
     const rel = displayPath(rootDir, gitPath);
     if (!hits.has(rel)) hits.set(rel, status);
   };
@@ -243,6 +244,25 @@ export function requiredCheckViolations(
     });
 }
 
+/**
+ * The required checks for a run: today's rules, plus — when the run itself
+ * changed the rules file — the rules it started under. Both apply, so a run
+ * cannot drop a check for itself by editing checks.yaml. Each file's answer
+ * comes from `requiredCheckViolations`; deduplication keeps one wording.
+ */
+export function requiredCheckViolationsForRun(
+  rootDir: string,
+  changed: ClassifiedChange[],
+  verifyCommand: string | undefined,
+  baseline: Baseline | null,
+): string[] {
+  const files: ChecksFile[] = [loadChecks(rootDir)];
+  if (changed.some((c) => c.path.replace(/\\/g, "/") === CHECKS_FILE)) {
+    files.push(checksAtBaseline(rootDir, baseline));
+  }
+  return [...new Set(files.flatMap((f) => requiredCheckViolations(changed, verifyCommand, f)))];
+}
+
 /** A recorded run, judged again against a Lock that may have moved on. */
 export interface Rejudged {
   changed: ClassifiedChange[];
@@ -354,7 +374,7 @@ export function changedLineCount(rootDir: string, untrackedPaths: string[], base
     for (const line of numstat.split("\n")) {
       const m = /^(\d+)\t(\d+)\t(.+)$/.exec(line);
       if (!m) continue;
-      if (m[3].split("/").includes(".codedirector")) continue; // the counter ignores cdir's own state, as the classifier does
+      if (isCodedirectorState(m[3])) continue; // the counter ignores cdir's own state, as the classifier does
       const rel = toRootRelative(prefix, m[3]);
       const preHash = pre[m[3]] ?? (rel !== null ? pre[rel] : undefined);
       if (preHash !== undefined) {
@@ -366,10 +386,18 @@ export function changedLineCount(rootDir: string, untrackedPaths: string[], base
   } catch {
     /* no HEAD or git failure — untracked count still reported */
   }
-  const preKeys = new Set(Object.keys(baseline?.workTreeHashes ?? {}));
   for (const p of untrackedPaths) {
     const gitPath = prefix ? prefix + p : p;
-    if (preKeys.has(gitPath) || preKeys.has(p)) continue;
+    const preHash = pre[gitPath] ?? pre[p];
+    if (preHash !== undefined) {
+      const now = hashGitPath(rootDir, gitPath) ?? hashGitPath(rootDir, p) ?? ABSENT;
+      if (now === preHash) continue;
+      // Already untracked at baseline: no vs-HEAD numstat exists. lineDelta
+      // uses the baseline tree copy when there is one (the rules file) and
+      // otherwise falls back to 0, as before.
+      total += lineDelta(rootDir, baseline?.treeDir, gitPath, preHash, 0);
+      continue;
+    }
     try {
       const text = fs.readFileSync(path.join(rootDir, p), "utf8");
       total += text === "" ? 0 : text.split("\n").length;
@@ -378,7 +406,7 @@ export function changedLineCount(rootDir: string, untrackedPaths: string[], base
       // expand it and count its files (a lock may create files in new folders)
       try {
         const abs = path.join(rootDir, p);
-        if (fs.statSync(abs).isDirectory()) total += dirLineCount(abs);
+        if (fs.statSync(abs).isDirectory()) total += dirLineCount(abs, p);
       } catch {
         /* binary or vanished — not counted */
       }
@@ -387,15 +415,20 @@ export function changedLineCount(rootDir: string, untrackedPaths: string[], base
   return total;
 }
 
-/** Sum the line counts of every text file under dir. */
-function dirLineCount(dir: string): number {
+/** Sum the line counts of every text file under dir, skipping cdir's own state. */
+function dirLineCount(dir: string, relDir: string): number {
   let total = 0;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === ".codedirector" || entry.name === ".git" || entry.name === "node_modules") continue;
+    const rel = `${relDir}/${entry.name}`;
     const p = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      total += dirLineCount(p);
+      if (entry.name === ".git" || entry.name === "node_modules") continue;
+      // A .codedirector/ folder is mostly state; walk it so its project file
+      // (the rules file) still counts, and skip only the state entries.
+      if (entry.name !== ".codedirector" && isCodedirectorState(rel)) continue;
+      total += dirLineCount(p, rel);
     } else if (entry.isFile()) {
+      if (isCodedirectorState(rel)) continue;
       try {
         const text = fs.readFileSync(p, "utf8");
         total += text === "" ? 0 : text.split("\n").length;

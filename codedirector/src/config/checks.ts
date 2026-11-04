@@ -165,25 +165,31 @@ function parseChecks(text: string): ChecksRules {
   };
 }
 
+/** Parse rules text. Never throws for a bad file; the error names the file. */
+export function checksFromText(text: string): ChecksFile {
+  try {
+    return { status: "rules", rules: parseChecks(text) };
+  } catch (e) {
+    if (e instanceof ChecksParseError) {
+      return { status: "invalid", error: `${CHECKS_FILE} is invalid: ${e.message}` };
+    }
+    throw e;
+  }
+}
+
 /** Read `<root>/.codedirector/checks.yaml`. Never throws for a bad file. */
 export function loadChecks(rootDir: string): ChecksFile {
-  const invalid = (reason: string): ChecksFile => ({
-    status: "invalid",
-    error: `${CHECKS_FILE} is invalid: ${reason}`,
-  });
   let text: string;
   try {
     text = fs.readFileSync(path.join(rootDir, CHECKS_FILE), "utf8");
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return { status: "absent" };
-    return invalid(`could not be read — ${e instanceof Error ? e.message : String(e)}`);
+    return {
+      status: "invalid",
+      error: `${CHECKS_FILE} is invalid: could not be read — ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
-  try {
-    return { status: "rules", rules: parseChecks(text) };
-  } catch (e) {
-    if (e instanceof ChecksParseError) return invalid(e.message);
-    throw e;
-  }
+  return checksFromText(text);
 }
 
 /** A check some files need, with the files that need it. */

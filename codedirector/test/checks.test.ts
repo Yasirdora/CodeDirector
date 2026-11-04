@@ -465,11 +465,16 @@ test("report: a closed lock is history — today's rules are not applied to it",
   await runWithLock(root, first.id, [NODE, "-e", append("src/core/a.js", "// x\n")], { stdio: "pipe" });
   assert.equal(loadLock(root, first.id)!.status, "verified", "no rules file when it ran");
 
-  // The repo adds its rules. A lock that is still open answers for the tree as it is now…
+  // The repo adds its rules. A lock that is still open answers for the tree as it is now —
+  // and the new rules file is part of that tree, so it is this lock's change as well…
   writeRules(root, RULES);
   const open = await buildReport(root, first.id);
   assert.equal(open.view, "current");
-  assert.deepEqual(open.violations, [appMissing("src/core/a.js")]);
+  assert.deepEqual(open.violations, [
+    `OUT-OF-BUDGET: ${CHECKS_FILE} is not in budget.files`,
+    "BUDGET: 2 files changed > maxFiles 1",
+    appMissing("src/core/a.js"),
+  ]);
 
   // …but once the next lock has started, the first one is shown as it was recorded.
   const second = await activeLock(root, ["web/c.js"], "echo unit-check");

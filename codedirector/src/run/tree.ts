@@ -16,6 +16,7 @@ import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { gitPrefix, gitStatusPorcelain, toRootRelative } from "../checkpoint";
+import { isCodedirectorState } from "../core/state";
 
 export interface HiddenFile {
   /** git-root-relative path */
@@ -149,7 +150,7 @@ export function snapshotWorkTree(rootDir: string): WorkTreeSnapshot {
     if (!line.trim()) continue;
     const status = line.slice(0, 2);
     for (const p of porcelainAllPaths(line)) {
-      if (p.split("/").includes(".codedirector")) continue;
+      if (isCodedirectorState(p)) continue;
       const text = readGitPath(rootDir, p);
       if (text !== null) {
         contents[p] = text;
@@ -175,7 +176,7 @@ export function snapshotWorkTree(rootDir: string): WorkTreeSnapshot {
 
 /** cdir's own state. The project's .gitignore is not: cdir never writes it (IL-0020). */
 function isToolPath(gitPath: string): boolean {
-  return gitPath.split("/").includes(".codedirector");
+  return isCodedirectorState(gitPath);
 }
 
 /** Untracked files (git-root-relative), excluding tool dirs. */

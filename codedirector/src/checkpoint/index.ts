@@ -16,6 +16,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { isGitRepo } from "../core/git";
 import { indexDir, stableStringify } from "../core/store";
+import { isCodedirectorState } from "../core/state";
 import { writeFileAtomic } from "../core/ids";
 
 export interface Checkpoint {
@@ -115,17 +116,19 @@ export function gitStatusPorcelain(rootDir: string): string {
 }
 
 /**
- * `git status --porcelain` with Code Director's own state directory
- * (.codedirector/) filtered out — locks, baselines, and run records are
- * tool state, not user work, and must not count as "dirty".
+ * `git status --porcelain` with Code Director's own state under
+ * .codedirector/ filtered out — locks, runs, seals and baselines are tool
+ * state, not user work, and must not count as "dirty". The rules file there
+ * is not state: an edit to it is the user's work.
  */
 export function workTreeStatusPorcelain(rootDir: string): string {
   return gitStatusPorcelain(rootDir)
     .split("\n")
     .filter((line) => {
       if (!line.trim()) return false;
-      // A dirty .gitignore is the user's work: cdir never writes it (IL-0020).
-      return !dirtyPaths(line).some((p) => p.split("/").includes(".codedirector"));
+      // The project's .gitignore is the user's work: cdir never writes it
+      // (IL-0020). State under .codedirector/ is not.
+      return !dirtyPaths(line).some((p) => isCodedirectorState(p));
     })
     .join("\n");
 }
@@ -199,7 +202,7 @@ function writeCheckpointBlobs(rootDir: string, id: string): string {
     if (!line.trim()) continue;
     const st = line.slice(0, 2);
     for (const p of porcelainLinePaths(line)) {
-      if (p.split("/").includes(".codedirector")) continue;
+      if (isCodedirectorState(p)) continue;
       const abs = gitPathAbs(rootDir, p);
       try {
         const data = fs.readFileSync(abs);
@@ -313,7 +316,7 @@ function postCheckpointUntracked(rootDir: string, keep: Set<string>): string[] {
   for (const line of status.split("\n")) {
     if (!line.startsWith("??")) continue;
     for (const p of porcelainLinePaths(line)) {
-      if (p.split("/").includes(".codedirector") || keep.has(p)) continue;
+      if (isCodedirectorState(p) || keep.has(p)) continue;
       out.push(p);
     }
   }
@@ -417,7 +420,7 @@ export function undo(rootDir: string, opts: UndoOptions = {}): UndoResult {
   }
 
   const currentStatus = gitStatusPorcelain(rootDir);
-  const currentDirty = dirtyPaths(currentStatus).filter((p) => !p.split("/").includes(".codedirector"));
+  const currentDirty = dirtyPaths(currentStatus).filter((p) => !isCodedirectorState(p));
 
   if (ckpt.dirty && !opts.force) {
     const lines = [
@@ -461,7 +464,7 @@ export function undo(rootDir: string, opts: UndoOptions = {}): UndoResult {
   }
   restoreCheckpointBlobs(rootDir, ckpt.id);
 
-  const after = dirtyPaths(gitStatusPorcelain(rootDir)).filter((p) => !p.split("/").includes(".codedirector"));
+  const after = dirtyPaths(gitStatusPorcelain(rootDir)).filter((p) => !isCodedirectorState(p));
   const record: UndoRecord = {
     at: new Date().toISOString(),
     checkpointId: ckpt.id,

@@ -35,10 +35,9 @@ import {
   ClassifiedChange,
   classifyChanges,
   rejudgeRun,
-  requiredCheckViolations,
+  requiredCheckViolationsForRun,
   scopeViolations,
 } from "../run/classify";
-import { loadChecks } from "../config/checks";
 import { Baseline, baselineFileHash, baselinesDir, loadTaskBaseline, taskBaselineFileName, taskBaselinePath } from "../run/baseline";
 import { sha256Bytes } from "../run/tree";
 import { verifyLock, VerifyOptions } from "../verify/verify";
@@ -483,7 +482,7 @@ export async function buildReport(
   // lock's verifyCommand stands, and --allow-expand does not excuse them. A
   // closed lock is history, as above: today's rules are not applied to it.
   const checks =
-    closedBy === null ? requiredCheckViolations(changed, lock.verifyCommand, loadChecks(rootDir)) : [];
+    closedBy === null ? requiredCheckViolationsForRun(rootDir, changed, lock.verifyCommand, taskBaseline) : [];
 
   const items = enforceArtifactRule(verification.items);
 

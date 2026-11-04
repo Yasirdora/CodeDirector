@@ -9,17 +9,20 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 import { RepoIndex } from "../core/types";
 import { buildGraph } from "../core/graph";
 import { hashContent } from "../core/builder";
 import { indexDir, stableStringify } from "../core/store";
 import { newRecordId, writeFileAtomic } from "../core/ids";
 import { buildIndex } from "../core/builder";
-import { workTreeStatusPorcelain } from "../checkpoint";
+import { gitPrefix, workTreeStatusPorcelain } from "../checkpoint";
+import { CHECKS_FILE, ChecksFile, checksFromText } from "../config/checks";
+import { isCodedirectorState } from "../core/state";
 import { VibeCheck } from "../lock/types";
 import { signatureHash } from "../lock/check";
 import { runShellProbe } from "./probe";
-import { currentHead, listHidden, runIsolated, snapshotWorkTree, WorkTreeSnapshot } from "./tree";
+import { ABSENT, currentHead, listHidden, runIsolated, sha256Bytes, snapshotWorkTree, WorkTreeSnapshot } from "./tree";
 import { probeDiagnostics } from "./diagnostics";
 import { captureIgnoreRules, IgnoreRules } from "./ignored";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
@@ -127,7 +130,8 @@ function baselineStamp(capturedAt: string): string {
  * Byte copies of the tracked-dirty files from the work-tree snapshot (the
  * run's line delta is measured against these, not vs HEAD). Storage stays
  * proportional: clean files are exact vs HEAD and need no copy, untracked
- * files are covered by the untracked-counting rule. Returns the
+ * files are covered by the untracked-counting rule — except the rules file,
+ * whose baseline text decides which checks still apply. Returns the
  * rootDir-relative directory, or undefined when nothing was dirty.
  */
 function writeBaselineTree(
@@ -140,8 +144,12 @@ function writeBaselineTree(
   const dir = path.join(baselinesDir(rootDir), `${lockId}-${stamp}`, "tree");
   let wrote = 0;
   for (const [p, bytes] of Object.entries(snap.contents)) {
-    if (untracked.has(p)) continue;
-    if (p.split("/").includes(".codedirector")) continue;
+    // Untracked files are covered by the untracked-line-counting rule, so no
+    // copy is kept — except the rules file, whose baseline text decides which
+    // checks a run that edits it must still run.
+    const rulesFile = p === CHECKS_FILE || p.endsWith(`/${CHECKS_FILE}`);
+    if (untracked.has(p) && !rulesFile) continue;
+    if (isCodedirectorState(p)) continue;
     const dest = path.join(dir, p);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, bytes);
@@ -275,6 +283,87 @@ export function baselineFileHash(baselinePath: string): string {
 /** Load a baseline from an explicit path. Throws on unreadable JSON. */
 export function loadBaseline(baselinePath: string): Baseline {
   return JSON.parse(fs.readFileSync(baselinePath, "utf8")) as Baseline;
+}
+
+/**
+ * The rules file as it stood at the task baseline.
+ *
+ * The baseline hashed every tracked file and every dirty one, and kept a
+ * byte copy of the dirty ones (the rules file even when untracked). So the
+ * copy answers when there is one and git at the baseline HEAD otherwise —
+ * and either answer counts only while its bytes match the recorded hash. A
+ * file absent then is absent. When no source gives the recorded bytes, the
+ * result is invalid: a run that edits the file is then judged by both the
+ * baseline and today's rules, and fails closed instead of being judged by
+ * today's alone.
+ */
+export function checksAtBaseline(rootDir: string, baseline: Baseline | null): ChecksFile {
+  const unreadable = (why: string): ChecksFile => ({
+    status: "invalid",
+    error: `${CHECKS_FILE} at the task baseline could not be read: ${why}`,
+  });
+  if (!baseline) return unreadable("there is no task baseline");
+  const prefix = gitPrefix(rootDir);
+  const gitPath = prefix ? prefix + CHECKS_FILE : CHECKS_FILE;
+
+  const expected = baseline.workTreeHashes?.[gitPath] ?? baseline.workTreeHashes?.[CHECKS_FILE];
+  if (expected === ABSENT) return { status: "absent" };
+  const matches = (bytes: Buffer) => expected === undefined || sha256Bytes(bytes) === expected;
+
+  // Dirty at capture: the baseline tree holds the bytes, keyed by git path.
+  if (baseline.treeDir) {
+    let bytes: Buffer | undefined;
+    try {
+      bytes = fs.readFileSync(path.join(rootDir, baseline.treeDir, gitPath));
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+        return unreadable(e instanceof Error ? e.message : String(e));
+      }
+      // No copy: the file was clean or absent at capture. Git answers below.
+    }
+    if (bytes !== undefined) {
+      if (!matches(bytes)) return unreadable("the baseline copy does not match the hash it recorded");
+      return checksFromText(bytes.toString("utf8"));
+    }
+  }
+
+  // Clean or absent at capture: the baseline HEAD holds the file, or it did not exist.
+  if (!baseline.head) return unreadable("the baseline records no HEAD and no copy of the file");
+  let listed: string;
+  try {
+    // `ls-tree` answers a path that is not in the commit with empty output
+    // (exit 0); only a real failure, such as a bad commit, throws.
+    // (`cat-file -e` exits 128 for both, so it cannot tell them apart.)
+    listed = execFileSync("git", ["ls-tree", "--full-tree", "--name-only", baseline.head, "--", gitPath], {
+      cwd: rootDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 15000,
+    });
+  } catch (e) {
+    return unreadable(e instanceof Error ? e.message : String(e));
+  }
+  if (listed.trim() === "") {
+    return expected === undefined
+      ? { status: "absent" }
+      : unreadable("the baseline hashed the file, but it is not in that commit and no copy was kept");
+  }
+  try {
+    // The file as it is checked out (`--filters`), so its bytes compare with
+    // the hash the baseline took from the work tree.
+    const bytes = execFileSync("git", ["cat-file", "--filters", `${baseline.head}:${gitPath}`], {
+      cwd: rootDir,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 15000,
+    });
+    // A file dirty at capture whose copy is gone reads HEAD's bytes here: the hash refuses them.
+    if (!matches(bytes)) {
+      return unreadable("the file at the baseline HEAD is not the one the baseline hashed, and no copy was kept");
+    }
+    return checksFromText(bytes.toString("utf8"));
+  } catch (e) {
+    return unreadable(e instanceof Error ? e.message : String(e));
+  }
 }
 
 /**
