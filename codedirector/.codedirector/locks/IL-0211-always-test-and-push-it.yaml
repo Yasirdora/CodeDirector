@@ -1,0 +1,47 @@
+schemaVersion: 1
+id: IL-0211
+status: verified
+utterance: always test and push it, if you find any weakness in code director also try to update and fix i to get the most out of each model, fine tune it so it become unbeatable that's the ultimate goal
+goal: 'W1: a run, a standalone verify or a re-verifying report in progress can be seen, and not started twice, from any process. One claim file per cdir root (.codedirector/running.json), published whole (temp file + hard link) so exactly one claimant wins and no reader sees it half-written; the owner rewrites its phase as it moves on and removes it when it ends. Any other live claim on the root refuses run, verify and re-verify with one sentence (lock, attempt, pid, phase, since when); report, lock show and lock ls print "Running now: …"; a report never re-runs checks behind a live claim. A claim is live only on this host with a living pid whose ps start time matches; a stale one is renamed into .codedirector/running-stale/, never deleted, and said once.'
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+deny:
+  - src/lock/**
+  - src/mcp/**
+  - src/core/state.ts
+  - package.json
+  - package-lock.json
+change: TODO — one-line scope description
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - src/cli-main.ts
+    - src/report/format.ts
+    - src/report/report.ts
+    - src/run/claim.ts
+    - src/run/run.ts
+    - src/verify/turns.ts
+    - src/verify/verify.ts
+    - test/claim.test.ts
+  symbols: []
+  maxFiles: 8
+  maxLines: 1050
+accept:
+  - "Written by DeepSeek V4.1 Flash (max) from a read-only copy of e5511e2 (prompt cd-w1/PROMPT-deepseek.md, with the OS facts measured first: ps lstart, ESRCH/EPERM, EEXIST, ENOENT); 40 blocks. One SEARCH line was copied short and was restored on both sides (answer-fixed.txt, copy only)."
+  - Its 2 failing tests watched the pid of cli.js's relaunch wrapper (src/cli.ts relaunches with --liftoff-only; SIGKILL is not passed on) — the claim code was right; the tests now start cdir as one process (CDIR = node + WASM_STARTUP_FLAGS + cli.js).
+  - "Lead review found 2 defects its tests missed: (1) a `wx` create is empty until its write lands, so a second claimant could read it as unreadable and set a live claim aside — now a temp file hard-linked into place (measured: link gives EEXIST and complete content); (2) release() after a takeover kept the in-process hold, so this process would share another's claim instead of being refused — the hold is cleared first. New test for (2); a type error in the test fixed. lead-amend.txt, 8 blocks."
+  - "Rehearsed in a scratch copy (cd-w1/test-run2.log): 438/438 twice, eval 25/25; red on e5511e2 (the claim module and report.running do not exist); red on DeepSeek's version: the takeover test only. blocks-root.txt sha256 8b8c6a86e4b40d35 gives that exact tree from e5511e2."
+assumptions:
+  - text: Anchors defended — DomainRegistry.get — src/domain/registry.ts (TypeScript); "get" is its whole name · find — test/verify.test.ts (TypeScript); "find" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: DomainRegistry.get, find (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-11-04T16:59:18.693Z
+createdBy: Yasirdora

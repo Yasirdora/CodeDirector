@@ -39,6 +39,7 @@ import {
   scopeViolations,
 } from "../run/classify";
 import { Baseline, baselineFileHash, baselinesDir, loadTaskBaseline, taskBaselineFileName, taskBaselinePath } from "../run/baseline";
+import { claimRoot, ClaimError, claimRefusal, describeClaim, readClaim, type ClaimDescription, type ClaimHandle } from "../run/claim";
 import { sha256Bytes } from "../run/tree";
 import { verifyLock, VerifyOptions } from "../verify/verify";
 import {
@@ -68,8 +69,8 @@ export interface ChecksSource {
   at: string;
   /** True = the attempt's recorded checks were shown; false = the checks ran now. */
   reused: boolean;
-  /** Why the checks ran now, when they did. */
-  reason?: "reverify" | "tree-changed" | "no-checks" | "no-after-hashes" | "baseline-moved" | "no-baseline";
+  /** Why the checks ran now, when they did ("running": another process holds the root). */
+  reason?: "reverify" | "tree-changed" | "no-checks" | "no-after-hashes" | "baseline-moved" | "no-baseline" | "running";
 }
 
 export interface Finding {
@@ -108,6 +109,14 @@ export interface ChangeReport {
   runRecordPath?: string;
   /** Present on a current-tree report: which checks it shows, and whether they ran. */
   checksFrom?: ChecksSource;
+  /**
+   * Set while another process holds this root's claim (a run, a verify, or a
+   * report re-running the checks): what is running, and where. The report
+   * shows the last recorded attempt and runs nothing while it is set.
+   */
+  running?: ClaimDescription;
+  /** A stale claim this report (or the attempt it shows) set aside, said once. */
+  staleClaim?: string;
   /** Repo-relative path of the reference the scope delta is measured against. */
   baselinePath?: string;
   /** Repo-relative task baseline (the immutable per-lock reference). */
@@ -344,6 +353,16 @@ function attemptAfterState(
   return "same";
 }
 
+/** The claim a re-verifying report needs, or the refusal a second process deserves. */
+function openReportClaim(rootDir: string, lockId: string, command: string | undefined): ClaimHandle {
+  try {
+    return claimRoot(rootDir, { kind: "report", lockId, command: command ?? "report", phase: "checking the tree" });
+  } catch (e) {
+    if (e instanceof ClaimError) throw new ReportError(e.message);
+    throw e;
+  }
+}
+
 export async function buildReport(
   rootDir: string,
   lockId: string,
@@ -376,6 +395,23 @@ export async function buildReport(
   }
   const run = latest?.record;
 
+  // What another process is doing with this root right now — read always.
+  // While a claim is live nothing here runs the checks behind it, and the
+  // report says what is running before anything else.
+  const claimView = readClaim(rootDir);
+  const claimed = claimView !== null && claimView.state !== "stale" ? claimView : null;
+  const running: ClaimDescription | undefined = claimed
+    ? {
+        kind: claimed.claim.kind,
+        lockId: claimed.claim.lockId,
+        attempt: claimed.claim.attempt,
+        pid: claimed.claim.pid,
+        startedAt: claimed.claim.startedAt,
+        phase: claimed.claim.phase,
+        phaseSince: claimed.claim.phaseSince,
+      }
+    : undefined;
+
   // The live tree is this lock's only until the next lock starts. After
   // that the report is the last attempt as recorded (see closingLock).
   const closedBy = run && !opts.run && opts.attempt === undefined ? closingLock(rootDir, lockId, run, taskBaseline) : null;
@@ -397,6 +433,12 @@ export async function buildReport(
   }
   const reuse = afterState === "same";
 
+  // Another process holds the root. An explicit re-verify is refused (it
+  // asked for checks that must not run behind a claim); every other report
+  // shows the last recorded attempt, as the attempt view does.
+  const busy = claimed !== null && view === "current" && !opts.run && opts.verification === undefined;
+  if (busy && claimed !== null && opts.reverify === true) throw new ReportError(claimRefusal(claimed));
+
   // When re-verifying standalone, hold the task baseline to its capture-time
   // hash (baseline tamper detection).
   const integrity =
@@ -410,8 +452,28 @@ export async function buildReport(
   // for `--attempt N` and for a lock a later lock has closed. Run again,
   // they would test a tree that is no longer that attempt's own.
   const recorded: VerificationReport | undefined =
-    run && (view === "attempt" || reuse) ? recordedChecks(lockId, run) : undefined;
-  const verification = opts.verification ?? recorded ?? (await verifyLock(rootDir, lockId, { ...integrity, ...opts }));
+    run && (view === "attempt" || reuse || busy) ? recordedChecks(lockId, run) : undefined;
+  // The checks: given, recorded, or run now. Running them takes the root's
+  // claim — a report that re-verifies is work on the tree. Behind a live
+  // claim nothing runs, and an empty set says so.
+  let verification: VerificationReport;
+  let claimStale: string | undefined;
+  if (opts.verification !== undefined) {
+    verification = opts.verification;
+  } else if (recorded !== undefined) {
+    verification = recorded;
+  } else if (busy) {
+    verification = { lockId, verifiedAt: new Date().toISOString(), items: [], violations: [], counts: countByClass([]) };
+  } else {
+    const claim = openReportClaim(rootDir, lockId, lock.verifyCommand);
+    try {
+      verification = await verifyLock(rootDir, lockId, { ...integrity, ...opts });
+    } finally {
+      claim.release();
+    }
+    claimStale = claim.stale;
+  }
+  const staleClaim = claimStale ?? run?.staleClaim;
   const runRecordPath = latest?.recordPath
     ? path.isAbsolute(latest.recordPath)
       ? path.relative(rootDir, latest.recordPath).split(path.sep).join("/")
@@ -432,9 +494,11 @@ export async function buildReport(
       const reason: ChecksSource["reason"] =
         opts.reverify === true
           ? "reverify"
-          : afterState !== undefined && afterState !== "same"
-            ? afterState
-            : "tree-changed";
+          : busy
+            ? "running"
+            : afterState !== undefined && afterState !== "same"
+              ? afterState
+              : "tree-changed";
       checksFrom = {
         attempt: index + 1,
         at: run.finishedAt,
@@ -500,7 +564,9 @@ export async function buildReport(
   // run: a closed lock names the lock that took the tree over, `--attempt N`
   // names the attempt.
   const incompleteReason =
-    view === "current" && !taskBaseline
+    busy && recorded === undefined && running !== undefined
+      ? `${describeClaim(running)} — its checks are not recorded yet; follow it with \`cdir report ${lockId}\``
+      : view === "current" && !taskBaseline
       ? `no task baseline for ${lockId} — scope could not be judged; run \`cdir run\` or \`cdir checkpoint ${lockId}\` first`
       : view === "attempt" && run && !run.verification
         ? closedBy !== null
@@ -519,7 +585,7 @@ export async function buildReport(
   // or the live run's own report. A current-tree re-verification judges the
   // tree it just measured; otherwise a fixed re-verify kept reading FAILED
   // from the attempt before it (a stale record).
-  const boundToRun = view === "attempt" || opts.run !== undefined || reuse;
+  const boundToRun = view === "attempt" || opts.run !== undefined || reuse || busy;
   const commandFailed = boundToRun && run !== undefined && run.exitCode !== 0;
   const verdict: ChangeReport["verdict"] =
     violations.length > 0 || commandFailed
@@ -565,6 +631,8 @@ export async function buildReport(
     ...(run ? { command: run.command } : {}),
     ...(run?.attemptId ? { attemptId: run.attemptId } : {}),
     ...(closedBy !== null ? { closedBy } : {}),
+    ...(running !== undefined ? { running } : {}),
+    ...(staleClaim !== undefined ? { staleClaim } : {}),
     ...(runRecordPath !== undefined ? { runRecordPath } : {}),
     ...(checksFrom !== undefined ? { checksFrom } : {}),
     ...(taskBaseline
@@ -596,6 +664,9 @@ export function finalizeLockStatus(rootDir: string, report: ChangeReport): VibeC
   const lock = loadLock(rootDir, report.lockId);
   if (!lock) throw new ReportError(`no such lock: ${report.lockId}`);
   if (report.view !== "current") return lock;
+  // Nothing was measured here: another process holds the root, so its claim —
+  // not this old reading — decides the lock's status.
+  if (report.running) return lock;
   // A lock closed by `cdir lock abandon` stays closed, whatever a report finds.
   if (lock.status === "abandoned") return lock;
   lock.status = report.verdict;

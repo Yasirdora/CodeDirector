@@ -22,6 +22,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { containsCommand, loadChecks } from "../config/checks";
+import { phaseFor } from "../run/claim";
 
 /** How often we look for the turn; the verifier is synchronous, so we sleep in between. */
 const POLL_MS = 200;
@@ -77,6 +78,8 @@ export function takeTurn(rootDir: string, command: string, env?: NodeJS.ProcessE
   const { run, waitMs } = file.rules.turns;
   if (containsCommand(command, run)) return { turn: NO_TURN };
 
+  // Said where the wait is, so another process can see why a check is slow.
+  phaseFor(rootDir, "waiting for the shared turn");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdir-turn-"));
   const ready = path.join(dir, "ready");
   const exited = `${ready}.exit`;

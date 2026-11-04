@@ -47,6 +47,7 @@ import { CORE_SKIP_DIRS } from "../core/walk";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
 import type { DiagnosticsCheck } from "../domain/types";
 import { takeTurn } from "./turns";
+import { claimRoot, ClaimError, phaseFor, type ClaimHandle } from "../run/claim";
 import {
   countByClass,
   ProbePutBack,
@@ -338,6 +339,7 @@ function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions, 
     if (clause.kind !== "tests-pass") continue;
     const glob = clause.glob ?? "";
     const subject = `tests-pass · ${glob}`;
+    phaseFor(rootDir, `tests-pass ${glob}`);
     if (!found) {
       items.push(uncheckedItem("keep-clause", subject, "no test runner is registered for tests-pass", clause.kind));
       continue;
@@ -420,10 +422,12 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): V
   if (!lock.verifyCommand) return [];
   const subject = `verifyCommand · ${lock.verifyCommand}`;
   const timeout = resolveVerifyTimeoutMs(lock, opts);
+  phaseFor(rootDir, "verifyCommand");
   // When the repo's rules ask for turns, wait for ours first: the wait is not
   // part of the timeout, which starts when the command does.
   const taken = takeTurn(rootDir, lock.verifyCommand, opts.env);
   if ("refused" in taken) return [uncheckedItem("verify-command", subject, taken.refused)];
+  phaseFor(rootDir, "verifyCommand"); // the turn, if any, was only a wait
   const { turn } = taken;
   let probe: ProbeResult;
   try {
@@ -471,6 +475,7 @@ function verifyOutputUnchanged(rootDir: string, lock: VibeCheck, baseline: Basel
     if (clause.kind !== "output-unchanged" || !clause.command) continue;
     const cmd = clause.command;
     const subject = `output-unchanged · ${cmd}`;
+    phaseFor(rootDir, `output-unchanged ${cmd}`);
     const captured = baseline?.outputs?.[cmd];
     if (!baseline || !captured) {
       items.push(uncheckedItem("keep-clause", subject, "no pre-change baseline for this command (lock edited after the baseline was captured)", clause.kind));
@@ -546,15 +551,21 @@ export function verifyWithBaseline(
   const opts: VerifyOptions = { ...given, putBack };
   const domains = given.domains ?? defaultDomains();
   const tampered = baselineTampered(rootDir, baselineRel, opts);
-  let items: VerificationItem[] = [
+  // Each rung says where the work is, so a reader in another process sees it.
+  phaseFor(rootDir, "structural checks");
+  const structural = [
     ...verifyApiUnchanged(lock, baseline, baselineRel, indexAfter, domains),
     ...verifyNoNewDependency(rootDir, lock, baseline, baselineRel, domains),
-    ...verifyDiagnostics(rootDir, opts, tampered ? null : baseline, domains),
-    ...verifyTestsPass(rootDir, lock, opts, domains),
-    ...verifyCommand(rootDir, lock, opts),
-    ...verifyOutputUnchanged(rootDir, lock, baseline, baselineRel, opts),
-    ...verifyCustom(lock),
   ];
+  phaseFor(rootDir, "typecheck");
+  const typecheck = verifyDiagnostics(rootDir, opts, tampered ? null : baseline, domains);
+  phaseFor(rootDir, "tests-pass");
+  const tests = verifyTestsPass(rootDir, lock, opts, domains);
+  phaseFor(rootDir, "verifyCommand");
+  const commandChecks = verifyCommand(rootDir, lock, opts);
+  phaseFor(rootDir, "output-unchanged");
+  const outputs = verifyOutputUnchanged(rootDir, lock, baseline, baselineRel, opts);
+  let items: VerificationItem[] = [...structural, ...typecheck, ...tests, ...commandChecks, ...outputs, ...verifyCustom(lock)];
   if (tampered) {
     // A tampered baseline invalidates every differential check against it.
     // Tests/typecheck/verifyCommand are self-contained and still count.
@@ -587,6 +598,21 @@ export function verifyWithBaseline(
  * while tests and typecheck still run (they are self-contained); the report
  * that consumes this result says incomplete, never verified.
  */
+/** A standalone verify's claim on the root, or the refusal a second process deserves. */
+function openVerifyClaim(rootDir: string, lock: VibeCheck): ClaimHandle {
+  try {
+    return claimRoot(rootDir, {
+      kind: "verify",
+      lockId: lock.id,
+      command: lock.verifyCommand ?? "verify",
+      phase: "loading the baseline",
+    });
+  } catch (e) {
+    if (e instanceof ClaimError) throw new VerifyError(e.message);
+    throw e;
+  }
+}
+
 export async function verifyLock(rootDir: string, lockId: string, opts: VerifyOptions = {}): Promise<VerificationReport> {
   const lock = loadLock(rootDir, lockId);
   if (!lock) throw new VerifyError(`no such lock: ${lockId} (see \`cdir lock ls\`)`);
@@ -594,6 +620,20 @@ export async function verifyLock(rootDir: string, lockId: string, opts: VerifyOp
   // grade the agent's own amendment — refuse until the user re-approves.
   const seal = sealViolation(rootDir, lock);
   if (seal) throw new VerifyError(seal);
+  // A standalone verify works the tree, so it holds the root's claim like a
+  // run does; nested inside a run or a re-verifying report that already
+  // claimed, it shares that claim — never two.
+  const claim = openVerifyClaim(rootDir, lock);
+  try {
+    return await verifyClaimed(rootDir, lock, opts);
+  } finally {
+    claim.release();
+  }
+}
+
+/** The body of a claimed standalone verify. */
+async function verifyClaimed(rootDir: string, lock: VibeCheck, opts: VerifyOptions): Promise<VerificationReport> {
+  const lockId = lock.id;
   const taskBaselineFile = taskBaselinePath(rootDir, lockId);
   const baselinePath = opts.baselinePath ?? (fs.existsSync(taskBaselineFile) ? taskBaselineFile : undefined);
   let baseline: Baseline | null = null;

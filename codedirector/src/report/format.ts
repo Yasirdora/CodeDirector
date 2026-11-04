@@ -6,6 +6,7 @@
 
 import { stableStringify } from "../core/store";
 import { VerificationItem } from "../verify/types";
+import { runningNowLine } from "../run/claim";
 import { ChangeReport } from "./report";
 
 const MARK: Record<VerificationItem["verdict"], string> = { held: "✓", violated: "✗", unchecked: "?" };
@@ -138,6 +139,8 @@ export function checksSourceLine(source: NonNullable<ChangeReport["checksFrom"]>
       return `The task baseline moved since attempt ${source.attempt} (${clock}) — checks re-run now`;
     case "no-baseline":
       return `No task baseline — checks re-run now (attempt ${source.attempt}, ${clock})`;
+    case "running":
+      return `Attempt ${source.attempt} (${clock}) — another run holds the root, so its checks were not re-run`;
     default:
       return `Tree changed since attempt ${source.attempt} (${clock}) — checks re-run now`;
   }
@@ -155,6 +158,8 @@ function clockTime(iso: string): string {
 
 export function formatReport(report: ChangeReport): string {
   const lines: string[] = [];
+  if (report.running) lines.push(runningNowLine(report.running));
+  if (report.staleClaim) lines.push(report.staleClaim);
   lines.push(summarizeReport(report));
   lines.push(``);
   lines.push(`CHANGE REPORT · ${report.lockId} · verdict: ${report.verdict.toUpperCase()}`);
@@ -255,6 +260,8 @@ export function formatReport(report: ChangeReport): string {
 
 export function formatReportMarkdown(report: ChangeReport): string {
   const lines: string[] = [];
+  if (report.running) lines.push(runningNowLine(report.running));
+  if (report.staleClaim) lines.push(report.staleClaim);
   lines.push(`# Change Report · ${report.lockId} · **${report.verdict.toUpperCase()}**`);
   lines.push(``);
   lines.push(`**${summarizeReport(report)}**`);

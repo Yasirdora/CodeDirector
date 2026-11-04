@@ -50,6 +50,7 @@ import {
   scopeViolations,
 } from "./classify";
 import { sha256Bytes } from "./tree";
+import { claimRoot, ClaimError, type ClaimHandle } from "./claim";
 import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
 import { declaredButUnrunnable, ProbePutBack, VerificationReport } from "../verify/types";
 
@@ -95,6 +96,8 @@ export interface RunRecord {
    * and nothing outside this set differs from the task baseline.
    */
   afterHashes?: Record<string, string>;
+  /** A stale claim this attempt found and set aside — said once, then never again. */
+  staleClaim?: string;
   /** Full verification-ladder result (present unless run with verify disabled). */
   verification?: VerificationReport;
 }
@@ -276,6 +279,16 @@ function keepResultsFromVerification(report: VerificationReport): KeepResult[] {
     });
 }
 
+/** The run's claim on the root, or the refusal a second process deserves. */
+function openClaim(rootDir: string, lock: VibeCheck, command: string[]): ClaimHandle {
+  try {
+    return claimRoot(rootDir, { kind: "run", lockId: lock.id, command, phase: "checkpoint and baseline" });
+  } catch (e) {
+    if (e instanceof ClaimError) throw new RunError(e.message);
+    throw e;
+  }
+}
+
 export async function runWithLock(
   rootDir: string,
   lockId: string,
@@ -299,6 +312,26 @@ export async function runWithLock(
 
   ensureCodedirectorIgnore(rootDir);
 
+  // One claim for the tree, from every process: a second run on the same
+  // root would corrupt this one's baseline. Taken after the contract is
+  // checked (a draft or a seal mismatch claims nothing) and before any work;
+  // released however this ends.
+  const claim = openClaim(rootDir, lock, command);
+  try {
+    return await runClaimed(rootDir, lock, command, opts, claim);
+  } finally {
+    claim.release();
+  }
+}
+
+/** The body of a claimed run: everything here holds the claim and moves its phase. */
+async function runClaimed(
+  rootDir: string,
+  lock: VibeCheck,
+  command: string[],
+  opts: RunOptions,
+  claim: ClaimHandle,
+): Promise<RunOutcome> {
   // 1. checkpoint before anything
   const checkpoint = createCheckpoint(rootDir);
 
@@ -325,6 +358,8 @@ export async function runWithLock(
   // the run record; verify re-hashes and invalidates on mismatch. (True
   // oracle separation — baseline outside the writable tree — is a later phase.)
   const baselineSha256 = baselineFileHash(baselinePath);
+  // The baseline is captured; the command is what runs next.
+  claim.phase("command");
 
   // 3. execute
   const attemptId = newRecordId();
@@ -336,6 +371,7 @@ export async function runWithLock(
   });
   const finishedAt = new Date().toISOString();
   const commandExit = child.error ? 127 : (child.status ?? 1);
+  claim.phase("classifying changes");
 
   // 4. classify changes against the Lock (delta vs pre-run baseline, not vs HEAD)
   const changed = classifyChanges(rootDir, lock, baseline);
@@ -413,8 +449,10 @@ export async function runWithLock(
     violations,
     allowExpand,
     afterHashes,
+    ...(claim.stale !== undefined ? { staleClaim: claim.stale } : {}),
     ...(verification ? { verification } : {}),
   };
+  claim.phase("writing the record");
   fs.mkdirSync(runsDir(rootDir), { recursive: true });
   // The record id is millisecond-stamped and process-unique: two runs in the
   // same second are two records, and the name still sorts in run order.
@@ -453,6 +491,7 @@ export function formatRunReport(outcome: RunOutcome): string {
   );
   lines.push(`checkpoint: ${r.checkpoint.tag} — restore with \`cdir undo\``);
   lines.push(`record: ${outcome.recordPath}`);
+  if (r.staleClaim) lines.push(`note: ${r.staleClaim}`);
   if (r.keepResults.length > 0) {
     lines.push(`KEEP:`);
     for (const k of r.keepResults) {

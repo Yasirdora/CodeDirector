@@ -40,6 +40,7 @@ import { checkLock } from "./lock/check";
 import { lastRunPaths, leftBehindWarnings, uncommittedAmong } from "./lock/leftovers";
 import { CHECKS_FILE, checksNeededBy, joinRuns, loadChecks } from "./config/checks";
 import { formatLock, formatLockLine } from "./lock/show";
+import { readClaim, runningNowLine } from "./run/claim";
 import { createCheckpoint, latestCheckpoint, undo, CheckpointError } from "./checkpoint";
 import { formatRunReport, runWithLock, RunError } from "./run/run";
 import { ensureTaskBaseline } from "./run/run";
@@ -320,7 +321,16 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
         process.stdout.write(`no locks yet — draft one with \`cdir lock new "<what you want>"\`\n`);
         return 0;
       }
-      process.stdout.write(locks.map(formatLockLine).join("\n") + "\n");
+      // The lock that holds the root's claim says so, in the one line.
+      const claim = readClaim(root);
+      const lines: string[] = [];
+      for (const l of locks) {
+        lines.push(formatLockLine(l));
+        if (claim && claim.state !== "stale" && claim.claim.lockId === l.id) {
+          lines.push(runningNowLine(claim.claim, claim.startChecked));
+        }
+      }
+      process.stdout.write(lines.join("\n") + "\n");
       return 0;
     }
 
@@ -331,6 +341,10 @@ async function lockCommand(root: string, positional: string[], flags: Map<string
       if (!lock) fail(`no such lock: ${id}`);
       const index = loadIndex(root);
       const check = checkLock(root, lock, index);
+      const claim = readClaim(root);
+      if (claim && claim.state !== "stale" && claim.claim.lockId === lock.id) {
+        process.stdout.write(runningNowLine(claim.claim, claim.startChecked) + "\n");
+      }
       process.stdout.write(formatLock(lock, check) + "\n");
       return 0;
     }
