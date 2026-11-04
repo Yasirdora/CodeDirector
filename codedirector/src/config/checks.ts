@@ -52,6 +52,13 @@ export interface ChecksRules {
   areas: CheckArea[];
   /** Set when the file asks check runs to take turns. */
   turns?: TurnsRule;
+  /**
+   * Commands that bring generated outputs up to date before the after-checks
+   * read them — a package build, a code generator. Run after the structural
+   * rung and before typecheck, tests-pass and the verifyCommand; they may
+   * only change ignored files.
+   */
+  refresh?: string[];
 }
 
 /**
@@ -136,6 +143,11 @@ function parseTurns(def: unknown): TurnsRule {
   return { run, waitMs };
 }
 
+function parseRefresh(def: unknown): string[] {
+  if (!Array.isArray(def)) err("refresh must be a list of commands (non-empty strings)");
+  return def.map((x, i) => reqString(x, `refresh[${i}]`));
+}
+
 function parseChecks(text: string): ChecksRules {
   let raw: unknown;
   try {
@@ -144,7 +156,7 @@ function parseChecks(text: string): ChecksRules {
     err(`invalid YAML — ${e instanceof Error ? e.message : String(e)}`);
   }
   if (!isObj(raw)) err("top level must be a mapping");
-  onlyKeys(raw, ["schemaVersion", "checks", "areas", "turns"], "top level");
+  onlyKeys(raw, ["schemaVersion", "checks", "areas", "turns", "refresh"], "top level");
   if (raw.schemaVersion !== CHECKS_SCHEMA_VERSION) {
     err(`schemaVersion must be ${CHECKS_SCHEMA_VERSION}, got ${JSON.stringify(raw.schemaVersion)}`);
   }
@@ -162,6 +174,7 @@ function parseChecks(text: string): ChecksRules {
     checks,
     areas,
     ...(raw.turns !== undefined ? { turns: parseTurns(raw.turns) } : {}),
+    ...(raw.refresh !== undefined ? { refresh: parseRefresh(raw.refresh) } : {}),
   };
 }
 

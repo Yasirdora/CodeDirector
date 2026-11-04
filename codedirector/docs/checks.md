@@ -44,6 +44,8 @@ areas:
   under `web/`.
 - `turns` makes check runs take turns. It is optional and has its own section
   below.
+- `refresh` brings generated outputs up to date before the checks read them.
+  It is optional and has its own section below.
 
 ## The matching rule
 
@@ -168,10 +170,61 @@ The known limit: only the lock's verifyCommand takes a turn. The `tests-pass`
 and `output-unchanged` clauses and the compiler check run as before, without
 one. Put checks that must not overlap into the verifyCommand.
 
+## Bringing outputs up to date
+
+A repo often checks code against something built from it: a workspace package
+whose `dist/` the compiler and the tests import, or generated sources. That
+output is not in git, so a run that changes the package's sources leaves the
+old build in place. The checks then read hours-old output, and a correct
+change fails with an error about the old build ("no exported member …").
+
+`refresh` lists the commands that build those outputs. Code Director runs them
+after the structural checks and before the compiler check, `tests-pass` and
+the verifyCommand, so every check reads today's output.
+
+```yaml
+refresh:
+  - npm run build --workspace packages/core
+  - npm run codegen
+```
+
+`refresh` must be a list of non-empty strings.
+
+How it works:
+
+- Each command runs in the repo root with `sh -c`, in order, under the verify
+  timeout. Refresh commands take **no turn**: they are meant to be quick
+  generation steps, and a turn would make them wait behind the checks they
+  feed.
+- A command that passes is a measured item, `refresh passed: <command>`. One
+  that fails is a violation, `refresh failed (exit N): <command>`, with the end
+  of its output; the commands after it are skipped and named as Unchecked
+  (`skipped: an earlier refresh failed`), and the later checks still run. A
+  timeout or a command that cannot start is Unchecked, as for the
+  verifyCommand.
+- **A refresh may only change ignored files.** Code Director compares
+  `git status` before the first command and after the last. A file that is
+  tracked or untracked-but-not-ignored and appears, disappears, changes status
+  or changes bytes is a violation: `refresh changed <path>, which is not an
+  ignored output`.
+- It runs for a locked run, a standalone `cdir verify` and a report that
+  verifies again. Without a rules file, or without `refresh`, nothing changes.
+
+Without `refresh`, the report still names the risk. When the root
+`package.json` declares `workspaces` (a list, or `{ packages: [...] }`; the forms
+`dir/*` and `dir` are read), a package whose `main`, `module`, `types`, `typings`
+or `exports` point into a git-ignored folder, and whose sources the run
+changed, gets a finding when that output is missing or older than the change:
+`packages/core/dist is older than its sources (the run changed …): an error
+about "core" may come from the old build — build it first, or name the build in
+checks.yaml's refresh`.
+
 ## What it does not do
 
 - It does not read what a command does. A `match` that appears in a comment or
   an `echo` counts as run.
 - The file is read at the time a lock is checked, a run is judged, or a report
-  is built. Code Director's own state under `.codedirector/` is not part of a
-  run's changes, so a run that edits this file is not caught by it.
+  is built. The file itself is a project file: a run that edits it is
+  classified, counted and denied like any other file, and the rules the run
+  started under apply together with today's, so a run cannot drop a check for
+  itself (`turns` and `refresh` are read from today's file only).

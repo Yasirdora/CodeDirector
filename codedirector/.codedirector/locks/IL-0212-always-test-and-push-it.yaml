@@ -1,0 +1,53 @@
+schemaVersion: 1
+id: IL-0212
+status: verified
+utterance: always test and push it, if you find any weakness in code director also try to update and fix i to get the most out of each model, fine tune it so it become unbeatable that's the ultimate goal
+goal: "W2 (measured 11-04 on a real repo, IL-0952 in eDraft: tsc and the tests read a workspace package's hours-old git-ignored dist, so a correct change failed on \"no exported member\" and nothing said the build was old). Part A: a stale-build finding (asserted) per workspace package whose main/module/types/typings/exports point into git-ignored output that is missing or older than the sources the run changed. Part B: an optional `refresh:` list in .codedirector/checks.yaml — commands run after the structural rung and before typecheck, tests-pass and the verifyCommand, with no turn; a failure is a violation, later refreshes are skipped and named, later rungs still run; a refresh may change only ignored files (git status before/after, bytes hashed). docs/checks.md gains the section, and its stale line from before W5 (\"a run that edits this file is not caught\") is corrected."
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: The lock schema, the seal, the baseline, W1/W4/W5 behaviour and the order of the existing rungs are unchanged (only the refresh rung is inserted). No existing test changes. Git is called by argv (execFileSync), never a shell string. No project or package names in src/ or tests.
+deny:
+  - src/lock/**
+  - src/mcp/**
+  - src/core/state.ts
+  - src/run/**
+  - package.json
+  - package-lock.json
+change: TODO — one-line scope description
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - src/config/checks.ts
+    - src/verify/types.ts
+    - src/verify/verify.ts
+    - src/report/report.ts
+    - src/report/stale-build.ts
+    - test/refresh.test.ts
+    - test/stale-build.test.ts
+    - docs/checks.md
+  symbols: []
+  maxFiles: 8
+  maxLines: 800
+accept:
+  - Drafted by DeepSeek V4.1 Flash (max) from a read-only copy of 7a3b0e1 (cd-w2/PROMPT-deepseek.md, answer.txt); docs by the lead (cd-w2/lead-docs.txt). Combined blocks w2-all.txt sha256 209403c32cd4…, 23 blocks / 8 files, check ok on 7a3b0e1.
+  - "Rehearsed in scratch (cdw2) under the turn: build clean; suite 450/450 twice; eval 25/25."
+  - "Red on 7a3b0e1 with the new tests: 7 of 12 fail, exactly as predicted (5 refresh tests on 'top level has unknown key \"refresh\"', 2 stale-build findings absent); 5 controls pass."
+  - "Deliberate breaks, each red on its own test only: fence removed → 'writing a tracked file'; no skip → 'a failure … skips the rest'; refresh moved after the verifyCommand → the order test and the standalone-verify test; ignore check removed → 'not ignored is not judged'; mtime compare removed → 'output newer than the change'."
+  - "Known gap, named: the output-folder filter (a changed path inside the output folder is not a source) is reached by no test, because ignored outputs never appear in a run's changes."
+  - "Design note: refresh is read from today's checks.yaml only, as turns is; a run that drops its own refresh only starves its own checks, and checks.yaml edits are counted and deniable since W5."
+  - The full check passes (build + whole suite + eval).
+assumptions:
+  - text: Anchors defended — DomainRegistry.get — src/domain/registry.ts (TypeScript); "get" is its whole name · find — test/verify.test.ts (TypeScript); "find" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: DomainRegistry.get, find (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+createdAt: 2026-11-04T19:30:37.896Z
+createdBy: Yasirdora

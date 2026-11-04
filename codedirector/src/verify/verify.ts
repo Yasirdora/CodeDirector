@@ -4,6 +4,8 @@
  *   1. Structural (proven)   — api-unchanged signature hashes and
  *                              no-new-dependency manifest hashes diffed
  *                              against the pre-captured baseline.
+ *   1b. Refresh (measured)   — the rules file's `refresh:` commands, run
+ *                              before any after-check reads generated output.
  *   2. Typecheck (proven)    — every compiler-diagnostics check a domain
  *                              describes (`tsc --noEmit` today) when it
  *                              applies and its compiler is available;
@@ -26,11 +28,14 @@
  * Read-only by construction: this module writes nothing to the repository
  * (the index refresh writes only .codedirector/, our own metadata area).
  * The commands being probed run with normal repo permissions — a fully
- * sandboxed verifier is a later phase.
+ * sandboxed verifier is a later phase. The refresh rung is the deliberate
+ * exception: its commands write generated output, and the rung names every
+ * changed file that is not ignored.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execFileSync } from "node:child_process";
 import { RepoIndex } from "../core/types";
 import { buildIndex } from "../core/builder";
 import { buildGraph } from "../core/graph";
@@ -39,9 +44,10 @@ import { loadLock } from "../lock/store";
 import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
+import { loadChecks } from "../config/checks";
 import { Baseline, baselineFileHash, loadBaseline, taskBaselinePath } from "../run/baseline";
 import { probeArtifactRef, probeExcerpt, runArgvProbe, runShellProbe, type ProbeResult } from "../run/probe";
-import { runIsolated } from "../run/tree";
+import { gitToAbsRel, runIsolated, sha256Bytes } from "../run/tree";
 import { diagnosticsExcerpt, newDiagnostics, probeDiagnostics } from "../run/diagnostics";
 import { CORE_SKIP_DIRS } from "../core/walk";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
@@ -225,6 +231,141 @@ function verifyNoNewDependency(
       evidenceClass: "proven",
       detail: "no dependency manifests present before or after — clause holds vacuously",
       artifactRef: `${baselineRel}#manifests`,
+    });
+  }
+  return items;
+}
+
+// ---------------------------------------------------------------------
+// Rung 1b — refresh (measured): commands that bring generated outputs up to
+// date before typecheck, the tests or the verifyCommand read them
+
+interface StatusEntry {
+  status: string;
+  /** sha256 of the path's bytes at snapshot time; null when it is not a readable file. */
+  hash: string | null;
+}
+
+/** sha256 of a git-reported path, or null when it is not a readable file. */
+function hashGitPath(rootDir: string, gitPath: string): string | null {
+  try {
+    return sha256Bytes(fs.readFileSync(path.join(rootDir, gitToAbsRel(rootDir, gitPath))));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `git status --porcelain=v1 -z --untracked-files=all`, keyed by path, with
+ * the bytes' sha256: a file that was already dirty keeps the same status
+ * line when the refresh rewrites it, and only the hash says so. Ignored
+ * files are absent by construction — those are the ones a refresh may change.
+ */
+function statusSnapshot(rootDir: string): Map<string, StatusEntry> {
+  const out = new Map<string, StatusEntry>();
+  let raw: string;
+  try {
+    raw = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], {
+      cwd: rootDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 15_000,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  } catch {
+    return out; // not a git work tree (or no git): nothing to compare
+  }
+  const entries = raw.split("\0");
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.length < 4) continue;
+    const status = entry.slice(0, 2);
+    const p = entry.slice(3);
+    out.set(p, { status, hash: hashGitPath(rootDir, p) });
+    if (status.startsWith("R") || status.startsWith("C")) {
+      // In -z form a rename/copy carries its other path as the next token.
+      const other = entries[++i];
+      if (other !== undefined && other !== "") out.set(other, { status, hash: hashGitPath(rootDir, other) });
+    }
+  }
+  return out;
+}
+
+/** Paths whose status line appeared, vanished or changed, or whose bytes did. */
+function refreshWrites(before: Map<string, StatusEntry>, after: Map<string, StatusEntry>): string[] {
+  const written: string[] = [];
+  for (const p of [...new Set([...before.keys(), ...after.keys()])].sort()) {
+    const was = before.get(p);
+    const now = after.get(p);
+    if (was === undefined || now === undefined || was.status !== now.status || was.hash !== now.hash) written.push(p);
+  }
+  return written;
+}
+
+/**
+ * The rules file's `refresh:` commands: the generation step that makes the
+ * after-checks read today's output instead of a build from hours ago. They
+ * run after the structural rung and before typecheck, tests-pass, the
+ * verifyCommand and output-unchanged; they take no shared turn (a build is
+ * meant to be fast, and a turn would make it wait behind the checks it
+ * exists to feed). A failing command stops the remaining ones — every later
+ * rung still runs — and the skipped commands are named. A refresh may only
+ * change ignored files: git status is compared before the first command and
+ * after the last, and any other path is a violation.
+ */
+function verifyRefresh(rootDir: string, lock: VibeCheck, opts: VerifyOptions): VerificationItem[] {
+  const file = loadChecks(rootDir);
+  const commands = file.status === "rules" ? file.rules.refresh : undefined;
+  if (!commands || commands.length === 0) return [];
+  const timeout = resolveVerifyTimeoutMs(lock, opts);
+  phaseFor(rootDir, "refresh");
+  const before = statusSnapshot(rootDir);
+  const items: VerificationItem[] = [];
+  let failed = false;
+  for (const command of commands) {
+    const subject = `refresh · ${command}`;
+    if (failed) {
+      items.push(uncheckedItem("refresh", subject, "skipped: an earlier refresh failed"));
+      continue;
+    }
+    // No takeTurn: a refresh is a fast generation step, and a turn would make
+    // it wait behind the very checks that read its output.
+    const probe = runShellProbe(rootDir, command, timeout, opts.env);
+    const artifactRef = probeArtifactRef(`sh -c ${JSON.stringify(command)}`, probe);
+    if (probe.timedOut) {
+      items.push(uncheckedItem("refresh", subject, `refresh timed out after ${timeout}ms`));
+      failed = true;
+      continue;
+    }
+    if (probe.error || probe.exitCode === null) {
+      items.push(uncheckedItem("refresh", subject, `refresh could not run: ${probe.error ?? "spawn failed"}`));
+      failed = true;
+      continue;
+    }
+    if (probe.exitCode === 0) {
+      items.push({ source: "refresh", subject, verdict: "held", evidenceClass: "measured", detail: `refresh passed: ${command}`, artifactRef });
+      continue;
+    }
+    const excerpt = probeExcerpt(probe);
+    items.push({
+      source: "refresh",
+      subject,
+      verdict: "violated",
+      evidenceClass: "measured",
+      detail: `refresh failed (exit ${probe.exitCode}): ${command}${excerpt ? ` — output: ${excerpt}` : ""}`,
+      artifactRef,
+    });
+    failed = true;
+  }
+  const written = refreshWrites(before, statusSnapshot(rootDir));
+  if (written.length > 0) {
+    const shown = written.slice(0, 5).join(", ") + (written.length > 5 ? ` and ${written.length - 5} more` : "");
+    items.push({
+      source: "refresh",
+      subject: "refresh · written files",
+      verdict: "violated",
+      evidenceClass: "measured",
+      detail: `refresh changed ${shown}, which is not an ignored output — a refresh may only bring ignored outputs up to date`,
     });
   }
   return items;
@@ -557,6 +698,7 @@ export function verifyWithBaseline(
     ...verifyApiUnchanged(lock, baseline, baselineRel, indexAfter, domains),
     ...verifyNoNewDependency(rootDir, lock, baseline, baselineRel, domains),
   ];
+  const refresh = verifyRefresh(rootDir, lock, opts);
   phaseFor(rootDir, "typecheck");
   const typecheck = verifyDiagnostics(rootDir, opts, tampered ? null : baseline, domains);
   phaseFor(rootDir, "tests-pass");
@@ -565,7 +707,7 @@ export function verifyWithBaseline(
   const commandChecks = verifyCommand(rootDir, lock, opts);
   phaseFor(rootDir, "output-unchanged");
   const outputs = verifyOutputUnchanged(rootDir, lock, baseline, baselineRel, opts);
-  let items: VerificationItem[] = [...structural, ...typecheck, ...tests, ...commandChecks, ...outputs, ...verifyCustom(lock)];
+  let items: VerificationItem[] = [...structural, ...refresh, ...typecheck, ...tests, ...commandChecks, ...outputs, ...verifyCustom(lock)];
   if (tampered) {
     // A tampered baseline invalidates every differential check against it.
     // Tests/typecheck/verifyCommand are self-contained and still count.

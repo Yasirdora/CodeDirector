@@ -51,6 +51,7 @@ import {
   VerificationItem,
   VerificationReport,
 } from "../verify/types";
+import { staleBuildFindings } from "./stale-build";
 
 // They live beside the run record's type now; callers of this module still find them here.
 export { latestRunRecord, listRunRecords };
@@ -554,7 +555,7 @@ export async function buildReport(
   if (opts.findings !== false && changed.length > 0) {
     const domains = opts.domains ?? defaultDomains();
     const index = opts.index ?? (await buildIndex(rootDir, { domains })).index;
-    findings = computeFindings(index, changed, domains);
+    findings = [...computeFindings(index, changed, domains), ...staleBuildFindings(rootDir, changed)];
   }
   // Always named, whatever else is: files were moved aside.
   findings.push(...(verification.putBack ?? []).map(putBackFinding));

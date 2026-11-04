@@ -24,7 +24,7 @@ export const EVIDENCE_CLASSES: EvidenceClass[] = ["proven", "measured", "asserte
 /** held = the claim was checked and held · violated = checked and broken · unchecked = no check ran */
 export type Verdict = "held" | "violated" | "unchecked";
 
-export type VerificationSource = "keep-clause" | "typecheck" | "verify-command";
+export type VerificationSource = "keep-clause" | "typecheck" | "verify-command" | "refresh";
 
 export interface VerificationItem {
   source: VerificationSource;
@@ -109,7 +109,8 @@ export function enforceArtifactRule(items: VerificationItem[]): VerificationItem
 
 /**
  * The items a DECLARED check left unchecked: the Lock named the check
- * (`verify-command`, or a keep-clause other than the human-judged `custom`)
+ * (`verify-command`, a `refresh` command, or a keep-clause other than the
+ * human-judged `custom`)
  * and it could not run — a timeout, a failed capture, a symbol that never
  * resolved. Those block `verified` (the verdict is incomplete). Everything
  * else that is unchecked is circumstantial — no tsconfig, no compiler — and
@@ -119,6 +120,6 @@ export function declaredButUnrunnable(items: VerificationItem[]): VerificationIt
   return items.filter(
     (i) =>
       i.verdict === "unchecked" &&
-      (i.source === "verify-command" || (i.source === "keep-clause" && i.clauseKind !== "custom")),
+      (i.source === "verify-command" || i.source === "refresh" || (i.source === "keep-clause" && i.clauseKind !== "custom")),
   );
 }
