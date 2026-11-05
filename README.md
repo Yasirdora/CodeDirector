@@ -83,3 +83,13 @@ The theoretical and architectural foundations of this project are detailed in th
 <br />
 
 *For detailed instructions on running the tools, reproducing the experiments, or reviewing the market studies, please navigate to the specific `README.md` files located inside each sub-directory.*
+
+---
+
+## ⚖️ Disclaimer
+
+This software is provided "as is", without warranty of any kind, express or implied. The author and contributors assume no responsibility or liability for any errors, issues, data loss, or consequences resulting from its use. Users are solely responsible for evaluating, testing, and verifying any operations or changes made with this tool.
+
+## 📄 License
+
+MIT. See [LICENSE](LICENSE).

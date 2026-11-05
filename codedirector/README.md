@@ -732,6 +732,10 @@ node dist/src/cli.js why ImagePipeline --root examples/demo-repo
 export, an image-preview toy) used by the tests and by later stages as a
 stable fixture.
 
+## Disclaimer
+
+This software is provided "as is", without warranty of any kind, express or implied. The author and contributors assume no responsibility or liability for any errors, issues, data loss, or consequences resulting from its use. Users are solely responsible for evaluating, testing, and verifying any operations or changes made with this tool.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
