@@ -72,6 +72,18 @@ export interface TestMappingProvider {
    * `src/**\/*.test.*`. Optional; without it the files are listed singly.
    */
   compressTestPaths?(testFiles: string[]): string[];
+  /**
+   * Whether this ecosystem owns a source file for symbol-to-test matching,
+   * e.g. every `.swift` file. Optional: path-based ecosystems such as Node
+   * need no such claim, and their rule is unchanged.
+   */
+  ownsSource?(relPath: string): boolean;
+  /**
+   * The module a source file belongs to when this ecosystem's test imports
+   * name modules rather than paths, or null when the path names none.
+   * Optional.
+   */
+  moduleOf?(relPath: string): string | null;
 }
 
 // ---------------------------------------------------------------------

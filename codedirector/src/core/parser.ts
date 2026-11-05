@@ -21,7 +21,7 @@ import { hasWasmStartupFlags, WASM_STARTUP_FLAGS } from "./wasm-flags";
 type SyntaxNode = any;
 
 /** Bump whenever extraction logic changes; stale entries are reparsed. */
-export const PARSER_VERSION = 6;
+export const PARSER_VERSION = 7;
 
 export type LangKey = "typescript" | "tsx" | "javascript" | "swift";
 

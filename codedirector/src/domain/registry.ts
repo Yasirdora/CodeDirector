@@ -124,6 +124,20 @@ export class DomainRegistry {
     return this.testDomainOf(relPath) !== null;
   }
 
+  /** The domain whose test mapping owns this source file, or null. */
+  sourceDomainOf(relPath: string): Domain | null {
+    return this.list.find((d) => d.testMapping?.ownsSource?.(relPath)) ?? null;
+  }
+
+  /** The module a source file belongs to, or null when no domain names one. */
+  moduleOf(relPath: string): string | null {
+    for (const d of this.list) {
+      const module = d.testMapping?.moduleOf?.(relPath);
+      if (module) return module;
+    }
+    return null;
+  }
+
   /**
    * Deny globs for test files: each file goes to the domain that claims it,
    * and each domain compresses its own. A domain without a compressor gets

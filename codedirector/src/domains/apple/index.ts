@@ -2,6 +2,7 @@
  * The Apple domain: what Code Director knows about Swift and Apple-platform
  * projects today. Facts only — build products the index skips, the
  * manifests that carry dependencies, what `swift` and `xcodebuild` reach,
+ * which files are Swift tests and which module a source file belongs to,
  * which project files a generator owns, and the `apple` draft profile.
  *
  * Nothing here executes anything (ADR 0001). Swift compiler diagnostics,
@@ -13,6 +14,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { KeepClause } from "../../lock/types";
 import type { Domain, ProjectFact } from "../../domain/types";
+import { compressSwiftTestPaths, isSwiftSourceFile, isSwiftTestFile, swiftModuleOf } from "./tests";
 
 /** Apple test suites (swift test) need minutes, not the 60s default. */
 export const APPLE_VERIFY_TIMEOUT_MS = 900_000;
@@ -51,6 +53,12 @@ function detect(rootDir: string): ProjectFact[] {
 export const appleDomain: Domain = {
   id: "apple",
   description: "Swift/Apple platforms: build products, SwiftPM/CocoaPods/Carthage manifests, swift/xcodebuild, generated Xcode projects",
+  testMapping: {
+    isTestFile: isSwiftTestFile,
+    compressTestPaths: compressSwiftTestPaths,
+    ownsSource: isSwiftSourceFile,
+    moduleOf: swiftModuleOf,
+  },
   projectFacts: { detect },
   dependencyFacts: {
     manifests: [

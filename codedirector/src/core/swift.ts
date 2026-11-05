@@ -257,6 +257,7 @@ export function extractSwift(
   }
 
   collectCalls(root, relPath, symbols, calls);
+  const references = collectReferences(root);
 
   symbols.sort((a, b) => a.id.localeCompare(b.id));
   imports.sort((a, b) => a.line - b.line || a.module.localeCompare(b.module));
@@ -266,7 +267,88 @@ export function extractSwift(
       a.callerId.localeCompare(b.callerId) ||
       a.calleeName.localeCompare(b.calleeName),
   );
-  return { hash, parserVersion, symbols, imports, calls };
+  return { hash, parserVersion, symbols, imports, calls, references };
+}
+
+/**
+ * The names a file uses, for test-to-source matching: type names in type
+ * positions (annotations, conformances, generic arguments) and identifiers
+ * in expressions. Declaration names are skipped — a test declaring
+ * `ModelTests` does not reference `Model` — except an extension's name,
+ * which is the type being extended. Imports are skipped: the import is a
+ * module fact, recorded separately.
+ *
+ * `type_identifier` and `simple_identifier` are the grammar's leaves for
+ * these; `.member` with an inferred type writes no type name, so it cannot
+ * be attributed and is absent.
+ */
+function collectReferences(root: SyntaxNode): string[] {
+  const names = new Set<string>();
+  // By node id: web-tree-sitter builds a new wrapper object on every access
+  // (childForFieldName and namedChildren never return the same object), so
+  // a Set of nodes would never match.
+  const declared = new Set<number>();
+
+  const markDeclared = (node: SyntaxNode): void => {
+    switch (node.type) {
+      case "class_declaration":
+        // An extension names the type it extends — a use, not a declaration.
+        if (declKeyword(node) === "extension") return;
+        break;
+      case "function_declaration":
+      case "protocol_function_declaration": // a protocol's requirement
+      case "protocol_declaration":
+      case "typealias_declaration":
+        break;
+      case "property_declaration":
+      case "protocol_property_declaration": {
+        const name =
+          node.childForFieldName("name") ??
+          node.namedChildren.find((c: SyntaxNode) => c.type === "simple_identifier");
+        if (name) declared.add(name.id);
+        return;
+      }
+      case "parameter": {
+        for (const child of node.namedChildren) {
+          if (child.type === "simple_identifier") declared.add(child.id);
+        }
+        return;
+      }
+      case "enum_entry": {
+        const name =
+          node.childForFieldName("name") ??
+          node.namedChildren.find((c: SyntaxNode) => c.type === "simple_identifier");
+        if (name) declared.add(name.id);
+        return;
+      }
+      default:
+        return;
+    }
+    const name =
+      node.childForFieldName("name") ??
+      node.namedChildren.find(
+        (c: SyntaxNode) =>
+          c.type === "simple_identifier" || c.type === "type_identifier" || c.type === "user_type",
+      );
+    if (name) declared.add(name.id);
+  };
+
+  const visit = (node: SyntaxNode): void => {
+    if (node.type === "import_declaration") return;
+    markDeclared(node);
+    if (declared.has(node.id)) return;
+    if (
+      node.type === "type_identifier" ||
+      node.type === "simple_identifier" ||
+      (node.type === "user_type" && /^[A-Za-z_]\w*$/.test(node.text))
+    ) {
+      if (node.text) names.add(node.text);
+    }
+    for (const child of node.namedChildren) visit(child);
+  };
+
+  visit(root);
+  return [...names].sort();
 }
 
 /** The smallest emitted symbol whose lines contain this one. */

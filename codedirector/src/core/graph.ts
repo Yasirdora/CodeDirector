@@ -24,6 +24,7 @@
 import { CallEdge, RepoIndex, SymbolInfo } from "./types";
 import { compareProvenance, FactProvenance } from "./provenance";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
+import type { Domain } from "../domain/types";
 
 export interface SymbolGraph {
   symbols: Map<string, SymbolInfo>;
@@ -237,9 +238,53 @@ export function isTestFile(relPath: string, domains: DomainRegistry = defaultDom
 }
 
 /**
- * Test files that reference a symbol: a test file imports the symbol's
- * defining module, or the symbol's name literally appears in that file's
- * extracted facts (calls or imports). Heuristic, documented as such.
+ * The type a member belongs to, by its qualified name: `PagePaper.read` →
+ * `PagePaper`, `ScriptSurface+Paginating.paginate` → `ScriptSurface` (an
+ * extension's member belongs to the extended type), `Outer.Inner.run` →
+ * `Inner`. Null for a top-level declaration.
+ */
+function ownerTypeOf(qualifiedName: string): string | null {
+  const dot = qualifiedName.lastIndexOf(".");
+  if (dot === -1) return null;
+  const owner = qualifiedName.slice(0, dot);
+  const last = owner.slice(owner.lastIndexOf(".") + 1);
+  return last.split("+")[0] || null;
+}
+
+/** How many types declare a member of each name, per index and domain. */
+const memberCounts = new WeakMap<RepoIndex, Map<Domain, Map<string, number>>>();
+function memberDeclarations(index: RepoIndex, domain: Domain): Map<string, number> {
+  const byDomain = memberCounts.get(index) ?? new Map<Domain, Map<string, number>>();
+  memberCounts.set(index, byDomain);
+  let counts = byDomain.get(domain);
+  if (!counts) {
+    counts = new Map<string, number>();
+    for (const [file, fi] of Object.entries(index.files)) {
+      if (!domain.testMapping?.ownsSource?.(file)) continue;
+      for (const sym of fi.symbols) {
+        if (ownerTypeOf(sym.qualifiedName) === null) continue;
+        counts.set(sym.name, (counts.get(sym.name) ?? 0) + 1);
+      }
+    }
+    byDomain.set(domain, counts);
+  }
+  return counts;
+}
+
+/**
+ * Test files that reference a symbol. The rules are the ecosystem's:
+ *
+ *  - Node/TypeScript: a test file imports the symbol's defining file, or
+ *    the symbol's name literally appears in its imports or calls.
+ *  - Apple/Swift: a test file imports the symbol's module (`import M` /
+ *    `@testable import M`) and names the symbol in a call or in its
+ *    `references` (type positions and expressions); a member whose name
+ *    several types declare is credited only where the test also names its
+ *    type.
+ *
+ * A Swift symbol outside `Sources/<M>/` (an Xcode app target) has no known
+ * module; it is credited by name alone, which can over-credit two targets
+ * that define the same type. Heuristic, documented as such.
  */
 export function testFilesFor(
   index: RepoIndex,
@@ -248,17 +293,48 @@ export function testFilesFor(
 ): string[] {
   const out: string[] = [];
   const hasFile = (relPath: string) => index.files[relPath] !== undefined;
+  // The domain that owns the symbol's language, when one declares it. Only
+  // the Apple domain does today (Swift); Node's path-based rule below is
+  // left exactly as it was.
+  const sourceDomain = domains.sourceDomainOf(symbol.file);
+  const module = sourceDomain ? domains.moduleOf(symbol.file) : null;
   for (const file of Object.keys(index.files).sort()) {
-    if (!domains.isTestFile(file)) continue;
+    const testDomain = domains.testDomainOf(file);
+    if (!testDomain) continue;
+    // A Swift symbol is tested by Swift tests, never by another language's
+    // test file that happens to call the same name.
+    if (sourceDomain && testDomain !== sourceDomain) continue;
+    // And the other way round: a TypeScript symbol keeps exactly the test
+    // set it had before Swift tests were recognised. A test from an ecosystem
+    // that maps its own sources never credits it by a shared bare name.
+    if (!sourceDomain && testDomain.testMapping?.ownsSource) continue;
     const fi = index.files[file];
-    const importsDefiningModule = fi.imports.some((imp) => {
-      const target = domains.resolveImport(file, imp.module, hasFile)?.target ?? null;
-      return target === symbol.file;
-    });
     const namesSymbol = fi.imports.some((imp) =>
       imp.names.some((n) => n.replace(/^default:/, "").replace(/.* as /, "") === symbol.name),
     );
     const callsSymbol = fi.calls.some((c) => c.calleeName === symbol.name);
+    if (sourceDomain) {
+      const uses = (name: string) =>
+        (fi.references?.includes(name) ?? false) || fi.calls.some((c) => c.calleeName === name);
+      const referencesSymbol = fi.references?.includes(symbol.name) ?? false;
+      const importsModule = module ? fi.imports.some((imp) => imp.module === module) : true;
+      // A member whose name more than one type declares — `read`, `store`,
+      // `hitTest` — is credited only beside its type (measured on a 540-file
+      // Swift app: `read` matched 61 test files). A name only one type
+      // declares is credited alone: Swift infers types, so a test calling
+      // `element.copyForInsertion()` often never writes `ScriptElement`.
+      const owner = ownerTypeOf(symbol.qualifiedName);
+      const ambiguous = owner !== null && memberDeclarations(index, sourceDomain).get(symbol.name)! > 1;
+      const namesOwner = !ambiguous || uses(owner!);
+      // No Sources/<M>/ folder means no known module: credit by name alone.
+      if ((namesSymbol || callsSymbol || referencesSymbol) && importsModule && namesOwner) out.push(file);
+      continue;
+    }
+    // Node/TypeScript: import the defining file, import the name, or call it.
+    const importsDefiningModule = fi.imports.some((imp) => {
+      const target = domains.resolveImport(file, imp.module, hasFile)?.target ?? null;
+      return target === symbol.file;
+    });
     if (importsDefiningModule || namesSymbol || callsSymbol) out.push(file);
   }
   return out.sort();

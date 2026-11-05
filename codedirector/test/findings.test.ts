@@ -54,12 +54,42 @@ test("findings: an uncovered source file in a language whose tests are recognise
   ], "math.ts is covered by test/math.test.ts; other.ts is not");
 });
 
-test("findings: Swift, whose tests cdir cannot recognise yet, gets one honest line — not one false one per file", async () => {
+const SWIFT = {
+  "App/Model.swift": "public struct Model { public func refresh() -> Int { 1 } }\n",
+  "App/Store.swift": "public struct Store { public func load() -> Int { 2 } }\n",
+  "AppTests/ModelTests.swift":
+    "import XCTest\n@testable import App\n\nfinal class ModelTests: XCTestCase {\n" +
+    "    func testRefresh() {\n" +
+    "        _ = Model().refresh()\n" +
+    "    }\n" +
+    "}\n",
+};
+
+test("findings: a Swift change covered by a test gets no 'no test file references' line", async () => {
+  const findings = await reportFor(
+    SWIFT,
+    ["App/Model.swift"],
+    'const f=require("fs");f.appendFileSync("App/Model.swift","// x\\n")',
+  );
+  assert.deepEqual(findings, []);
+});
+
+test("findings: an uncovered Swift file gets the per-file line, not the language-wide one", async () => {
+  const findings = await reportFor(
+    SWIFT,
+    ["App/Store.swift"],
+    'const f=require("fs");f.appendFileSync("App/Store.swift","// x\\n")',
+  );
+  assert.deepEqual(findings, [
+    "App/Store.swift changed in-budget, but no test file references its symbols — behavioral coverage unknown",
+  ]);
+});
+
+test("findings: a Swift project with no test target still gets one honest line, not one per file", async () => {
   const findings = await reportFor(
     {
       "Sources/App/Model.swift": "struct Model { func refresh() -> Int { 1 } }\n",
       "Sources/App/Store.swift": "struct Store { func load() -> Int { 2 } }\n",
-      "Tests/AppTests/ModelTests.swift": "import XCTest\nfinal class ModelTests: XCTestCase { func testRefresh() { _ = Model().refresh() } }\n",
     },
     ["Sources/App/Model.swift", "Sources/App/Store.swift"],
     'const f=require("fs");f.appendFileSync("Sources/App/Model.swift","// x\\n");f.appendFileSync("Sources/App/Store.swift","// x\\n")',
@@ -67,4 +97,13 @@ test("findings: Swift, whose tests cdir cannot recognise yet, gets one honest li
   assert.deepEqual(findings, [
     "2 Swift file(s) changed in-budget (Sources/App/Model.swift, Sources/App/Store.swift); cdir recognises no Swift test files here, so their test coverage is unknown",
   ]);
+});
+
+test("findings: a package manifest is not behaviour, so it gets no 'no test file references' line", async () => {
+  const findings = await reportFor(
+    { ...SWIFT, "Pkg/Package.swift": "// swift-tools-version:5.9\nlet package = Package(name: \"Pkg\")\n" },
+    ["App/Model.swift", "Pkg/Package.swift"],
+    'const f=require("fs");f.appendFileSync("App/Model.swift","// x\\n");f.appendFileSync("Pkg/Package.swift","// x\\n")',
+  );
+  assert.deepEqual(findings, []);
 });

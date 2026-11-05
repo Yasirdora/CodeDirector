@@ -66,6 +66,12 @@ export interface FileIndex {
   symbols: SymbolInfo[];
   imports: ImportInfo[];
   calls: CallSite[];
+  /**
+   * Bare type and expression names the file uses (Swift only), sorted and
+   * de-duplicated. Absent for languages whose extractor does not record
+   * them. Test-to-source matching reads these, never the file text.
+   */
+  references?: string[];
 }
 
 export interface RepoIndex {

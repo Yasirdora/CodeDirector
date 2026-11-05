@@ -182,6 +182,31 @@ weaker there than in TypeScript — every Swift `import` names a module rather
 than a path, so import-based resolution cannot fire and same-file and
 unique-name resolution carry it.
 
+Swift test files are recognised by where they sit, never by their file
+name: a `.swift` file is a test when it lives under a SwiftPM
+`Tests/<Target>/` directory or inside an Xcode bundle folder whose name
+ends in `Tests` / `UITests`; a `Sources/` path is never a test, and
+`Package.swift` is a manifest. A test covers a symbol when it imports the
+symbol's module (`import M` / `@testable import M`) and names it — in a
+call or in any type or expression reference, so
+`let colour: NoteColour = .pink` counts. A type outside `Sources/<M>/`
+(an Xcode app target) has no known module and is credited by name alone.
+The mapping is name-based and module-scoped: a use that writes no type name
+— a leading-dot case like `.pink`, a type inferred only from a factory's
+return — credits nothing; protocol conformances and generic uses are seen
+only when the type name itself appears. Module matching is exact; a
+submodule import (`import struct M.T`) is not matched. The module is the
+folder under the innermost `Sources/`, so a package nested inside another
+names its own targets.
+
+A member is credited by its own name. When the repo's Swift sources
+declare that member name more than once — `load()` on both `Store` and
+`Cache`, or two overloads on one type — a test is credited only if it
+also names the owning type; a member name declared once needs nothing
+more. Swift tests never credit a
+TypeScript symbol, and TypeScript tests never credit a Swift one.
+`Package.swift` is never reported as an untested source.
+
 Swift / SwiftUI repos also get a draft preset:
 `cdir lock new "<words>" --profile apple`. The profile denies vendor dirs and
 dependency lockfiles (Pods, Carthage, SPM, Bundler), signing assets, and
@@ -221,7 +246,8 @@ Blast radius for a symbol — genuinely useful with no AI involved:
 - where it is defined (file:lines, signature)
 - direct callers (reverse call edges)
 - transitive callers to depth 3, with per-depth counts
-- which test files reference it (`*.test.*` / `*.spec.*` / `__tests__`)
+- which test files reference it (`*.test.*` / `*.spec.*` / `__tests__`
+  for JavaScript/TypeScript; module-scoped Swift test targets)
 - historical co-change coupling (top files committed together with the
   defining file, from `git log --name-only`; degrades gracefully outside
   a git repo). Skipped with a printed reason on shallow clones

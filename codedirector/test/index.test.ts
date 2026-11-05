@@ -9,9 +9,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import test from "node:test";
 import { buildIndex } from "../src/core/builder";
-import { loadIndex } from "../src/core/store";
+import { PARSER_VERSION } from "../src/core/parser";
+import { loadIndex, saveIndex } from "../src/core/store";
 import { RepoWalker } from "../src/core/walk";
-import { copyFixture } from "./helpers";
+import { copyFixture, makeGitRepo } from "./helpers";
 
 test("full build parses every file; rebuild parses none", async () => {
   const root = copyFixture();
@@ -74,4 +75,25 @@ test("walker skips Xcode build-product directories", async () => {
     assert.ok(!files.some((f) => f.startsWith(dir + "/")), `${dir} skipped`);
   }
   assert.equal(files.length, 4);
+});
+
+test("an index from the previous parser version is rebuilt, not read with a missing references field", async () => {
+  const root = makeGitRepo({
+    "Sources/App/Model.swift":
+      "public struct Model { public func refresh() -> Int { 1 } }\n" +
+      "public func makeModel() -> Model { Model() }\n",
+  });
+  await buildIndex(root);
+  const old = loadIndex(root)!;
+  const oldFile = old.files["Sources/App/Model.swift"] as unknown as {
+    parserVersion: number;
+    references?: string[];
+  };
+  oldFile.parserVersion = PARSER_VERSION - 1;
+  delete oldFile.references;
+  saveIndex(root, old);
+  const { index, stats } = await buildIndex(root);
+  assert.equal(stats.filesParsed, 1, "the old entry was reparsed, not trusted");
+  const rebuilt = index.files["Sources/App/Model.swift"] as unknown as { references?: string[] };
+  assert.ok(rebuilt.references?.includes("Model"), "the new field is present after the rebuild");
 });

@@ -1,0 +1,63 @@
+schemaVersion: 1
+id: IL-0213
+status: verified
+utterance: always test and push it, if you find any weakness in code director also try to update and fix i to get the most out of each model, fine tune it so it become unbeatable that's the ultimate goal
+goal: "W6 (measured 11-04/11-05 on eDraft: Swift test files were never recognised, so every Swift change reported \"no test file references its symbols\" and a draft's deny list could not name unrelated Swift tests). Swift test files are recognised by where they sit (SwiftPM Tests/<Target>/, Xcode bundles ending Tests/UITests; never Sources/; Package.swift is a manifest). A test covers a Swift symbol when it imports the symbol's module (the folder under the innermost Sources/) and names it in a call or any type/expression reference (new `references` in the Swift index, PARSER_VERSION 7). A member name the repo's Swift sources declare more than once is credited only beside its owning type. Swift tests never credit TypeScript symbols and the reverse. Package.swift is never reported as an untested source. README states the rules and limits."
+interpretation: TODO — the system's operationalization of the goal (edit to correct it)
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: "TypeScript test mapping is unchanged (its test set for every TS symbol is what it was). The lock schema, the seal, the baseline, and W1/W2/W4/W5 behaviour are unchanged. In src/lock only draft.ts's deny-hint wording changes (it named a TS-only glob). One existing test changes by design: the findings test 'Swift, whose tests cdir cannot recognise yet' becomes 'a Swift project with no test target' (its fixture drops the test file, its expected one-line-per-language finding is unchanged); two new tests cover the per-file Swift line. No other existing assertion is removed or loosened."
+deny:
+  - src/mcp/**
+  - src/run/**
+  - src/verify/**
+  - src/core/state.ts
+  - package.json
+  - package-lock.json
+change: TODO — one-line scope description
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - README.md
+    - src/core/graph.ts
+    - src/core/parser.ts
+    - src/core/swift.ts
+    - src/core/types.ts
+    - src/domain/registry.ts
+    - src/domain/types.ts
+    - src/domains/apple/index.ts
+    - src/domains/apple/tests.ts
+    - src/lock/draft.ts
+    - src/report/report.ts
+    - test/domains.test.ts
+    - test/findings.test.ts
+    - test/index.test.ts
+    - test/parser.test.ts
+  symbols: []
+  maxFiles: 15
+  maxLines: 650
+accept:
+  - "Drafted by a second model from a read-only copy of 3b470ea; lead fixes after review: node.id keys (web-tree-sitter makes a new wrapper per access), protocol requirements as declarations, TS isolation, innermost Sources, manifests skipped in findings, the ambiguous-member rule; a code review by a third model, its two confirmed findings fixed (TS symbols credited by Swift tests; first-Sources module). Patch w6-final.patch sha256 3d40948b6d322676…, 15 files, +543/−19, applies on 3b470ea."
+  - "Rehearsed in scratch (cdw-w6-work) under the turn: build clean; suite 463/463 twice (green-6, green-7); eval 25/25 twice."
+  - "Deliberate breaks, each red on its own test only: references off → the reference tests; module check off → the module test; Sources counted as tests → the Sources test; TS isolation off → 'never credits a TypeScript symbol'; first Sources instead of innermost → 'a nested package's sources name their own module'; ambiguity rule off → 'CacheTests calls a load() too'; strict owner rule → 'only Store declares compact()'."
+  - "Measured on an eDraft copy (540 Swift files: 325 tests, 215 sources): index 15.1 s, references 742 KB, credit check 7.8 ms per changed file; 29/215 sources uncovered, 7 of them Package.swift (now skipped in reports); 'read' was credited to 61 tests before the member rule, now owner-scoped; DraftIdentity.copyForInsertion keeps its two real tests."
+  - "Known limits, named in the README: name-based and module-scoped; a leading-dot use (.pink) or a type inferred only from a factory credits nothing; submodule imports are not matched; an Xcode app target has no known module and is credited by name alone."
+  - "Found, not fixed here (W7): dependency manifests are checked at the repo root only (draft.ts, verify.ts, run.ts), so nested Package.swift files are never seen by no-new-dependency."
+  - The full check passes (build + whole suite + eval).
+assumptions:
+  - text: Anchors defended — DomainRegistry.get — src/domain/registry.ts (TypeScript); "get" is its whole name · find — test/verify.test.ts (TypeScript); "find" is its whole name
+    source: system
+    confirmed: false
+  - text: "Budget proposed automatically from anchors: DomainRegistry.get, find (blast-radius analysis, anchor strength: name; review before activating)"
+    source: system
+    confirmed: false
+  - text: Deny list suggested automatically (manifests, unrelated test files); review before activating
+    source: system
+    confirmed: false
+  - text: "Edited on 11-06 before the first publish, at the owner's wish: the names of the models that drafted and reviewed the change were removed from the first acceptance note, and the local folder paths in the run record's command were shortened to ~/. The seal holds the text as approved, so it no longer matches; a later lock closed this one, so it cannot run again."
+    source: system
+    confirmed: false
+createdAt: 2026-11-05T17:41:14.043Z
+createdBy: Yasirdora

@@ -1,0 +1,185 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261105-174228-299-1rp1-e435",
+  "baselinePath": ".codedirector/baselines/IL-0213-task.json",
+  "baselineSha256": "9de15757dd205bb15a6cf46d08f5617ed59dfa53a55b0ae455411093f3ac633f",
+  "budget": {
+    "filesChanged": 15,
+    "linesChanged": 563,
+    "maxFiles": 15,
+    "maxLines": 650
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/graph.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/parser.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/swift.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/types.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domain/registry.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domain/types.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domains/apple/index.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domains/apple/tests.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/draft.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/domains.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/findings.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/index.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/parser.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261105T174150610",
+    "createdAt": "2026-11-05T17:41:50.702Z",
+    "dirty": false,
+    "id": "ckpt-20261105T174150610",
+    "ref": "3b470ea13b500ad9e8672b28740bb45f9aa3374f",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261105T174150610"
+  },
+  "command": [
+    "git",
+    "-C",
+    "~/codedirector-deploy",
+    "apply",
+    "~/codedirector-briefs/cdir/cd-w6/w6-final.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-11-05T17:42:28.401Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "TypeScript test mapping is unchanged (its test set for every TS symbol is what it was). The lock schema, the seal, the baseline, and W1/W2/W4/W5 behaviour are unchanged. In src/lock only draft.ts's deny-hint wording changes (it named a TS-only glob). One existing test changes by design: the findings test 'Swift, whose tests cdir cannot recognise yet' becomes 'a Swift project with no test target' (its fixture drops the test file, its expected one-line-per-language finding is unchanged); two new tests cover the per-file Swift line. No other existing assertion is removed or loosened. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0213",
+  "startedAt": "2026-11-05T17:42:28.299Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0213-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0213-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0213-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"/usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'\" → exit 0",
+        "detail": "verifyCommand passed: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · TypeScript test mapping is unchanged (its test set for every TS symbol is what it was). The lock schema, the seal, the baseline, and W1/W2/W4/W5 behaviour are unchanged. In src/lock only draft.ts's deny-hint wording changes (it named a TS-only glob). One existing test changes by design: the findings test 'Swift, whose tests cdir cannot recognise yet' becomes 'a Swift project with no test target' (its fixture drops the test file, its expected one-line-per-language finding is unchanged); two new tests cover the per-file Swift line. No other existing assertion is removed or loosened.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0213",
+    "verifiedAt": "2026-11-05T18:02:40.989Z",
+    "violations": []
+  },
+  "violations": []
+}

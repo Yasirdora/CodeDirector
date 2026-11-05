@@ -390,7 +390,7 @@ export function draftLock(
       text:
         `Deny list suggested automatically (manifests, unrelated test files)` +
         (denyOmitted > 0
-          ? ` — truncated for readability: ${denyOmitted} further entr${denyOmitted === 1 ? "y" : "ies"} omitted (mostly test files; add a glob like "src/**/*.test.*" to deny them all)`
+          ? ` — truncated for readability: ${denyOmitted} further entr${denyOmitted === 1 ? "y" : "ies"} omitted (add a glob covering the remaining test directories to deny them all)`
           : "; review before activating"),
       source: "system",
       confirmed: false,

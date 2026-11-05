@@ -81,6 +81,19 @@ test("swift: calls are attributed to the function that makes them", async () => 
   assert.equal(helper!.callerId, "Surface.swift#ScriptSurface.reveal");
 });
 
+test("swift: references record uses, not declaration names", async () => {
+  const facts = (await swiftSymbols()) as unknown as { references?: string[] };
+  const references = facts.references;
+  for (const name of ["CGFloat", "CGPoint", "UUID", "String", "Paginating", "ScriptSurface", "normalise", "helper"]) {
+    assert.ok(references?.includes(name), `${name} is used in the file`);
+  }
+  for (const name of ["SpreadFold", "defaultMeasure", "internalOnly", "paginate"]) {
+    assert.ok(!references?.includes(name), `${name} is declared here, not used`);
+  }
+  assert.deepEqual(references, [...(references ?? [])].sort(), "sorted");
+  assert.equal(new Set(references ?? []).size, (references ?? []).length, "de-duplicated");
+});
+
 
 const SAMPLE = `import { helper } from "./helper";
 import * as fs from "node:fs";

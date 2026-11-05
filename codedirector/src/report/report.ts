@@ -160,9 +160,10 @@ export interface BuildReportOptions extends VerifyOptions {
  *
  * Said only where it can be true. A file the index does not read (Markdown,
  * YAML, a plist) has no symbols to reference, so the sentence is noise
- * there. And for a language whose tests cdir cannot recognise at all —
- * Swift, until its test mapping exists — "no test references it" is false
- * modesty: the truth is that cdir cannot tell, said once for the language.
+ * there. And for a language with no recognised test file in the index,
+ * "no test references it" is false modesty: the truth is that cdir cannot
+ * tell, said once for the language — Swift is now recognised by its test
+ * targets, so it lands here only when the project has none.
  */
 function computeFindings(index: RepoIndex, changed: ClassifiedChange[], domains: DomainRegistry): Finding[] {
   const findings: Finding[] = [];
@@ -170,10 +171,14 @@ function computeFindings(index: RepoIndex, changed: ClassifiedChange[], domains:
   const testedLanguages = new Set(
     Object.keys(index.files).filter((f) => isTestFile(f, domains)).map(languageOf),
   );
+  // A dependency manifest (Package.swift) declares a package: nothing in it
+  // is behaviour a test could reference, so it gets no line of its own.
+  const manifests = new Set(domains.dependencyManifests().map((m) => path.basename(m.path)));
   const unmapped = new Map<string, string[]>();
   for (const c of changed) {
     if (c.class !== "in-budget" || isTestFile(c.path, domains)) continue;
     if (!index.files[c.path]) continue; // not source cdir reads: nothing to reference
+    if (manifests.has(path.basename(c.path))) continue;
     const language = languageOf(c.path);
     if (!testedLanguages.has(language)) {
       unmapped.set(language, [...(unmapped.get(language) ?? []), c.path]);

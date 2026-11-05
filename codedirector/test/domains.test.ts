@@ -22,6 +22,7 @@ import { compareProvenance, effectiveEvidence, freshnessOf, FactProvenance, stro
 import { defaultDomains, DomainRegistry, DomainRegistryError } from "../src/domain/registry";
 import { Domain, DiagnosticsCheck, TestRunnerDescription } from "../src/domain/types";
 import { APPLE_VERIFY_TIMEOUT_MS, XCODEBUILD_VERIFY_TIMEOUT_MS } from "../src/domains/apple";
+import { swiftModuleOf } from "../src/domains/apple/tests";
 import { checkLock, verifyCoverage } from "../src/lock/check";
 import { draftLock } from "../src/lock/draft";
 import { describeProfiles, getProfile, PROFILE_NAMES } from "../src/lock/profiles";
@@ -376,6 +377,150 @@ test("domains: drafting takes manifests and test conventions from the registry",
   const { index } = await buildIndex(root, { persist: false, domains });
   const result = draftLock(root, index, "change add", { now: "2026-09-26T00:00:00.000Z", createdBy: "test" }, domains);
   assert.deepEqual(result.suggestedDeny, ["acme.lock", "checks/other.ts"]);
+});
+
+test("domains: Apple recognises Swift test targets by directory, never by file name", () => {
+  for (const file of [
+    "Pkg/Tests/NotesTests/A.swift",
+    "App/AppTests/B.swift",
+    "AppUITests/C.swift",
+  ]) {
+    assert.equal(isTestFile(file), true, `${file} is a test target`);
+  }
+  for (const file of [
+    "Pkg/Sources/Demo/TestTools.swift",
+    "Pkg/Sources/Notes/NotesTests.swift",
+    "Pkg/Sources/Demo/Tests/NotesTests/A.swift",
+    "Package.swift",
+    "Tests.md",
+    "Pkg/Tests/fixtures/data.json",
+    "Pkg/Tests/A.swift",
+  ]) {
+    assert.equal(isTestFile(file), false, `${file} is not a test target`);
+  }
+});
+
+test("domains: Swift test targets compress to one deny glob each, even at 300 files", () => {
+  const many = Array.from({ length: 300 }, (_, i) => `Pkg/Tests/NotesTests/Test${i}.swift`);
+  assert.deepEqual(defaultDomains().compressTestPaths(many), ["Pkg/Tests/NotesTests/**"]);
+  assert.deepEqual(
+    defaultDomains().compressTestPaths([
+      "App/AppTests/B.swift",
+      "AppUITests/C.swift",
+      "Pkg/Tests/NotesTests/A.swift",
+    ]),
+    ["App/AppTests/**", "AppUITests/**", "Pkg/Tests/NotesTests/**"],
+  );
+});
+
+test("domains: a Swift test must import the symbol's module and name the symbol", async () => {
+  const root = makeGitRepo({
+    "Pkg/Package.swift": "// swift-tools-version:5.9\n",
+    "Pkg/Sources/Notes/NoteColour.swift": "public struct NoteColour {}\n",
+    "Pkg/Sources/Notes/MakeNote.swift": "public func makeNote() -> NoteColour { NoteColour() }\n",
+    "Pkg/Sources/Other/Other.swift": "public struct Colour {}\n",
+    "Pkg/Tests/NotesTests/NoteTests.swift":
+      "import XCTest\n@testable import Notes\n\nfinal class NoteTests: XCTestCase {\n" +
+      "    func testColour() {\n" +
+      "        let colour: NoteColour = .pink\n" +
+      "        let other: Colour = Colour()\n" +
+      "        _ = makeNote()\n" +
+      "        _ = colour\n" +
+      "        _ = other\n" +
+      "    }\n" +
+      "}\n",
+  });
+  const domains = defaultDomains();
+  const { index } = await buildIndex(root, { persist: false, domains });
+  const graph = buildGraph(index, domains);
+  const noteColour = graph.symbols.get("Pkg/Sources/Notes/NoteColour.swift#NoteColour")!;
+  const otherColour = graph.symbols.get("Pkg/Sources/Other/Other.swift#Colour")!;
+  const makeNote = graph.symbols.get("Pkg/Sources/Notes/MakeNote.swift#makeNote")!;
+  assert.deepEqual(testFilesFor(index, noteColour, domains), ["Pkg/Tests/NotesTests/NoteTests.swift"],
+    "a type named only in an annotation is credited, in the imported module");
+  assert.deepEqual(testFilesFor(index, otherColour, domains), [],
+    "the test imports Notes, not Other — a same-named Colour elsewhere is not credited");
+  assert.deepEqual(testFilesFor(index, makeNote, domains), ["Pkg/Tests/NotesTests/NoteTests.swift"],
+    "a call still counts");
+});
+
+test("domains: a Swift test that names a type without importing its module is not credited", async () => {
+  const root = makeGitRepo({
+    "Pkg/Package.swift": "// swift-tools-version:5.9\n",
+    "Pkg/Sources/Notes/NoteColour.swift": "public struct NoteColour {}\n",
+    "Pkg/Sources/Other/Other.swift": "public struct Colour {}\n",
+    "Pkg/Tests/OtherTests/OtherTests.swift":
+      "import XCTest\n@testable import Other\n\nfinal class OtherTests: XCTestCase {\n" +
+      "    func testIt() {\n" +
+      "        let colour: NoteColour? = nil\n" +
+      "        _ = colour\n" +
+      "    }\n" +
+      "}\n",
+  });
+  const domains = defaultDomains();
+  const { index } = await buildIndex(root, { persist: false, domains });
+  const noteColour = buildGraph(index, domains).symbols.get("Pkg/Sources/Notes/NoteColour.swift#NoteColour")!;
+  assert.deepEqual(testFilesFor(index, noteColour, domains), [],
+    "the name is used, but the test imports Other, not Notes");
+});
+
+test("domains: a member name several types declare is credited only beside its type; a unique one alone", async () => {
+  const root = makeGitRepo({
+    "Pkg/Package.swift": "// swift-tools-version:5.9\n",
+    "Pkg/Sources/Notes/Store.swift":
+      "public struct Store {\n    public init() {}\n    public func load() -> Int { 1 }\n    public func compact() {}\n}\n",
+    "Pkg/Sources/Notes/Cache.swift":
+      "public struct Cache {\n    public init() {}\n    public func load() -> Int { 2 }\n}\n",
+    "Pkg/Tests/NotesTests/StoreTests.swift":
+      "import XCTest\n@testable import Notes\n\nfinal class StoreTests: XCTestCase {\n" +
+      "    func testLoad() { XCTAssertEqual(Store().load(), 1) }\n}\n",
+    "Pkg/Tests/NotesTests/CacheTests.swift":
+      "import XCTest\n@testable import Notes\n\nfinal class CacheTests: XCTestCase {\n" +
+      "    func testLoad() { let cache = Cache(); _ = cache.load() }\n}\n",
+    "Pkg/Tests/NotesTests/CompactTests.swift":
+      "import XCTest\n@testable import Notes\n\nfinal class CompactTests: XCTestCase {\n" +
+      "    func testCompact() { factory().compact() }\n}\n",
+  });
+  const domains = defaultDomains();
+  const { index } = await buildIndex(root, { persist: false, domains });
+  const graph = buildGraph(index, domains);
+  const load = graph.symbols.get("Pkg/Sources/Notes/Store.swift#Store.load")!;
+  const compact = graph.symbols.get("Pkg/Sources/Notes/Store.swift#Store.compact")!;
+  assert.ok(load && compact, "the members are indexed");
+  assert.deepEqual(testFilesFor(index, load, domains), ["Pkg/Tests/NotesTests/StoreTests.swift"],
+    "CacheTests calls a load() too — Cache's, which another type also declares");
+  assert.deepEqual(testFilesFor(index, compact, domains), ["Pkg/Tests/NotesTests/CompactTests.swift"],
+    "only Store declares compact(): a test that never writes Store is still credited");
+});
+
+test("domains: a nested package's sources name their own module", () => {
+  assert.equal(swiftModuleOf("Pkg/Sources/Notes/NoteColour.swift"), "Notes");
+  assert.equal(swiftModuleOf("Outer/Sources/Host/Vendor/Inner/Sources/Core/A.swift"), "Core");
+  assert.equal(swiftModuleOf("App/Model.swift"), null, "an Xcode app target has no known module");
+});
+
+test("domains: a Swift test never credits a TypeScript symbol that shares its name", async () => {
+  const root = makeGitRepo({
+    "src/math.ts": "export function add(a: number, b: number) { return a + b; }\n",
+    "test/math.test.ts": 'import { add } from "../src/math";\nadd(1, 2);\n',
+    "ios/AppTests/MathTests.swift":
+      "import XCTest\n\nfinal class MathTests: XCTestCase {\n    func testAdd() { _ = add(1, 2) }\n}\n",
+  });
+  const domains = defaultDomains();
+  const { index } = await buildIndex(root, { persist: false, domains });
+  assert.equal(isTestFile("ios/AppTests/MathTests.swift", domains), true);
+  const add = buildGraph(index, domains).symbols.get("src/math.ts#add")!;
+  assert.deepEqual(testFilesFor(index, add, domains), ["test/math.test.ts"]);
+});
+
+test("domains: the TypeScript test rule is unchanged", async () => {
+  const root = makeGitRepo({
+    "src/math.ts": "export function add(a: number, b: number) { return a + b; }\n",
+    "test/math.test.ts": 'import { add } from "../src/math";\nadd(1, 2);\n',
+  });
+  const { index } = await buildIndex(root, { persist: false });
+  const add = buildGraph(index).symbols.get("src/math.ts#add")!;
+  assert.deepEqual(testFilesFor(index, add), ["test/math.test.ts"]);
 });
 
 // ---------------------------------------------------------------------
