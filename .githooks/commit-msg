@@ -1,10 +1,33 @@
 #!/bin/sh
-# Reject commits that credit an AI assistant as co-author.
+# Keep commit messages clear and professional:
+#   the subject is "area: what the change does", at most 72 characters, no full stop;
+#   line 2 is empty; the body wraps at 72 (indented output and links may be longer);
+#   the message says what changed and why, never who asked for it, and credits no AI.
 # The work is committed under the human's name; agents are tools, not authors.
-msg="$1"
-if grep -iE 'co-authored-by:.*(claude|anthropic|gemini|google|openai|gpt|chatgpt|grok|xai|copilot|cursor|codeium|windsurf)' "$msg" >/dev/null 2>&1; then
-	echo "commit rejected: AI co-author trailers are not allowed in this repository." >&2
-	echo "Remove the Co-authored-by trailer crediting an AI assistant and commit again." >&2
-	exit 1
+msg_file="$1"
+export LC_ALL=en_US.UTF-8   # count characters, not bytes (a dash is one character)
+msg=$(grep -v '^#' "$msg_file")
+subject=$(printf '%s\n' "$msg" | sed -n '1p')
+problems=0
+fail() { echo "commit rejected: $1" >&2; problems=1; }
+
+if printf '%s\n' "$msg" | grep -iqE 'co-authored-by:.*(claude|anthropic|gemini|google|openai|gpt|chatgpt|kimi|moonshot|grok|xai|copilot|cursor|codeium|windsurf|deepseek)'; then
+	fail "AI co-author trailers are not allowed."
 fi
+case $subject in
+	"Merge "*|"Revert \""*|"fixup! "*|"squash! "*|"amend! "*) ;;
+	*)
+		len=$(printf '%s' "$subject" | wc -m | tr -d ' ')
+		[ "$len" -le 72 ] || fail "the subject has $len characters. Keep it to 72 (aim for 50); put the detail in the body."
+		printf '%s\n' "$subject" | grep -qE '^[a-z0-9][a-z0-9/._-]*: [^ ]' || fail "start the subject with its area, like \"run: \" or \"iphone: \"."
+		case $subject in *.) fail "end the subject without a full stop." ;; esac
+		;;
+esac
+[ -z "$(printf '%s\n' "$msg" | sed -n '2p')" ] || fail "leave line 2 empty; the body starts on line 3."
+long=$(printf '%s\n' "$msg" | sed '1,2d' | grep -vE '^[[:space:]]|://' | awk 'length > 72' | sed -n '1p')
+[ -z "$long" ] || fail "wrap the body at 72 characters (indented output and links may be longer): \"$(printf '%s' "$long" | cut -c1-40)…\""
+if printf '%s\n' "$msg" | grep -iqE "(user|owner)('s)? (has |had )?(said|asked|requested|wanted|told|instructed|approved)|as (you |the user |the owner )?(asked|requested|instructed)|per (the )?(user|owner)"; then
+	fail "say what the change does and why, not who asked for it (\"user said …\", \"as requested\")."
+fi
+[ "$problems" = 0 ] || { echo "Your message is kept in $msg_file." >&2; exit 1; }
 exit 0
