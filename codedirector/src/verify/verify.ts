@@ -645,23 +645,27 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions, do
   phaseFor(rootDir, "verifyCommand"); // the turn, if any, was only a wait
   const { turn } = taken;
   if (turn.waitNote) say(opts.progressFd, `got the shared turn${turn.waitNote}`);
-  say(opts.progressFd, steps ? `verifyCommand started: ${checkWord(steps.length)}` : "verifyCommand started");
   const stepDir = steps ? fs.mkdtempSync(path.join(os.tmpdir(), "cdir-steps-")) : undefined;
-  const startedAt = Date.now();
+  // The clock starts with the command, after the tree is snapshotted: the
+  // command's time is the command's, and "started" is said when it is.
+  let startedAt = Date.now();
   let probe: ProbeResult;
   let times: StepTime[] | undefined;
   try {
     try {
       probe = runIsolated(
         rootDir,
-        () =>
-          steps && stepDir
+        () => {
+          startedAt = Date.now();
+          say(opts.progressFd, steps ? `verifyCommand started: ${checkWord(steps.length)}` : "verifyCommand started");
+          return steps && stepDir
             ? runStepsProbe(rootDir, markedCommand(steps), command, timeout, {
                 dir: stepDir,
                 names: steps.map((s) => s.name),
                 progressFd: opts.progressFd,
               }, opts.env)
-            : runShellProbe(rootDir, command, timeout, opts.env),
+            : runShellProbe(rootDir, command, timeout, opts.env);
+        },
         (p) => opts.putBack?.push({ probe: subject, ...p }),
       );
     } finally {
@@ -701,9 +705,10 @@ function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions, do
       say(opts.progressFd, reason);
       return [{ ...uncheckedItem("verify-command", subject, reason), artifactRef, ...timing }];
     }
-    say(opts.progressFd, steps ? `checks passed: ${checkWord(steps.length)} in ${formatDuration(durationMs)}` : `verifyCommand passed in ${formatDuration(durationMs)}`);
+    const passedIn = formatDuration(times ? totalMs(times) : durationMs);
+    say(opts.progressFd, steps ? `checks passed: ${checkWord(steps.length)} in ${passedIn}` : `verifyCommand passed in ${passedIn}`);
     const detail = steps
-      ? `verifyCommand passed: ${checkWord(steps.length)} in ${formatDuration(times ? totalMs(times) : durationMs)}${times ? "" : " (check times not recorded)"}${turn.waitNote}`
+      ? `verifyCommand passed: ${checkWord(steps.length)} in ${passedIn}${times ? "" : " (check times not recorded)"}${turn.waitNote}`
       : `verifyCommand passed: ${command}${turn.waitNote}`;
     return [{ source: "verify-command", subject, verdict: "held", evidenceClass: "measured", detail, artifactRef, ...timing }];
   }

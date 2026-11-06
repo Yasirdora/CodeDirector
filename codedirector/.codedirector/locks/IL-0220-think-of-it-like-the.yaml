@@ -1,0 +1,55 @@
+schemaVersion: 1
+id: IL-0220
+status: verified
+utterance: Think of it like the evolution from MacBooks with Intel processors to what Apple achieved with the M1 chip—it became more efficient, powerful, and reliable.
+goal: "W14: Code Director spends its time on the checks, not on itself. Every probe runs inside a snapshot of the work tree, and the snapshot asked git for the project's prefix once per tracked file — a git process each: 33 s for one snapshot of a 2,943-file app (measured twice, 11-06), against 0.02 s for git's own listing. It now asks once per snapshot and once per put-back, and passes the answer to every path it reads or writes. A verifyCommand's clock and its 'started' line now begin when the command does, after the snapshot: the first real run under W13 said 31m 07s on its progress line and 30m 33s in its report, and the 34 s between them was the snapshot. The progress line and the report now give one total, and docs/checks.md says what durationMs measures."
+interpretation: "src/run/tree.ts: gitToAbsRel, readGitPath and listHidden take an optional prefix, asked for only when not given, so every other caller works as before; snapshotWorkTree and restoreWorkTree ask once and pass it. src/verify/verify.ts: startedAt and the 'verifyCommand started' line move into the probe, after the snapshot; one formatted total serves the progress line and the detail. test/snapshot-speed.test.ts (new): counts the git processes a snapshot starts (a logging git first on PATH), a subfolder project's put-back, the command's time with a slowed snapshot, and the one total. docs/checks.md: one sentence."
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: "Every path the snapshot and the put-back read or write is the same as before — the prefix is the same answer, asked once — so the existing runIsolated, run and scope tests pass unchanged. No existing assertion is removed or loosened. The two defects found in subfolder projects while measuring (the put-back's checkout and hidden files) are not touched here: they are W15, in its own lock."
+deny:
+  - package.json
+  - package-lock.json
+  - README.md
+  - src/mcp/**
+  - src/checkpoint/**
+  - src/core/**
+  - src/lock/**
+  - src/domains/**
+  - src/run/claim.ts
+  - src/run/baseline.ts
+  - src/run/probe.ts
+  - src/run/supervise.ts
+  - src/verify/steps.ts
+  - eval/**
+change: the work-tree snapshot asks git for the project's prefix once, not once per file; a verifyCommand's time starts with the command; one total on the progress line and in the report
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - docs/checks.md
+    - src/run/tree.ts
+    - src/verify/verify.ts
+    - test/snapshot-speed.test.ts
+  symbols: []
+  maxFiles: 4
+  maxLines: 300
+accept:
+  - "Measured before the change (11-06 19:4x, under the shared turn): one work-tree snapshot of a 2,943-file app took 32.7 s and 33.4 s, while git's own listing took 0.02 s — one `git rev-parse --show-prefix` per tracked file. That app's first full run under W13 spent 2 min 24 s between its checkpoint and its first check, and its progress line (31m 07s) and report (30m 33s) disagreed by the 34 s of one snapshot."
+  - "Rehearsed in scratch (a worktree at 530a81a, 11-06 19:56–20:09): build clean; the new tests 5/5, and on W13's source 4 of them red (the subfolder round-trip guard green there too, as meant); the whole suite 516/516 (511 + 5 new) and eval 25/25 under the turn. Patch w14-snapshot-prefix.patch sha256 4ab327e09b99d0fc…, 4 files +213/−24; private-word scan clean."
+  - "Deliberate breaks, each red where meant, restored green: B1 snapshot asks per tracked file → both prefix-count tests; B2 put-back writes a dirty file with no prefix → the subfolder round-trip; B3 set-aside with no prefix → the subfolder round-trip; B4 the clock starts before the snapshot → the command's-time test; B5 restore asks per path → the put-back prefix count."
+  - "Measured after, same app, same files, same turn: one snapshot 0.38 s and 0.39 s (was 33 s)."
+  - The full check passes (build + whole suite + eval).
+assumptions:
+  - text: "The owner's words (the utterance) set the direction for Code Director: more efficient, more powerful, more reliable, all at once. The standing yes of 11-04 covers fixing weaknesses found in Code Director, testing and pushing them; the owner leaves decisions to the lead (10-16)."
+    source: user
+    confirmed: true
+  - text: Budget and deny set by hand from the rehearsed patch; the automatic draft is not used.
+    source: system
+    confirmed: false
+  - text: "Not reached: the put-back's own time on a big tree (it reads only what git calls changed, so it was not the slow part); Windows."
+    source: system
+    confirmed: false
+createdAt: 2026-11-06T19:09:39.490Z
+createdBy: Yasirdora

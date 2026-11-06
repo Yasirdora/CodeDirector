@@ -248,7 +248,9 @@ as **named checks**:
   once (as the artifact), and gives each check's time:
   `times: prepare 14s · build 1m 05s · … · iphone 18m 20s (failed) · mac-build (not run)`.
   The run record keeps each check's start, time and outcome
-  (`verification.items[].steps`), and the whole run's time (`durationMs`).
+  (`verification.items[].steps`), and the command's own time (`durationMs`,
+  from when the command starts — after the work-tree snapshot every probe
+  runs in — to when it ends).
 - A failure names the check it failed in:
   `verifyCommand failed (exit 65) in iphone (check 9 of 11) after 18m 20s`.
   A timeout names the check it stopped.

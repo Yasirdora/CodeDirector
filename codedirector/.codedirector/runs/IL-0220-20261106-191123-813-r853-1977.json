@@ -1,0 +1,135 @@
+{
+  "afterHashes": {
+    "docs/checks.md": "0fa5a8090f5b8b4aeb667b10688bae521c4d61c3dcca49272acd53b426a86689",
+    "src/run/tree.ts": "8ec009046833c48cb5d72400d7475122f687fe246c181b0e7bda363ca762b017",
+    "src/verify/verify.ts": "5a96992f81e0d3912f0f89688c270d7c5a7977d345a97cd994c1f8110e187768",
+    "test/snapshot-speed.test.ts": "6e09e19d789a36c2a9dd4f09d24be2686ea15334f14d07a942a9794c76f28b07"
+  },
+  "allowExpand": false,
+  "attemptId": "20261106-191123-813-r852-1977",
+  "baselinePath": ".codedirector/baselines/IL-0220-task.json",
+  "baselineSha256": "bd210725d184a207c64d12e557bb40d2d1176d1146909f23e074d5f2cc06ad32",
+  "budget": {
+    "filesChanged": 4,
+    "linesChanged": 238,
+    "maxFiles": 4,
+    "maxLines": 300
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/checks.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/tree.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/snapshot-speed.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261106T191004664",
+    "createdAt": "2026-11-06T19:10:05.133Z",
+    "dirty": false,
+    "id": "ckpt-20261106T191004664",
+    "ref": "530a81ac9d16fe27a8b35b3e9893c40257cfbeed",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261106T191004664"
+  },
+  "command": [
+    "git",
+    "apply",
+    "../../w14-snapshot-prefix.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-11-06T19:11:23.862Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "Every path the snapshot and the put-back read or write is the same as before — the prefix is the same answer, asked once — so the existing runIsolated, run and scope tests pass unchanged. No existing assertion is removed or loosened. The two defects found in subfolder projects while measuring (the put-back's checkout and hidden files) are not touched here: they are W15, in its own lock. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0220",
+  "startedAt": "2026-11-06T19:11:23.813Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0220-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 0,
+      "proven": 3,
+      "unchecked": 2
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0220-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0220-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "detail": "verifyCommand timed out after 3600000ms",
+        "durationMs": 3610415,
+        "evidenceClass": "unchecked",
+        "reason": "verifyCommand timed out after 3600000ms",
+        "source": "verify-command",
+        "subject": "verifyCommand · /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "verdict": "unchecked"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · Every path the snapshot and the put-back read or write is the same as before — the prefix is the same answer, asked once — so the existing runIsolated, run and scope tests pass unchanged. No existing assertion is removed or loosened. The two defects found in subfolder projects while measuring (the put-back's checkout and hidden files) are not touched here: they are W15, in its own lock.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0220",
+    "verifiedAt": "2026-11-06T20:11:47.060Z",
+    "violations": []
+  },
+  "violations": []
+}

@@ -82,7 +82,7 @@ export function porcelainAllPaths(line: string): string[] {
   return [unquote(rest)];
 }
 
-export function listHidden(rootDir: string): HiddenFile[] {
+export function listHidden(rootDir: string, prefix: string = gitPrefix(rootDir)): HiddenFile[] {
   let raw = "";
   try {
     raw = git(rootDir, ["ls-files", "-v"]);
@@ -95,7 +95,7 @@ export function listHidden(rootDir: string): HiddenFile[] {
     const flag = line[0];
     if (flag !== "S" && flag !== "h") continue;
     const p = line.slice(2);
-    const abs = path.join(rootDir, gitToAbsRel(rootDir, p));
+    const abs = path.join(rootDir, gitToAbsRel(rootDir, p, prefix));
     let hash = "";
     try {
       hash = sha256Bytes(fs.readFileSync(abs));
@@ -107,9 +107,12 @@ export function listHidden(rootDir: string): HiddenFile[] {
   return out;
 }
 
-/** Translate a git-root-relative path into a path relative to rootDir (may start with ../). */
-export function gitToAbsRel(rootDir: string, gitPath: string): string {
-  const prefix = gitPrefix(rootDir);
+/**
+ * Translate a git-root-relative path into a path relative to rootDir (may
+ * start with ../). Without `prefix` this asks git for it — one process per
+ * call — so a caller with many paths asks once and passes it.
+ */
+export function gitToAbsRel(rootDir: string, gitPath: string, prefix: string = gitPrefix(rootDir)): string {
   if (!prefix) return gitPath;
   const rel = toRootRelative(prefix, gitPath);
   if (rel !== null) return rel;
@@ -118,8 +121,8 @@ export function gitToAbsRel(rootDir: string, gitPath: string): string {
   return up ? `${up}/${gitPath}` : gitPath;
 }
 
-export function readGitPath(rootDir: string, gitPath: string): Buffer | null {
-  const rel = gitToAbsRel(rootDir, gitPath);
+export function readGitPath(rootDir: string, gitPath: string, prefix: string = gitPrefix(rootDir)): Buffer | null {
+  const rel = gitToAbsRel(rootDir, gitPath, prefix);
   const abs = path.join(rootDir, rel);
   try {
     return fs.readFileSync(abs);
@@ -128,7 +131,14 @@ export function readGitPath(rootDir: string, gitPath: string): Buffer | null {
   }
 }
 
+/**
+ * Every tracked file's hash, and the bytes of every dirty, untracked or
+ * hidden one. The project's prefix in the repo is asked for once: asked
+ * per file it cost a git process each — 33 s for one snapshot of a
+ * 2,943-file app, measured twice, against 0.02 s for git's own listing.
+ */
 export function snapshotWorkTree(rootDir: string): WorkTreeSnapshot {
+  const prefix = gitPrefix(rootDir);
   const contents: Record<string, Buffer> = {};
   const hashes: Record<string, string> = {};
   const untracked: string[] = [];
@@ -140,7 +150,7 @@ export function snapshotWorkTree(rootDir: string): WorkTreeSnapshot {
     tracked = [];
   }
   for (const p of tracked) {
-    const text = readGitPath(rootDir, p);
+    const text = readGitPath(rootDir, p, prefix);
     if (text === null) continue;
     hashes[p] = sha256Bytes(text);
   }
@@ -151,7 +161,7 @@ export function snapshotWorkTree(rootDir: string): WorkTreeSnapshot {
     const status = line.slice(0, 2);
     for (const p of porcelainAllPaths(line)) {
       if (isCodedirectorState(p)) continue;
-      const text = readGitPath(rootDir, p);
+      const text = readGitPath(rootDir, p, prefix);
       if (text !== null) {
         contents[p] = text;
         hashes[p] = sha256Bytes(text);
@@ -162,9 +172,9 @@ export function snapshotWorkTree(rootDir: string): WorkTreeSnapshot {
     }
   }
 
-  const hidden = listHidden(rootDir);
+  const hidden = listHidden(rootDir, prefix);
   for (const h of hidden) {
-    const text = readGitPath(rootDir, h.path);
+    const text = readGitPath(rootDir, h.path, prefix);
     if (text !== null) {
       contents[h.path] = text;
       hashes[h.path] = sha256Bytes(text);
@@ -201,12 +211,13 @@ function putBackDir(rootDir: string): string {
 }
 
 export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): PutBack {
+  const prefix = gitPrefix(rootDir);
   const restored: string[] = [];
   const removed: string[] = [];
   let kept: string | undefined;
   /** Move the file as the probe left it into the put-back folder — before it's replaced or removed. */
   const setAside = (p: string): void => {
-    const abs = path.join(rootDir, gitToAbsRel(rootDir, p));
+    const abs = path.join(rootDir, gitToAbsRel(rootDir, p, prefix));
     if (!fs.existsSync(abs)) return;
     kept ??= putBackDir(rootDir);
     const dest = path.join(kept, p);
@@ -221,7 +232,7 @@ export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): PutBac
 
   // Drop skip-worktree so checkout/write can land (and so a file the probe
   // hid mid-run becomes visible to porcelain again).
-  for (const h of listHidden(rootDir)) {
+  for (const h of listHidden(rootDir, prefix)) {
     try {
       git(rootDir, [
         "update-index",
@@ -248,9 +259,9 @@ export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): PutBac
   // Restore snapshotted contents (raw bytes — binary-safe) — only where the
   // bytes moved: a file written back unchanged would still get a new time.
   for (const [p, data] of Object.entries(snap.contents)) {
-    const now = readGitPath(rootDir, p);
+    const now = readGitPath(rootDir, p, prefix);
     if (now !== null && now.equals(data)) continue;
-    const abs = path.join(rootDir, gitToAbsRel(rootDir, p));
+    const abs = path.join(rootDir, gitToAbsRel(rootDir, p, prefix));
     try {
       setAside(p);
       fs.mkdirSync(path.dirname(abs), { recursive: true });
@@ -272,7 +283,7 @@ export function restoreWorkTree(rootDir: string, snap: WorkTreeSnapshot): PutBac
   }
   for (const p of candidates) {
     if (!(p in snap.hashes) || p in snap.contents) continue;
-    const now = readGitPath(rootDir, p);
+    const now = readGitPath(rootDir, p, prefix);
     if (snap.hashes[p] === ABSENT) {
       // Deleted at snapshot: keep it deleted (a probe that recreated it: set aside).
       if (now !== null) {
