@@ -1,5 +1,5 @@
 /**
- * One claim file per cdir root: `.codedirector/running.json`.
+ * One claim file per cdir root: `.codedirector/live/running.json`.
  *
  * A run, a standalone verify and a report that re-runs the checks write it
  * before they do any work, rewrite it as they move from phase to phase, and
@@ -12,13 +12,22 @@
  * does not live in .codedirector/runs/ — that folder holds one record per
  * finished attempt, and its contents are counted.
  *
+ * It lives in .codedirector/live/, a folder that ignores itself: its own
+ * .gitignore holds `*`. A claim names this host, a pid and the command, and
+ * none of that belongs in a commit — whatever ignore rules the project has
+ * (the block older versions wrote, `.codedirector/.gitignore`, or a project
+ * that commits its run records). Older versions kept the claim at
+ * `.codedirector/running.json`, in sight of git: a live claim there still
+ * refuses a second run, and a stale one, like their running-stale/ folder,
+ * is moved in on the next claim.
+ *
  * Liveness is three facts: the claim is from this host, its pid is alive
  * (kill 0, or EPERM for a process of another user), and the process started
  * when the claim says (`ps lstart` within two seconds — a pid can be reused).
  * Without a start time from `ps` the kill check alone decides and the claim's
  * description says the start time was not checked. A claim from another host
  * is not judged here. A stale claim is never deleted: the next claimant
- * renames it into .codedirector/running-stale/ and says so once.
+ * renames it into .codedirector/live/stale/ and says so once.
  *
  * Only the owner rewrites or removes the file: the pid and the claim's own
  * startedAt stamp must still match what is on disk.
@@ -33,7 +42,7 @@ import { indexDir, stableStringify } from "../core/store";
 
 export type ClaimKind = "run" | "verify" | "report";
 
-/** What .codedirector/running.json holds while a run, verify or report works. */
+/** What .codedirector/live/running.json holds while a run, verify or report works. */
 export interface ClaimFile {
   formatVersion: 1;
   kind: ClaimKind;
@@ -66,9 +75,16 @@ export interface ClaimDescription {
 export class ClaimError extends Error {}
 
 export const RUNNING_FILE = "running.json";
-export const STALE_DIR = "running-stale";
-/** Root-relative, for the sentences: `.codedirector/running.json`. */
-export const RUNNING_REL = path.join(".codedirector", RUNNING_FILE).split(path.sep).join("/");
+/** The folder the claim and the stale claims live in; it ignores itself. */
+export const LIVE_DIR = "live";
+export const STALE_DIR = "stale";
+/** Root-relative, for the sentences: `.codedirector/live/running.json`. */
+export const RUNNING_REL = [".codedirector", LIVE_DIR, RUNNING_FILE].join("/");
+/** Where older versions kept the claim and the stale claims — in sight of git. */
+const OLD_RUNNING_REL = ".codedirector/running.json";
+const OLD_STALE_DIR = "running-stale";
+/** The live folder's own .gitignore: everything in it, itself included. */
+export const LIVE_GITIGNORE = "*\n";
 
 /** `ps lstart` is whole seconds; a real process start is well within this. */
 const START_TOLERANCE_MS = 2000;
@@ -106,12 +122,28 @@ export interface ClaimHandle {
   release(): void;
 }
 
+export function liveDir(rootDir: string): string {
+  return path.join(indexDir(rootDir), LIVE_DIR);
+}
+
 export function claimPath(rootDir: string): string {
-  return path.join(indexDir(rootDir), RUNNING_FILE);
+  return path.join(liveDir(rootDir), RUNNING_FILE);
 }
 
 export function staleClaimsDir(rootDir: string): string {
-  return path.join(indexDir(rootDir), STALE_DIR);
+  return path.join(liveDir(rootDir), STALE_DIR);
+}
+
+function oldClaimPath(rootDir: string): string {
+  return path.join(rootDir, ...OLD_RUNNING_REL.split("/"));
+}
+
+/** The live folder, with the .gitignore that hides it; an existing one is never rewritten. */
+function ensureLiveDir(rootDir: string): void {
+  const dir = liveDir(rootDir);
+  fs.mkdirSync(dir, { recursive: true });
+  const ignore = path.join(dir, ".gitignore");
+  if (!fs.existsSync(ignore)) fs.writeFileSync(ignore, LIVE_GITIGNORE);
 }
 
 /** How many attempts this lock has recorded (a run's claim is that + 1). */
@@ -214,13 +246,18 @@ export function claimRefusal(view: ClaimView): string {
   if (view.state === "other-host") {
     return (
       `${describeClaim(c, view.startChecked)} on ${c.host} — a claim from another machine is not judged here; ` +
-      `wait for it, or if ${c.host} is not running cdir, remove ${RUNNING_REL} by hand`
+      `wait for it, or if ${c.host} is not running cdir, remove ${relOf(view)} by hand`
     );
   }
   return (
     `${describeClaim(c, view.startChecked)} — wait for it, or follow it with ` +
     `\`cdir report ${c.lockId}\`; do not start it again`
   );
+}
+
+/** The claim's file as a sentence names it: the old place for an older version's claim. */
+function relOf(view: ClaimView): string {
+  return path.basename(path.dirname(view.path)) === LIVE_DIR ? RUNNING_REL : OLD_RUNNING_REL;
 }
 
 /** "found a stale claim from IL-0952 (pid 4711, since 13:52): kept in …, ignored" */
@@ -295,6 +332,49 @@ function handleFor(rootDir: string, key: string, claim: ClaimFile, stale?: strin
 }
 
 /**
+ * A claim an older version left at `.codedirector/running.json`: a live one
+ * (or one from another host) refuses as before; a stale or unreadable one is
+ * set aside into the live folder and worded once. The old running-stale/
+ * folder's claims move in too. Returns the stale line, if any.
+ */
+function takeOldClaim(rootDir: string): string | undefined {
+  const oldStale = safeList(path.join(indexDir(rootDir), OLD_STALE_DIR));
+  if (oldStale.length > 0) fs.mkdirSync(staleClaimsDir(rootDir), { recursive: true });
+  for (const name of oldStale) {
+    const dest = path.join(staleClaimsDir(rootDir), name);
+    try {
+      if (!fs.existsSync(dest)) fs.renameSync(path.join(indexDir(rootDir), OLD_STALE_DIR, name), dest);
+    } catch {
+      // another claimant moved it first — either is fine
+    }
+  }
+  try {
+    fs.rmdirSync(path.join(indexDir(rootDir), OLD_STALE_DIR));
+  } catch {
+    // absent, or something else is still in it: left as it is
+  }
+  const old = oldClaimPath(rootDir);
+  const onDisk = readFile(old);
+  if (onDisk === null) return undefined;
+  if (onDisk === "unreadable") {
+    const kept = stow(rootDir, old);
+    return kept === null ? undefined : `found an unreadable claim (${OLD_RUNNING_REL}): kept in ${kept}, ignored`;
+  }
+  const view = judge(onDisk, old);
+  if (view.state !== "stale") throw new ClaimError(claimRefusal(view));
+  const kept = stow(rootDir, old);
+  return kept === null ? undefined : staleLine(onDisk, kept);
+}
+
+function safeList(dir: string): string[] {
+  try {
+    return fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Claim this root for the work starting now, or throw the refusal a second
  * process deserves. A claim this process already holds (a verify inside a
  * re-verifying report) is shared: the same file, and only the outer call
@@ -307,7 +387,7 @@ export function claimRoot(rootDir: string, want: ClaimRequest): ClaimHandle {
     return { file: mine, phase: (next: string) => rewrite(rootDir, mine, next), release: () => {} };
   }
 
-  fs.mkdirSync(indexDir(rootDir), { recursive: true });
+  ensureLiveDir(rootDir);
   const file = claimPath(rootDir);
   const now = new Date().toISOString();
   const claim: ClaimFile = {
@@ -325,7 +405,7 @@ export function claimRoot(rootDir: string, want: ClaimRequest): ClaimHandle {
     cdirVersion: cdirVersion(),
   };
 
-  let stale: string | undefined;
+  let stale = takeOldClaim(rootDir);
   for (let tries = 0; tries < ATTEMPTS; tries++) {
     const onDisk = readFile(file);
     if (onDisk === "unreadable") {
@@ -360,12 +440,19 @@ export function claimRoot(rootDir: string, want: ClaimRequest): ClaimHandle {
   throw new ClaimError(`could not claim ${RUNNING_REL}: another process keeps taking it — try again`);
 }
 
-/** The claim on this root, judged — or null when none is recorded or it cannot be read. */
+/**
+ * The claim on this root, judged — or null when none is recorded or it cannot
+ * be read. An older version's claim at the old place counts when the live
+ * folder holds none.
+ */
 export function readClaim(rootDir: string): ClaimView | null {
-  const file = claimPath(rootDir);
-  const onDisk = readFile(file);
-  if (onDisk === null || onDisk === "unreadable") return null;
-  return judge(onDisk, file);
+  for (const file of [claimPath(rootDir), oldClaimPath(rootDir)]) {
+    const onDisk = readFile(file);
+    if (onDisk === null) continue;
+    if (onDisk === "unreadable") return null;
+    return judge(onDisk, file);
+  }
+  return null;
 }
 
 /** Move the claim this process holds on `rootDir` to a new phase; a no-op when it holds none. */

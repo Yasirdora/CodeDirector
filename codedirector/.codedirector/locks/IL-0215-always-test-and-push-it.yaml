@@ -1,0 +1,49 @@
+schemaVersion: 1
+id: IL-0215
+status: verified
+utterance: always test and push it, if you find any weakness in code director also try to update and fix i to get the most out of each model, fine tune it so it become unbeatable that's the ultimate goal
+goal: "W11 (found 11-06 while reading W1's claim): the claim file `.codedirector/running.json` holds this machine's host name, a pid and the command, and its stale copies in `.codedirector/running-stale/` are kept for good — and git ignores neither in any setup: the managed .codedirector/.gitignore does not list them, a project with the older root block gets no new rule, and a project that commits .codedirector/ (this repository) commits whatever is there. A `git add -A` during a run, or after a crashed one, commits them. Now the claim and the stale claims live in `.codedirector/live/`, a folder that ignores itself (its own .gitignore holds `*`, written once, never rewritten), so git shows nothing whatever the project ignores. A claim an older version left at the old place still refuses a second run while live (and a report still sees it); a stale one, and the old running-stale/ folder, move in on the next claim; a refusal for a claim from another machine names the file where it is."
+interpretation: "`runs/` was ruled out by claim.ts's own header (its contents are counted as attempts); changing ensureCodedirectorIgnore would break the rule that an older root block is left as it is (a test asserts no .codedirector/.gitignore is created there). A self-ignoring folder works in every setup without touching any ignore file of the project. Only claim.ts changes; the claim's contents, the liveness rules and every sentence except the path stay as they are."
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: "The claim's format, the liveness rules (host, pid, `ps lstart`), the race (hard-link publish), stale claims never deleted, and every refusal and running-now sentence stay as they are; only the path they name changes. No existing assertion is removed or loosened: claim.test.ts and report.test.ts change only the paths they look at, plus the new tests."
+deny:
+  - package.json
+  - package-lock.json
+  - src/core/**
+  - src/lock/**
+  - src/mcp/**
+  - src/verify/**
+  - src/report/**
+  - src/domain/**
+  - src/domains/**
+  - eval/**
+change: the run claim and stale claims move into a self-ignoring .codedirector/live/ folder; an older version's claim at the old place is still honoured, and stale ones move in
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - src/run/claim.ts
+    - test/claim.test.ts
+    - test/report.test.ts
+  symbols: []
+  maxFiles: 3
+  maxLines: 280
+accept:
+  - "Rehearsed in scratch under the turn (11-06 10:10–10:17, a worktree at cf2bc46): build clean; the whole suite 471/471 twice; eval 25/25. Patch w11-final.patch sha256 5a1ae9bed450278b…, 3 files, +193/−26, applies here; private-word scan clean."
+  - "Deliberate breaks, each type-checking (0 errors), each red on exactly one test at the named assertion: the live .gitignore ignores nothing → 'git shows nothing new for a live claim'; the .gitignore rewritten every claim → 'an existing live .gitignore is kept as it is'; an old claim not taken → the live old claim does not refuse; readClaim skips the old place → 'a report sees the older version's run'; the refusal always names the new place → the other-machine refusal; the old stale folder left → 'the old stale folder is moved in'. Restored, claim tests 10/10."
+  - "On the old code the updated tests fail (9 of 10): they look in the new place. That run proves nothing on its own; the breaks above are the proof."
+  - The full check passes (build + whole suite + eval).
+assumptions:
+  - text: "The owner's standing words of 11-04 (the utterance) cover Code Director fixes, and the owner leaves the decisions to the lead (10-16: \"I leave all decisions to you\"). The push to the public repository is held with W6 until the owner confirms the history rewrite is finished."
+    source: user
+    confirmed: true
+  - text: "Budget and deny set by hand from the rehearsed patch: the automatic draft proposed denying test/**/*.test.*, which would deny the two test files the change needs."
+    source: system
+    confirmed: false
+  - text: "Not reached: an older version that starts after a newer one has claimed does not see the new claim — upgrade between runs, as the install already requires. The claim's tmp file (written beside the claim, then hard-linked) now also sits in the ignored folder."
+    source: system
+    confirmed: false
+createdAt: 2026-11-06T09:17:09.010Z
+createdBy: Yasirdora

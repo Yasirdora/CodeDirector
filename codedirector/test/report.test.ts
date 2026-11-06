@@ -629,7 +629,7 @@ test("run: a closed lock is refused before the checkpoint, naming the lock that 
 
   assert.equal(recordCount(root, lock.id), before.records, "a refused run writes no record");
   assert.equal(checkpointCount(root), before.checkpoints, "a refused run takes no checkpoint");
-  assert.equal(fs.existsSync(path.join(root, ".codedirector", "running.json")), false, "a refused run takes no claim");
+  assert.equal(fs.existsSync(path.join(root, ".codedirector", "live", "running.json")), false, "a refused run takes no claim");
   assert.equal(loadLock(root, lock.id)!.status, before.status, "a refused run leaves the status alone");
 });
 
@@ -666,7 +666,7 @@ test("run: a first attempt is refused when another lock's baseline is newer", as
   );
   assert.equal(recordCount(root, lock.id), 0, "the refused first attempt wrote no record");
   assert.equal(checkpointCount(root), checkpoints, "no checkpoint was taken");
-  assert.equal(fs.existsSync(path.join(root, ".codedirector", "running.json")), false);
+  assert.equal(fs.existsSync(path.join(root, ".codedirector", "live", "running.json")), false);
 });
 
 test("verify: an explicit re-verify of a closed lock is refused before the check runs", async () => {

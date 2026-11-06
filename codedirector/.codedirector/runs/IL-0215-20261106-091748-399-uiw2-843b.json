@@ -1,0 +1,123 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261106-091748-399-uiw1-843b",
+  "baselinePath": ".codedirector/baselines/IL-0215-task.json",
+  "baselineSha256": "b350464c57d7218e68adb7973884ac489cee9173df5d289a543b08c9095bdc40",
+  "budget": {
+    "filesChanged": 3,
+    "linesChanged": 219,
+    "maxFiles": 3,
+    "maxLines": 280
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "src/run/claim.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/claim.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/report.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261106T091739136",
+    "createdAt": "2026-11-06T09:17:39.178Z",
+    "dirty": false,
+    "id": "ckpt-20261106T091739136",
+    "ref": "cf2bc461da1f084433bb3ebe8d3cfc6bd8498ebc",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261106T091739136"
+  },
+  "command": [
+    "git",
+    "apply",
+    "../../w11-claim.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-11-06T09:17:48.411Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "The claim's format, the liveness rules (host, pid, `ps lstart`), the race (hard-link publish), stale claims never deleted, and every refusal and running-now sentence stay as they are; only the path they name changes. No existing assertion is removed or loosened: claim.test.ts and report.test.ts change only the paths they look at, plus the new tests. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0215",
+  "startedAt": "2026-11-06T09:17:48.399Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0215-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0215-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0215-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"/usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'\" → exit 0",
+        "detail": "verifyCommand passed: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · The claim's format, the liveness rules (host, pid, `ps lstart`), the race (hard-link publish), stale claims never deleted, and every refusal and running-now sentence stay as they are; only the path they name changes. No existing assertion is removed or loosened: claim.test.ts and report.test.ts change only the paths they look at, plus the new tests.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0215",
+    "verifiedAt": "2026-11-06T09:20:39.747Z",
+    "violations": []
+  },
+  "violations": []
+}

@@ -1,5 +1,5 @@
 /**
- * W1: one claim file per cdir root (`.codedirector/running.json`). A run or a
+ * W1: one claim file per cdir root (`.codedirector/live/running.json`). A run or a
  * verify in progress is visible from another process, cannot be started
  * twice, and a claim whose process is gone is named stale — never deleted.
  */
@@ -18,7 +18,7 @@ import { VibeCheck } from "../src/lock/types";
 import { formatReport, formatReportMarkdown } from "../src/report/format";
 import { buildReport } from "../src/report/report";
 import { WASM_STARTUP_FLAGS } from "../src/core/wasm-flags";
-import { ClaimError, claimPath, claimRoot, type ClaimFile } from "../src/run/claim";
+import { ClaimError, claimPath, claimRoot, LIVE_GITIGNORE, readClaim, type ClaimFile } from "../src/run/claim";
 import { RunError, runWithLock } from "../src/run/run";
 import { makeDemoGitRepo } from "./helpers";
 
@@ -34,8 +34,11 @@ const CDIR = [NODE, ...WASM_STARTUP_FLAGS, CLI];
 /** dist/src/run/claim.js — what the racing children import. */
 const CLAIM_MODULE = path.join(__dirname, "..", "src", "run", "claim.js");
 
-const runningFile = (root: string) => path.join(root, ".codedirector", "running.json");
-const staleDir = (root: string) => path.join(root, ".codedirector", "running-stale");
+const runningFile = (root: string) => path.join(root, ".codedirector", "live", "running.json");
+const staleDir = (root: string) => path.join(root, ".codedirector", "live", "stale");
+/** Where versions before W11 kept the claim and the stale claims. */
+const oldRunningFile = (root: string) => path.join(root, ".codedirector", "running.json");
+const oldStaleDir = (root: string) => path.join(root, ".codedirector", "running-stale");
 const tempDir = (prefix: string) => fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -159,7 +162,11 @@ function deadPid(): number {
   return dead.pid;
 }
 
-function writeClaim(root: string, fields: Partial<ClaimFile> & { lockId: string; pid: number }): void {
+function writeClaim(
+  root: string,
+  fields: Partial<ClaimFile> & { lockId: string; pid: number },
+  file = claimPath(root),
+): void {
   const now = new Date().toISOString();
   const base: Omit<ClaimFile, "lockId" | "pid"> = {
     formatVersion: 1,
@@ -173,8 +180,8 @@ function writeClaim(root: string, fields: Partial<ClaimFile> & { lockId: string;
     phaseSince: now,
     cdirVersion: "test",
   };
-  fs.mkdirSync(path.dirname(claimPath(root)), { recursive: true });
-  fs.writeFileSync(claimPath(root), JSON.stringify({ ...base, ...fields } as ClaimFile));
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ ...base, ...fields } as ClaimFile));
 }
 
 test("claim: a run in another process is refused, followed and removed", { timeout: 90000 }, async (t) => {
@@ -249,7 +256,7 @@ test("claim: a claim whose process is dead is set aside as stale, kept, and does
   assert.equal(outcome.exitCode, 0, outcome.record.violations.join("; "));
   const note = outcome.record.staleClaim ?? "";
   assert.match(note, new RegExp(`found a stale claim from ${lock.id} \\(pid ${pid}, since`), note);
-  assert.ok(note.includes(".codedirector/running-stale/"), note);
+  assert.ok(note.includes(".codedirector/live/stale/"), note);
   assert.equal(fs.readdirSync(staleDir(root)).length, 1, "the stale claim is kept, not deleted");
   assert.equal(fs.existsSync(runningFile(root)), false);
 });
@@ -381,4 +388,77 @@ test("claim: a run that throws after claiming still releases its claim", { timeo
   await assert.rejects(runWithLock(root, lock.id, [NODE, "-e", "0"], { stdio: "pipe" }), /not a git repository/);
   assert.equal(fs.existsSync(runningFile(root)), false, "a run that throws removes its claim");
   assert.equal(fs.readdirSync(staleDir(root)).length, 1, "it had claimed: the stale file was set aside first");
+});
+
+/** What git shows under .codedirector/, ignored files left out. */
+function shown(root: string): string[] {
+  return execFileSync("git", ["status", "--porcelain", "--untracked-files=all", "--", ".codedirector"], {
+    cwd: root,
+    encoding: "utf8",
+  })
+    .split("\n")
+    .filter(Boolean);
+}
+
+test("claim: git never shows a claim or a stale claim, whatever the project ignores", { timeout: 30000 }, async () => {
+  const { root, lock } = await setup();
+  // A project that commits everything under .codedirector/, as Code Director's own repository does with its run records.
+  fs.rmSync(path.join(root, ".codedirector", ".gitignore"), { force: true });
+  fs.writeFileSync(path.join(root, ".gitignore"), "!.codedirector/\n");
+  const before = shown(root);
+
+  const first = claimRoot(root, { kind: "run", lockId: lock.id, command: [NODE, "-e", "0"] });
+  assert.ok(fs.existsSync(runningFile(root)), "the claim is written");
+  assert.equal(fs.readFileSync(path.join(root, ".codedirector", "live", ".gitignore"), "utf8"), LIVE_GITIGNORE);
+  assert.deepEqual(shown(root), before, "git shows nothing new for a live claim");
+  first.release();
+
+  writeClaim(root, { lockId: lock.id, pid: deadPid() });
+  fs.appendFileSync(path.join(root, ".codedirector", "live", ".gitignore"), "# the project's own line\n");
+  const second = claimRoot(root, { kind: "run", lockId: lock.id, command: [NODE, "-e", "0"] });
+  assert.match(second.stale ?? "", /found a stale claim/);
+  assert.equal(fs.readdirSync(staleDir(root)).length, 1);
+  assert.deepEqual(shown(root), before, "git shows nothing new for a stale claim");
+  assert.equal(
+    fs.readFileSync(path.join(root, ".codedirector", "live", ".gitignore"), "utf8"),
+    `${LIVE_GITIGNORE}# the project's own line\n`,
+    "an existing live .gitignore is kept as it is",
+  );
+  second.release();
+  assert.equal(fs.readFileSync(path.join(root, ".gitignore"), "utf8"), "!.codedirector/\n", "the project's .gitignore is left as it is");
+});
+
+test("claim: an older version's claim at .codedirector/running.json — a live one refuses, a stale one moves in", { timeout: 30000 }, async () => {
+  const { root, lock } = await setup();
+  const live = new Date(Date.now() - process.uptime() * 1000).toISOString();
+  writeClaim(root, { lockId: lock.id, pid: process.pid, processStartedAt: live }, oldRunningFile(root));
+  assert.equal(readClaim(root)?.state, "live", "a report sees the older version's run");
+  assert.throws(
+    () => claimRoot(root, { kind: "run", lockId: lock.id, command: [NODE, "-e", "0"] }),
+    (e: unknown) => e instanceof ClaimError && /is running since/.test(e.message),
+  );
+  assert.ok(fs.existsSync(oldRunningFile(root)), "a live claim is left where it is");
+  assert.equal(fs.existsSync(runningFile(root)), false);
+
+  // One from another machine is not judged, and the refusal names the file where it is.
+  writeClaim(root, { lockId: lock.id, pid: 1, host: "elsewhere.example" }, oldRunningFile(root));
+  assert.throws(
+    () => claimRoot(root, { kind: "run", lockId: lock.id, command: [NODE, "-e", "0"] }),
+    (e: unknown) => e instanceof ClaimError && e.message.includes("remove .codedirector/running.json by hand"),
+  );
+
+  const pid = deadPid();
+  writeClaim(root, { lockId: lock.id, pid }, oldRunningFile(root));
+  fs.mkdirSync(oldStaleDir(root), { recursive: true });
+  fs.writeFileSync(path.join(oldStaleDir(root), "earlier.json"), "{}\n");
+  const handle = claimRoot(root, { kind: "run", lockId: lock.id, command: [NODE, "-e", "0"] });
+  const note = handle.stale ?? "";
+  assert.match(note, new RegExp(`found a stale claim from ${lock.id} \\(pid ${pid}, since`), note);
+  assert.ok(note.includes(".codedirector/live/stale/"), note);
+  assert.equal(fs.existsSync(oldRunningFile(root)), false, "the old claim is moved, not copied");
+  assert.equal(fs.existsSync(oldStaleDir(root)), false, "the old stale folder is moved in");
+  assert.deepEqual(fs.readdirSync(staleDir(root)).length, 2, "both stale claims are kept");
+  assert.ok(fs.readdirSync(staleDir(root)).includes("earlier.json"));
+  assert.ok(fs.existsSync(runningFile(root)), "the new claim is in the live folder");
+  handle.release();
 });
