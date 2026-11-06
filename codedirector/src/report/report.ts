@@ -38,8 +38,9 @@ import {
   requiredCheckViolationsForRun,
   scopeViolations,
 } from "../run/classify";
-import { Baseline, baselineFileHash, baselinesDir, loadTaskBaseline, taskBaselineFileName, taskBaselinePath } from "../run/baseline";
+import { Baseline, baselineFileHash, loadTaskBaseline, taskBaselinePath } from "../run/baseline";
 import { claimRoot, ClaimError, claimRefusal, describeClaim, readClaim, type ClaimDescription, type ClaimHandle } from "../run/claim";
+import { closedReverifyRefusal, closingLock, type ClosingLock } from "../run/closing";
 import { sha256Bytes } from "../run/tree";
 import { verifyLock, VerifyOptions } from "../verify/verify";
 import {
@@ -55,6 +56,11 @@ import { staleBuildFindings } from "./stale-build";
 
 // They live beside the run record's type now; callers of this module still find them here.
 export { latestRunRecord, listRunRecords };
+
+// The closed-lock question lives beside the run types so a run can ask it
+// without importing this module; callers still find it here.
+export { closingLock };
+export type { ClosingLock };
 
 export class ReportError extends Error {}
 
@@ -226,62 +232,8 @@ export function putBackFinding(p: ProbePutBack): Finding {
   };
 }
 
-/** The lock that closed another, and when it started. */
-export interface ClosingLock {
-  lockId: string;
-  /** When its task baseline was captured (ISO 8601). */
-  capturedAt: string;
-}
-
-/**
- * The lock that closed `lockId`, or null while it is still open.
- *
- * A lock answers for the tree from its task baseline until the next lock
- * starts. "Starts" is a fact in the store, not a guess: another lock's task
- * baseline, captured after this lock's last attempt finished. From then on
- * the live tree holds that lock's work too, and judging this lock against it
- * blames it for changes it never made — a sibling's sealed files read as
- * OUT-OF-BUDGET, a later change as a broken KEEP — and wrote FAILED onto a
- * lock that was verified when it ran.
- *
- * A lock whose own task baseline is the newer one is open again: `cdir lock
- * rebase` is the human pointing it at the present tree. The earliest
- * closing lock is the one named, because that is where this lock's
- * answerability ended.
- *
- * Not covered, and said in the README: two locks running at once (each
- * still sees the other's files), and an edit made between this lock's last
- * attempt and the next lock's start (no report judges it once that lock
- * exists).
- */
-export function closingLock(
-  rootDir: string,
-  lockId: string,
-  lastAttempt: Pick<RunRecord, "finishedAt">,
-  taskBaseline: Baseline | null,
-): ClosingLock | null {
-  const since = Math.max(
-    Date.parse(lastAttempt.finishedAt),
-    taskBaseline ? Date.parse(taskBaseline.capturedAt) : Number.NEGATIVE_INFINITY,
-  );
-  if (!Number.isFinite(since)) return null; // an unreadable date closes nothing
-  const dir = baselinesDir(rootDir);
-  if (!fs.existsSync(dir)) return null;
-
-  const suffix = taskBaselineFileName("");
-  let closing: ClosingLock | null = null;
-  for (const file of fs.readdirSync(dir)) {
-    if (!file.endsWith(suffix)) continue;
-    const other = file.slice(0, -suffix.length);
-    if (other === lockId) continue;
-    const capturedAt = loadTaskBaseline(rootDir, other)?.capturedAt;
-    if (capturedAt === undefined) continue;
-    const at = Date.parse(capturedAt);
-    if (!(at > since)) continue;
-    if (closing === null || at < Date.parse(closing.capturedAt)) closing = { lockId: other, capturedAt };
-  }
-  return closing;
-}
+// ClosingLock and closingLock live in ../run/closing: run/run.ts asks the same
+// question before a new attempt, and it must not import this module.
 
 /**
  * The checks an attempt recorded, as they were written down: what `--attempt
@@ -359,6 +311,16 @@ function attemptAfterState(
   return "same";
 }
 
+/**
+ * The verdict word the lock's status was written from, read back from the run
+ * record: failed on a non-zero command or a violation, incomplete when a
+ * declared check could not run, verified otherwise.
+ */
+function recordedVerdict(run: RunRecord): "verified" | "failed" | "incomplete" {
+  if (run.exitCode !== 0 || run.violations.length > 0) return "failed";
+  return declaredButUnrunnable(run.verification?.items ?? []).length > 0 ? "incomplete" : "verified";
+}
+
 /** The claim a re-verifying report needs, or the refusal a second process deserves. */
 function openReportClaim(rootDir: string, lockId: string, command: string | undefined): ClaimHandle {
   try {
@@ -423,6 +385,24 @@ export async function buildReport(
   const closedBy = run && !opts.run && opts.attempt === undefined ? closingLock(rootDir, lockId, run, taskBaseline) : null;
   const view: ChangeReport["view"] =
     (opts.attempt !== undefined && !opts.run) || closedBy !== null ? "attempt" : "current";
+
+  // An explicit re-verify of a closed lock is refused: the checks would run
+  // against a tree that now holds the next lock's work, and anything they
+  // found would be written back as this lock's verdict. Refused before the
+  // claim is taken and before anything runs.
+  if (
+    opts.reverify === true &&
+    opts.run === undefined &&
+    opts.attempt === undefined &&
+    opts.verification === undefined &&
+    closedBy !== null
+  ) {
+    const lastAttempt =
+      run !== undefined && run.attemptId !== undefined
+        ? { attemptId: run.attemptId, verdict: recordedVerdict(run) }
+        : null;
+    throw new ReportError(closedReverifyRefusal(lockId, closedBy, lastAttempt));
+  }
 
   // The last attempt's checks are shown without running them again only while
   // the tree is exactly that attempt's after-state. A moved tree, a record

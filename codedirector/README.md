@@ -504,13 +504,23 @@ writes nothing onto the lock: an old attempt is history, not the verdict.
 another lock's task baseline has been captured after this lock's last
 attempt, the live tree holds that lock's work too, and judging the older
 lock against it would blame it for changes it never made. So for a lock that
-a later one has closed, `cdir report` — and `cdir verify`, and the MCP
-`report` tool — show its last attempt as recorded, name the lock that closed
-it ("Closed by IL-0042"), re-run nothing, and leave its status as it was.
-`cdir lock rebase` opens it again, on the present tree. Two things this rule
-does not reach: two locks running at the same time still see each other's
-files, and an edit made between one lock's last attempt and the next lock's
-start is not judged by any report once that lock exists.
+a later one has closed, `cdir report` and the MCP `report` tool show its last
+attempt as recorded, name the lock that closed it ("Closed by IL-0042"),
+re-run nothing, and leave its status as it was. The summary says so first
+("Shown as last recorded: …", then "Last recorded: Blocked …") and never
+offers `cdir undo`, which would restore the later lock's checkpoint.
+An explicit re-check of a closed lock — `cdir verify`, `cdir report
+--reverify`, the MCP `report` tool with `reverify: true` — is refused before
+anything runs, and so is a new attempt with `cdir run`, including a first
+attempt when another lock started after this one's task baseline: each would
+judge the later lock's changes as this lock's. The refusal names the lock that
+started and when, and gives the way back: take this lock's changes out of the
+tree, run `cdir lock rebase <id> --accept-current`, then run it; or abandon it
+and carry its contract to a new lock. `cdir lock rebase` is what opens a
+closed lock again, on the present tree. Two things this rule does not reach:
+two locks running at the same time still see each other's files, and an edit
+made between one lock's last attempt and the next lock's start is not judged
+by any report once that lock exists.
 
 The report opens with a plain-language summary generated from the same data as the
 detail ("Done — verified. Only src/preview.ts changed, within the agreed

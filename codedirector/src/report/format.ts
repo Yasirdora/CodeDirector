@@ -38,13 +38,25 @@ export function summarizeReport(report: ChangeReport): string {
   const violatedItems = report.items.filter((i) => i.verdict === "violated");
   const unchecked = report.items.filter((i) => i.verdict === "unchecked");
   const outOfScope = report.changed.filter((c) => c.class !== "in-budget");
-  const undoHint = "Nothing was reverted — run `cdir undo` to restore.";
+  // A closed lock's tree belongs to the lock that took over; `cdir undo`
+  // restores the LATEST checkpoint, which is that lock's. Never offer it here.
+  const undoHint = report.closedBy ? "" : "Nothing was reverted — run `cdir undo` to restore.";
 
-  // 1. Outcome first.
+  // 1. A closed lock is history before anything else: the reader must know
+  // that what follows is what was recorded, not a fresh judgment.
+  if (report.closedBy) {
+    sentences.push(
+      `Shown as last recorded: ${report.closedBy.lockId} has started since, and the tree is that lock's to answer for now.`,
+    );
+  }
+
+  // Then the outcome — labelled as recorded on a closed lock.
+  const failure = (text: string) => (undoHint === "" ? text : `${text} ${undoHint}`);
+  let outcome: string;
   if (report.verdict === "incomplete") {
-    sentences.push(`Not verified — ${report.incompleteReason ?? "the scope could not be judged"}.`);
+    outcome = `Not verified — ${report.incompleteReason ?? "the scope could not be judged"}.`;
   } else if (report.verdict === "verified") {
-    sentences.push("Done — verified.");
+    outcome = "Done — verified.";
   } else if (outOfScope.length > 0) {
     const first = outOfScope[0];
     const what =
@@ -52,14 +64,15 @@ export function summarizeReport(report: ChangeReport): string {
         ? `${first.path} is off-limits`
         : `${first.path} was outside the agreed scope`;
     const more = outOfScope.length > 1 ? ` (${outOfScope.length - 1} more below)` : "";
-    sentences.push(`Blocked: ${what}${more}. ${undoHint}`);
+    outcome = failure(`Blocked: ${what}${more}.`);
   } else if (violatedItems.length > 0) {
-    sentences.push(`Blocked: ${violatedItems[0].subject} — ${violatedItems[0].detail}. ${undoHint}`);
+    outcome = failure(`Blocked: ${violatedItems[0].subject} — ${violatedItems[0].detail}.`);
   } else if (report.violations.length > 0) {
-    sentences.push(`Blocked: ${report.violations[0]}. ${undoHint}`);
+    outcome = failure(`Blocked: ${report.violations[0]}.`);
   } else {
-    sentences.push(`The command itself failed. ${undoHint}`);
+    outcome = failure("The command itself failed.");
   }
+  sentences.push(report.closedBy ? `Last recorded: ${outcome}` : outcome);
 
   // 2. Scope.
   if (report.changed.length > 0) {
@@ -96,13 +109,6 @@ export function summarizeReport(report: ChangeReport): string {
   // 5. Incidental observations.
   if (report.findings.length > 0) {
     sentences.push(`${plural(report.findings.length, "observation")} noted along the way (not verified).`);
-  }
-
-  // 6. A closed lock: what is shown is its last attempt, not today's tree.
-  if (report.closedBy) {
-    sentences.push(
-      `Shown as last recorded: ${report.closedBy.lockId} has started since, and the tree is that lock's to answer for now.`,
-    );
   }
 
   return sentences.join(" ");

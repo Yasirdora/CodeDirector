@@ -51,6 +51,7 @@ import {
 } from "./classify";
 import { sha256Bytes } from "./tree";
 import { claimRoot, ClaimError, type ClaimHandle } from "./claim";
+import { closedRunRefusal, closingLock } from "./closing";
 import { verifyWithBaseline, VerifyOptions } from "../verify/verify";
 import { declaredButUnrunnable, ProbePutBack, VerificationReport } from "../verify/types";
 
@@ -309,6 +310,28 @@ export async function runWithLock(
   // hash refuses to run until the user re-approves (lock check + activate).
   const seal = sealViolation(rootDir, lock);
   if (seal) throw new RunError(seal);
+
+  // A lock answers for the tree only until the next lock starts (see
+  // closingLock). A new attempt now would be judged against this lock's task
+  // baseline, so the later lock's changes would be counted as this one's.
+  // Refused before the claim and before any checkpoint, record or status write.
+  const lastAttempt = latestRunRecord(rootDir, lockId);
+  const existingBaseline = loadTaskBaseline(rootDir, lockId);
+  if (lastAttempt !== null) {
+    const closed = closingLock(rootDir, lockId, lastAttempt.record, existingBaseline);
+    if (closed !== null) {
+      throw new RunError(
+        closedRunRefusal(lockId, closed, existingBaseline?.capturedAt ?? null, true),
+      );
+    }
+  } else if (existingBaseline !== null) {
+    const closed = closingLock(rootDir, lockId, { finishedAt: existingBaseline.capturedAt }, existingBaseline);
+    if (closed !== null) {
+      throw new RunError(
+        closedRunRefusal(lockId, closed, existingBaseline.capturedAt, false),
+      );
+    }
+  }
 
   ensureCodedirectorIgnore(rootDir);
 

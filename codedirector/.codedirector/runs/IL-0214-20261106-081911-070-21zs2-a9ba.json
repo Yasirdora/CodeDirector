@@ -1,0 +1,150 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261106-081911-070-21zs1-a9ba",
+  "baselinePath": ".codedirector/baselines/IL-0214-task.json",
+  "baselineSha256": "ab70b9c5c7593dc68e3402a84745710ab1265491b55948ca7c0363bfc1a0b46a",
+  "budget": {
+    "filesChanged": 8,
+    "linesChanged": 520,
+    "maxFiles": 8,
+    "maxLines": 620
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/checks.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/format.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/report.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/closing.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/mcp.test.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/report.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261106T081902075",
+    "createdAt": "2026-11-06T08:19:02.121Z",
+    "dirty": false,
+    "id": "ckpt-20261106T081902075",
+    "ref": "91180b7652557606b8cfbf339b00f67594c8d9c0",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261106T081902075"
+  },
+  "command": [
+    "git",
+    "-C",
+    "~/edraft-scratch/cd-public-w6",
+    "apply",
+    "~/codedirector-briefs/cdir/cd-w9-w10/w9w10-final.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-11-06T08:19:11.084Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "A lock that no later lock has closed behaves exactly as before in run, verify, report and the MCP report. `cdir report` without --reverify still shows a closed lock as recorded, re-runs nothing and writes nothing. The lock schema, the seal, the task baseline and `cdir lock rebase --accept-current` are unchanged, and a rebased lock runs again. No existing test assertion is removed or loosened (test/report.test.ts changes only its imports besides the new tests). — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0214",
+  "startedAt": "2026-11-06T08:19:11.070Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0214-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0214-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0214-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"/usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'\" → exit 0",
+        "detail": "verifyCommand passed: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · A lock that no later lock has closed behaves exactly as before in run, verify, report and the MCP report. `cdir report` without --reverify still shows a closed lock as recorded, re-runs nothing and writes nothing. The lock schema, the seal, the task baseline and `cdir lock rebase --accept-current` are unchanged, and a rebased lock runs again. No existing test assertion is removed or loosened (test/report.test.ts changes only its imports besides the new tests).",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0214",
+    "verifiedAt": "2026-11-06T08:21:54.763Z",
+    "violations": []
+  },
+  "violations": []
+}

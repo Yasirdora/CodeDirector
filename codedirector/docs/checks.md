@@ -84,7 +84,9 @@ specific.
 4. **Report.** `cdir report`, `cdir verify` and the MCP report judge the same
    way, over the current tree, over the live run, and over `--attempt N`, with
    the same wording. A lock that a later lock has closed is shown as it was
-   recorded, and today's rules are not applied to it.
+   recorded, and today's rules are not applied to it; an explicit re-check of
+   it (`cdir verify`, `--reverify`) and a new `cdir run` are refused before
+   any check runs, until `cdir lock rebase <id> --accept-current` opens it.
 
 ## Ask it
 

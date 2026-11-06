@@ -1,0 +1,56 @@
+schemaVersion: 1
+id: IL-0214
+status: verified
+utterance: always test and push it, if you find any weakness in code director also try to update and fix i to get the most out of each model, fine tune it so it become unbeatable that's the ultimate goal
+goal: "W9 and W10 (measured 11-06 on a real repo, IL-0962/IL-0963 in eDraft). W9: `cdir verify` on a lock that a later lock has closed ran nothing, replayed the old run in about a second, and printed \"Blocked … run `cdir undo` to restore\" first, with the closed note last — it read as a fresh failure, and `cdir undo` restores the LATEST checkpoint, the later lock's. W10: `cdir run` on such a lock was accepted and judged against its own task baseline, so files the later lock changed and committed counted as this lock's (a false OUT-OF-BUDGET). Now: an explicit re-check of a closed lock (`cdir verify`, `cdir report --reverify`, the MCP report with reverify) is refused before anything runs, and a new attempt (`cdir run`, also a first attempt when another lock started after this one's task baseline) is refused before the claim, the checkpoint and any record; both name the lock that started and when, and give one remedy (take the changes out, `cdir lock rebase <id> --accept-current`, run; or abandon and carry the contract). A closed lock's summary says it is history first, labels the outcome \"Last recorded:\", and never offers `cdir undo`. README and docs/checks.md say so."
+interpretation: closingLock and the two refusal texts move to src/run/closing.ts so run.ts can ask the same question without importing the report module (report.ts re-exports closingLock and ClosingLock for existing callers). runWithLock asks closingLock after the seal check and before ensureCodedirectorIgnore and the claim. buildReport throws a ReportError for reverify on a closed lock when no run, attempt or verification is given. summarizeReport puts the closed sentence first and drops the undo hint for a closed lock.
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: A lock that no later lock has closed behaves exactly as before in run, verify, report and the MCP report. `cdir report` without --reverify still shows a closed lock as recorded, re-runs nothing and writes nothing. The lock schema, the seal, the task baseline and `cdir lock rebase --accept-current` are unchanged, and a rebased lock runs again. No existing test assertion is removed or loosened (test/report.test.ts changes only its imports besides the new tests).
+deny:
+  - package.json
+  - package-lock.json
+  - src/core/**
+  - src/lock/**
+  - src/mcp/**
+  - src/verify/**
+  - src/domain/**
+  - src/domains/**
+  - eval/**
+change: refuse a re-check and a new run of a lock that a later lock has closed, with one remedy; the closed summary says history first and offers no undo
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - README.md
+    - docs/checks.md
+    - src/report/format.ts
+    - src/report/report.ts
+    - src/run/closing.ts
+    - src/run/run.ts
+    - test/mcp.test.ts
+    - test/report.test.ts
+  symbols: []
+  maxFiles: 8
+  maxLines: 620
+accept:
+  - "Drafted by a second model from a read-only copy of 91180b7, from a written brief; lead review 11-06: the run-record shape, one declaration of each name in runWithLock, and the options `cdir verify`, `cdir report --reverify` and the MCP report pass. The lead wrote the README and docs/checks.md text, which the draft had left saying `cdir verify` re-runs nothing on a closed lock. Patch w9w10-final.patch sha256 04316f1e122d8d65…, 8 files, +436/−83, applies on 91180b7."
+  - "Rehearsed in scratch under the turn (11-06 09:08–09:16): without the fix 5 of the 6 new tests fail (the sixth, a rebased lock runs again, guards against refusing too much); with it the build is clean, the whole suite 469/469 twice, eval 25/25."
+  - "Deliberate breaks, each type-checking (0 errors), each red on its own tests only: run refusal off → 'a closed lock is refused before the checkpoint'; first-attempt refusal off → 'a first attempt is refused when another lock's baseline is newer'; report refusal off → the verify and the MCP re-verify tests; undo hint kept → 'says it is history first'; outcome label dropped → the same summary test. Restored, 6/6."
+  - The full check passes (build + whole suite + eval).
+assumptions:
+  - text: "The owner's standing words of 11-04 (the utterance) cover Code Director fixes, and the owner leaves the decisions to the lead (10-16: \"I leave all decisions to you\"). The push to the public repository is held until the owner confirms the history rewrite is finished (with W6)."
+    source: user
+    confirmed: true
+  - text: "Budget and deny set by hand from the rehearsed patch: the automatic anchors (DomainRegistry.get, find; anchor strength name) proposed six files the change never touches, and the suggested deny test/**/*.test.* would have denied the two test files it needs."
+    source: system
+    confirmed: false
+  - text: "Not reached, as before and said in the README: two locks running at the same time, and an edit made between one lock's last attempt and the next lock's start."
+    source: system
+    confirmed: false
+  - text: "Edited on 11-06 before the first publish, at the owner's wish: the names of the models that drafted and reviewed the change were removed from the first acceptance note, and the local folder paths in the run record's command were shortened to ~/. The seal holds the text as approved, so it no longer matches; a later lock closed this one, so it cannot run again."
+    source: system
+    confirmed: false
+createdAt: 2026-11-06T08:18:10.255Z
+createdBy: Yasirdora

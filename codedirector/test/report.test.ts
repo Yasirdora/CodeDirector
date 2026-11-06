@@ -6,23 +6,29 @@
  */
 
 import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { buildIndex } from "../src/core/builder";
 import { draftLock } from "../src/lock/draft";
 import { loadLock, saveLock } from "../src/lock/store";
 import { sealLock } from "../src/lock/seal";
 import { VibeCheck, KeepClause } from "../src/lock/types";
-import { runWithLock } from "../src/run/run";
+import { RunError, ensureTaskBaseline, listRunRecords, runWithLock } from "../src/run/run";
 import { scopeViolations } from "../src/run/classify";
-import { buildReport, closingLock, finalizeLockStatus } from "../src/report/report";
+import { ReportError, buildReport, closingLock, finalizeLockStatus } from "../src/report/report";
 import { loadTaskBaseline, rebaseTaskBaseline } from "../src/run/baseline";
 import { formatReport, formatReportJson, formatReportMarkdown, summarizeReport } from "../src/report/format";
 import { enforceArtifactRule, VerificationItem } from "../src/verify/types";
 import { stableStringify } from "../src/core/store";
-import { makeGitRepo } from "./helpers";
+import { checkpointsPath } from "../src/checkpoint";
+import { git, makeGitRepo } from "./helpers";
 
 const NODE = process.execPath;
+/** dist/src/cli.js once built — the compiled tests live in dist/test. */
+const CLI = path.join(__dirname, "..", "src", "cli.js");
 const append = (file: string, text: string) =>
   `require("fs").appendFileSync(${JSON.stringify(file)},${JSON.stringify(text)})`;
 
@@ -563,4 +569,174 @@ test("report: a fixed re-verification refreshes the verdict, not the failed atte
 
   // A report bound to that attempt still keeps its recorded command failure.
   assert.equal((await buildReport(root, lock.id, { attempt: 1 })).verdict, "failed");
+});
+
+// ---------------------------------------------------------------------
+// W9/W10 — a lock a later lock has closed: no silent re-verify, no new attempt
+
+/** Run records a lock has written so far. */
+function recordCount(root: string, lockId: string): number {
+  return listRunRecords(root, lockId).length;
+}
+
+/** Checkpoints the root's store has recorded so far. */
+function checkpointCount(root: string): number {
+  const p = checkpointsPath(root);
+  if (!fs.existsSync(p)) return 0;
+  return (JSON.parse(fs.readFileSync(p, "utf8")) as { checkpoints?: unknown[] }).checkpoints?.length ?? 0;
+}
+
+/**
+ * The shape measured on a real project: A runs and is verified; B starts,
+ * changes a file outside A's budget, and commits it. B's task baseline is
+ * the fact that closes A.
+ */
+async function closedByALaterRun(): Promise<{ root: string; lock: VibeCheck; next: VibeCheck; nextStartedAt: string }> {
+  const { root, lock } = await setup([], (l) => {
+    l.budget.files = ["src/math.js"];
+  });
+  const first = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  assert.equal(first.exitCode, 0, JSON.stringify(first.record.violations));
+
+  const next = await laterLock(root, ["src/untested.js"]);
+  const second = await runWithLock(root, next.id, [NODE, "-e", append("src/untested.js", "// y\n")], { stdio: "pipe" });
+  assert.equal(second.exitCode, 0, JSON.stringify(second.record.violations));
+  const nextStartedAt = loadTaskBaseline(root, next.id)!.capturedAt;
+  git(root, ["add", "-A"]);
+  git(root, ["commit", "-qm", "the later lock's work"]);
+  return { root, lock, next, nextStartedAt };
+}
+
+test("run: a closed lock is refused before the checkpoint, naming the lock that started", async () => {
+  const { root, lock, next, nextStartedAt } = await closedByALaterRun();
+  const before = {
+    records: recordCount(root, lock.id),
+    checkpoints: checkpointCount(root),
+    status: loadLock(root, lock.id)!.status,
+  };
+
+  await assert.rejects(
+    runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// z\n")], { stdio: "pipe" }),
+    (e: unknown) => {
+      assert.ok(e instanceof RunError, `expected a RunError, got ${String(e)}`);
+      assert.ok(e.message.includes(`${lock.id} cannot run again as it stands:`), e.message);
+      assert.ok(e.message.includes(`${next.id} started at ${nextStartedAt}`), e.message);
+      assert.ok(e.message.includes(`after ${lock.id}'s last attempt`), e.message);
+      assert.ok(e.message.includes(`cdir lock rebase ${lock.id} --accept-current`), e.message);
+      return true;
+    },
+  );
+
+  assert.equal(recordCount(root, lock.id), before.records, "a refused run writes no record");
+  assert.equal(checkpointCount(root), before.checkpoints, "a refused run takes no checkpoint");
+  assert.equal(fs.existsSync(path.join(root, ".codedirector", "running.json")), false, "a refused run takes no claim");
+  assert.equal(loadLock(root, lock.id)!.status, before.status, "a refused run leaves the status alone");
+});
+
+test("run: a rebased lock runs again, and the later lock's committed file is not its change", async () => {
+  const { root, lock } = await closedByALaterRun();
+  await rebaseTaskBaseline(root, loadLock(root, lock.id)!);
+
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// z\n")], { stdio: "pipe" });
+  assert.equal(outcome.exitCode, 0, JSON.stringify(outcome.record.violations));
+  assert.deepEqual(outcome.record.changed.map((c) => c.path), ["src/math.js"], JSON.stringify(outcome.record.changed));
+});
+
+test("run: a first attempt is refused when another lock's baseline is newer", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.budget.files = ["src/math.js"];
+  });
+  await ensureTaskBaseline(root, loadLock(root, lock.id)!);
+  assert.equal(recordCount(root, lock.id), 0, "no attempt yet");
+
+  const next = await laterLock(root, ["src/untested.js"]);
+  await runWithLock(root, next.id, [NODE, "-e", append("src/untested.js", "// y\n")], { stdio: "pipe" });
+  const nextStartedAt = loadTaskBaseline(root, next.id)!.capturedAt;
+  const checkpoints = checkpointCount(root);
+
+  await assert.rejects(
+    runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" }),
+    (e: unknown) => {
+      assert.ok(e instanceof RunError, `expected a RunError, got ${String(e)}`);
+      assert.ok(e.message.includes(`${next.id} started at ${nextStartedAt}`), e.message);
+      assert.ok(e.message.includes(`after ${lock.id}'s task baseline was captured`), e.message);
+      assert.ok(e.message.includes(`cdir lock rebase ${lock.id} --accept-current`), e.message);
+      return true;
+    },
+  );
+  assert.equal(recordCount(root, lock.id), 0, "the refused first attempt wrote no record");
+  assert.equal(checkpointCount(root), checkpoints, "no checkpoint was taken");
+  assert.equal(fs.existsSync(path.join(root, ".codedirector", "running.json")), false);
+});
+
+test("verify: an explicit re-verify of a closed lock is refused before the check runs", async () => {
+  const marker = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cdir-closed-")), "checks.log");
+  fs.writeFileSync(marker, "");
+  const script = `require("fs").appendFileSync(${JSON.stringify(marker)},"ran\\n")`;
+  const { root, lock } = await setup([], (l) => {
+    l.budget.files = ["src/math.js"];
+    l.verifyCommand = `${JSON.stringify(NODE)} -e ${JSON.stringify(script)}`;
+  });
+  const first = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  assert.equal(first.exitCode, 0, JSON.stringify(first.record.violations));
+  assert.equal(fs.readFileSync(marker, "utf8"), "ran\n", "the run ran the check once");
+
+  const next = await laterLock(root, ["src/untested.js"]);
+  await runWithLock(root, next.id, [NODE, "-e", append("src/untested.js", "// y\n")], { stdio: "pipe" });
+  const nextStartedAt = loadTaskBaseline(root, next.id)!.capturedAt;
+
+  await assert.rejects(buildReport(root, lock.id, { reverify: true }), (e: unknown) => {
+    assert.ok(e instanceof ReportError, `expected a ReportError, got ${String(e)}`);
+    assert.ok(e.message.startsWith(`${lock.id} cannot be checked again here:`), e.message);
+    assert.ok(e.message.includes(`${next.id} started at ${nextStartedAt}`), e.message);
+    assert.ok(e.message.includes(`(${first.record.attemptId}, verified)`), e.message);
+    assert.ok(e.message.includes(`cdir report ${lock.id}`), e.message);
+    assert.ok(e.message.includes(`cdir lock rebase ${lock.id} --accept-current`), e.message);
+    return true;
+  });
+  assert.equal(fs.readFileSync(marker, "utf8"), "ran\n", "the refused re-verify ran nothing");
+  assert.equal(loadLock(root, lock.id)!.status, "verified", "the lock's status is unchanged");
+
+  for (const args of [["verify", lock.id], ["report", lock.id, "--reverify"]]) {
+    const cli = spawnSync(NODE, [CLI, ...args, "--root", root], { encoding: "utf8", timeout: 60_000 });
+    assert.notEqual(cli.status, 0, `${args.join(" ")} should refuse: ${cli.stdout}${cli.stderr}`);
+    assert.ok(cli.stderr.includes(`${lock.id} cannot be checked again here:`), cli.stderr);
+  }
+  assert.equal(fs.readFileSync(marker, "utf8"), "ran\n", "neither CLI command ran the check");
+  assert.equal(loadLock(root, lock.id)!.status, "verified");
+});
+
+test("report summary: a closed lock says it is history first, labels the outcome, and never offers undo", async () => {
+  const { root, lock } = await setup([], (l) => {
+    l.budget.files = ["src/math.js"];
+    l.verifyCommand = `${JSON.stringify(NODE)} -e ${JSON.stringify("process.exit(1)")}`;
+  });
+  const failed = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  assert.equal(failed.exitCode, 1, "the verifyCommand failed the attempt");
+  assert.equal(loadLock(root, lock.id)!.status, "failed");
+
+  const next = await laterLock(root, ["src/untested.js"]);
+  await runWithLock(root, next.id, [NODE, "-e", append("src/untested.js", "// y\n")], { stdio: "pipe" });
+
+  const closed = await buildReport(root, lock.id);
+  assert.equal(closed.closedBy?.lockId, next.id);
+  const summary = summarizeReport(closed);
+  assert.ok(summary.startsWith(`Shown as last recorded: ${next.id} has started since,`), summary);
+  assert.ok(summary.includes("Last recorded: Blocked"), summary);
+  assert.ok(!summary.includes("cdir undo"), summary);
+  assert.equal(summary.split("Shown as last recorded:").length, 2, "the closed sentence appears once");
+
+  const v = await setup([], (l) => {
+    l.budget.files = ["src/math.js"];
+  });
+  const verifiedRun = await runWithLock(v.root, v.lock.id, [NODE, "-e", append("src/math.js", "// x\n")], { stdio: "pipe" });
+  assert.equal(verifiedRun.exitCode, 0, JSON.stringify(verifiedRun.record.violations));
+  assert.equal(loadLock(v.root, v.lock.id)!.status, "verified");
+  const vNext = await laterLock(v.root, ["src/untested.js"]);
+  await runWithLock(v.root, vNext.id, [NODE, "-e", append("src/untested.js", "// y\n")], { stdio: "pipe" });
+
+  const verified = summarizeReport(await buildReport(v.root, v.lock.id));
+  assert.ok(verified.startsWith(`Shown as last recorded: ${vNext.id} has started since,`), verified);
+  assert.ok(verified.includes("Last recorded: Done — verified."), verified);
+  assert.ok(!verified.includes("cdir undo"), verified);
 });
