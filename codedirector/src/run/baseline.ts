@@ -16,6 +16,7 @@ import { hashContent } from "../core/builder";
 import { indexDir, stableStringify } from "../core/store";
 import { newRecordId, writeFileAtomic } from "../core/ids";
 import { buildIndex } from "../core/builder";
+import { isRootManifest, presentManifests } from "../core/manifests";
 import { gitPrefix, workTreeStatusPorcelain } from "../checkpoint";
 import { CHECKS_FILE, ChecksFile, checksFromText } from "../config/checks";
 import { isCodedirectorState } from "../core/state";
@@ -64,6 +65,12 @@ export interface Baseline {
   signatures: Record<string, string>;
   /** no-new-dependency surface: manifest relpath -> fingerprint. */
   manifests: Record<string, string>;
+  /**
+   * "tree" when `manifests` holds every manifest in the project (W7); absent
+   * in baselines that looked at the root only, so a manifest below the root
+   * is never read as new against one of them.
+   */
+  manifestScope?: "tree";
   /** output-unchanged KEEP surface: command -> captured stdout/stderr hashes. */
   outputs?: Record<string, BaselineOutput>;
   /** Raw `git status --porcelain` at capture time and its sha256. */
@@ -180,11 +187,8 @@ export function captureBaseline(
   const manifests: Record<string, string> = {};
   const wantsManifestDiff = lock.keep.some((c) => c.kind === "no-new-dependency");
   if (wantsManifestDiff) {
-    for (const { path: m } of domains.dependencyManifests()) {
-      const p = path.join(rootDir, m);
-      if (fs.existsSync(p)) {
-        manifests[m] = domains.manifestFingerprint(m, fs.readFileSync(p, "utf8"));
-      }
+    for (const m of presentManifests(rootDir, domains)) {
+      manifests[m] = domains.manifestFingerprint(m, fs.readFileSync(path.join(rootDir, m), "utf8"));
     }
   }
 
@@ -256,6 +260,7 @@ export function captureBaseline(
     head: currentHead(rootDir) ?? undefined,
     signatures,
     manifests,
+    ...(wantsManifestDiff ? { manifestScope: "tree" as const } : {}),
     ...(capturedAnyOutput ? { outputs } : {}),
     gitStatus: status,
     gitStatusHash: hashContent(status),
@@ -488,4 +493,15 @@ export async function rebaseTaskBaseline(
   }
   saveTaskBaseline(rootDir, fresh);
   return { path: taskBaselinePath(rootDir, lock.id), ...(archived ? { archived } : {}), capturedAt: fresh.capturedAt };
+}
+
+/**
+ * Manifests present now that the baseline did not record: a new dependency
+ * surface. A baseline that looked at the root only never recorded a manifest
+ * below it, so against one of those only the root counts.
+ */
+export function appearedManifests(rootDir: string, baseline: Baseline, domains: DomainRegistry): string[] {
+  return presentManifests(rootDir, domains).filter(
+    (m) => !(m in baseline.manifests) && (baseline.manifestScope === "tree" || isRootManifest(m)),
+  );
 }

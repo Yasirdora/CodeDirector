@@ -237,6 +237,42 @@ test("verify: no-new-dependency flags a Podfile.lock change (Apple manifests)", 
   assert.ok(item!.detail.includes("Podfile.lock changed"), `detail: ${item!.detail}`);
 });
 
+test("verify: no-new-dependency reads manifests below the root — a nested Package.swift and a new workspace package.json (W7)", async () => {
+  const root = makeGitRepo({
+    ...fixtureFiles(),
+    "apple/Core/Package.swift": 'let package = Package(name: "Core", dependencies: [])\n',
+  });
+  const { index } = await buildIndex(root);
+  const { lock } = draftLock(root, index, "make math faster", { now: "2026-11-06T00:00:00.000Z", createdBy: "test" });
+  lock.keep = [{ kind: "no-new-dependency" }];
+  lock.budget = { files: ["src/math.js"], symbols: [], maxFiles: 3, maxLines: 400 };
+  lock.deny = [];
+  lock.status = "active";
+  saveLock(root, lock);
+  sealLock(root, lock);
+
+  const swift = 'let package = Package(name: "Core", dependencies: [.package(url: "https://example.com/dep.git", from: "1.0.0")])\n';
+  const change =
+    append("src/math.js", "// ok\n") +
+    `;require("fs").writeFileSync("apple/Core/Package.swift",${JSON.stringify(swift)})` +
+    ';require("fs").mkdirSync("packages/b",{recursive:true})' +
+    `;require("fs").writeFileSync("packages/b/package.json",${JSON.stringify('{"name":"b","dependencies":{"left-pad":"*"}}\n')})`;
+  const outcome = await runWithLock(root, lock.id, [NODE, "-e", change], { stdio: "pipe", allowExpand: true });
+  assert.equal(outcome.exitCode, 1);
+  const items = outcome.record.verification!.items;
+  const nested = items.find((i) => i.subject === "no-new-dependency · apple/Core/Package.swift");
+  assert.ok(nested, `subjects: ${items.map((i) => i.subject).join(", ")}`);
+  assert.equal(nested!.verdict, "violated");
+  assert.ok(nested!.detail.includes("apple/Core/Package.swift changed"), `detail: ${nested!.detail}`);
+  const added = items.find((i) => i.subject === "no-new-dependency · packages/b/package.json");
+  assert.ok(added, "a new workspace manifest is a new dependency surface");
+  assert.equal(added!.verdict, "violated");
+  assert.ok(added!.detail.includes("packages/b/package.json appeared"), `detail: ${added!.detail}`);
+  // The run's own KEEP results say the same.
+  const kept = outcome.record.keepResults.filter((k) => k.kind === "no-new-dependency" && k.status === "violated");
+  assert.deepEqual(kept.map((k) => k.detail).sort(), ["apple/Core/Package.swift changed", "packages/b/package.json appeared"]);
+});
+
 test("verify: custom clauses are always unchecked — human judges", async () => {
   const { root, lock } = await setup([{ kind: "custom", text: "still feels snappy" }]);
   const outcome = await runWithLock(root, lock.id, [NODE, "-e", append("src/math.js", "// ok\n")], { stdio: "pipe" });

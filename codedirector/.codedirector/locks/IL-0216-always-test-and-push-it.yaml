@@ -1,0 +1,52 @@
+schemaVersion: 1
+id: IL-0216
+status: verified
+utterance: always test and push it, if you find any weakness in code director also try to update and fix i to get the most out of each model, fine tune it so it become unbeatable that's the ultimate goal
+goal: "W7 (found 11-05, measured on a real repo): no-new-dependency, the task baseline, the run's KEEP results and the draft's suggested deny looked at dependency manifests at the root only. A project whose manifests sit below the root (an Apple project's apple/Core/Package.swift, a workspace's packages/a/package.json) got 'no-new-dependency: proven' while a new dependency went in. Now every manifest the registered domains name counts wherever it sits in the project: tracked or new, never one git ignores or one inside a build or vendor folder (the core's skip folders and the domains' never-source folders); outside git only the root, as before. A nested package.json keeps the dependency-map fingerprint. A baseline records that it looked at the whole tree; against a baseline taken before this, a manifest below the root is never read as new (no false violation for a lock whose baseline predates an install). The draft suggests denying every manifest. README says so."
+interpretation: "One new core module (src/core/manifests.ts: presentManifests, isRootManifest) asks git once (`ls-files --cached --others --exclude-standard` with a `:(glob)**/<name>` pathspec per manifest name, run in the root so a root below the git root sees its own folder by its own paths). The registry stays a lookup: manifestFingerprint also matches by file name. baseline.ts captures every present manifest and writes manifestScope: \"tree\" when it does; appearedManifests there is the one 'appeared' rule run.ts and verify.ts share. draft.ts's manifest deny uses presentManifests (its fs/path imports fall away). The domains' manifest lists do not change."
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: "A root manifest is judged exactly as before (same keys, same fingerprints, same 'changed', 'deleted' and 'appeared' details). Baselines from earlier versions load and verify as before: no new violation against them. No existing assertion is removed or loosened (verify.test.ts only gains a test). Measured on real trees before the lock: eDraft 10 manifests (7 nested Package.swift + packages/edraft/package.json newly guarded) in 38 ms; this repository 2 (package.json, package-lock.json), as before."
+deny:
+  - package.json
+  - package-lock.json
+  - src/mcp/**
+  - src/report/**
+  - src/checkpoint/**
+  - src/domains/**
+  - src/run/claim.ts
+  - eval/**
+change: dependency manifests are found anywhere in the project (git, never ignored or build folders) for no-new-dependency, the baseline, the run and the draft's deny; old root-only baselines raise no new 'appeared'
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - README.md
+    - src/core/manifests.ts
+    - src/domain/registry.ts
+    - src/lock/draft.ts
+    - src/run/baseline.ts
+    - src/run/run.ts
+    - src/verify/verify.ts
+    - test/manifests.test.ts
+    - test/verify.test.ts
+  symbols: []
+  maxFiles: 9
+  maxLines: 290
+accept:
+  - "Written by the lead; rehearsed in scratch under the turn (11-06 10:26–10:36, a worktree at 7d0ce06): build clean (0 TS errors); the whole suite 477/477 twice; eval 25/25. Patch w7-final.patch sha256 f211e7e5cc8ef00b…, 9 files, +206/−24, applies here; private-word scan clean."
+  - "Deliberate breaks, each type-checking (0 TS errors), each red on the tests that guard it: A root only → the three tree tests and the end-to-end verify test (4); B build folders counted → 'found below the root … never in an ignored or build folder'; C a deleted manifest still present → that test's 'a deleted manifest is not present' and 'outside git only the root is looked at' (the existence check guards both); D the baseline's scope ignored → 'against a baseline that looked at the root only …'; E fingerprint by full path only → 'a description is not a dependency'; F scope not written → the end-to-end test's 'a new workspace manifest is a new dependency surface'. Restored, 36/36 in the two files."
+  - The full check passes (build + whole suite + eval).
+assumptions:
+  - text: "The owner's standing words of 11-04 (the utterance) cover Code Director fixes, and the owner leaves the decisions to the lead (10-16: \"I leave all decisions to you\"). The push to the public repository is held with W6 until the owner confirms the history rewrite is finished."
+    source: user
+    confirmed: true
+  - text: Budget and deny set by hand from the rehearsed patch; the automatic draft is not used.
+    source: system
+    confirmed: false
+  - text: "Not reached: a manifest name with a folder in it (none is registered today; presentManifests matches by file name), and a manifest a project hides with skip-worktree (git still lists it, so it counts)."
+    source: system
+    confirmed: false
+createdAt: 2026-11-06T09:36:53.905Z
+createdBy: Yasirdora

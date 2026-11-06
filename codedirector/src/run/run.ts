@@ -32,6 +32,7 @@ import { loadLock, saveLock } from "../lock/store";
 import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import {
+  appearedManifests,
   Baseline,
   BaselineOptions,
   baselineFileHash,
@@ -230,10 +231,8 @@ function checkKeepClauses(
           );
         }
         // a manifest that did not exist before but exists now is a new dependency surface
-        for (const { path: m } of domains.dependencyManifests()) {
-          if (!(m in baseline.manifests) && fs.existsSync(path.join(rootDir, m))) {
-            results.push({ kind: clause.kind, detail: `${m} appeared`, status: "violated" });
-          }
+        for (const m of appearedManifests(rootDir, baseline, domains)) {
+          results.push({ kind: clause.kind, detail: `${m} appeared`, status: "violated" });
         }
         break;
       }

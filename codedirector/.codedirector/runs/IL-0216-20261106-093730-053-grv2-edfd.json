@@ -1,0 +1,153 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261106-093730-053-grv1-edfd",
+  "baselinePath": ".codedirector/baselines/IL-0216-task.json",
+  "baselineSha256": "d6bddf86b0c466c2fce4d0ec1b801c3c00170404c16f92d1e77802f53dbafb3c",
+  "budget": {
+    "filesChanged": 9,
+    "linesChanged": 232,
+    "maxFiles": 9,
+    "maxLines": 290
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/core/manifests.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domain/registry.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/lock/draft.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/baseline.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/manifests.test.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/verify.test.ts",
+      "status": "M"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261106T093720547",
+    "createdAt": "2026-11-06T09:37:20.588Z",
+    "dirty": false,
+    "id": "ckpt-20261106T093720547",
+    "ref": "7d0ce06549e9d904bc02fd963635d2cc41a29856",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261106T093720547"
+  },
+  "command": [
+    "git",
+    "apply",
+    "../../w7-manifests.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-11-06T09:37:30.066Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "A root manifest is judged exactly as before (same keys, same fingerprints, same 'changed', 'deleted' and 'appeared' details). Baselines from earlier versions load and verify as before: no new violation against them. No existing assertion is removed or loosened (verify.test.ts only gains a test). Measured on real trees before the lock: eDraft 10 manifests (7 nested Package.swift + packages/edraft/package.json newly guarded) in 38 ms; this repository 2 (package.json, package-lock.json), as before. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0216",
+  "startedAt": "2026-11-06T09:37:30.053Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0216-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0216-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0216-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"/usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'\" → exit 0",
+        "detail": "verifyCommand passed: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · A root manifest is judged exactly as before (same keys, same fingerprints, same 'changed', 'deleted' and 'appeared' details). Baselines from earlier versions load and verify as before: no new violation against them. No existing assertion is removed or loosened (verify.test.ts only gains a test). Measured on real trees before the lock: eDraft 10 manifests (7 nested Package.swift + packages/edraft/package.json newly guarded) in 38 ms; this repository 2 (package.json, package-lock.json), as before.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0216",
+    "verifiedAt": "2026-11-06T09:40:18.524Z",
+    "violations": []
+  },
+  "violations": []
+}

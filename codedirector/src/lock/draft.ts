@@ -9,13 +9,12 @@
  * human to edit; nothing is enforced until `cdir lock activate`.
  */
 
-import * as fs from "node:fs";
 import * as os from "node:os";
-import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { RepoIndex, SymbolInfo } from "../core/types";
 import { buildGraph, isTestFile, testFilesFor } from "../core/graph";
 import { buildRepoMap, resolveAnchorsDetailed, type AnchorMatch, type AnchorStrength } from "../core/map";
+import { presentManifests } from "../core/manifests";
 import { INDEXABLE_EXTENSIONS } from "../core/walk";
 import { defaultDomains, DomainRegistry } from "../domain/registry";
 import { checksNeededBy, joinRuns, loadChecks } from "../config/checks";
@@ -322,7 +321,7 @@ export function draftLock(
     }
   }
 
-  // Suggested deny: dependency manifests present at the root, plus test
+  // Suggested deny: dependency manifests present anywhere in the project, plus test
   // files that are NOT in the blast radius of any anchor (unrelated areas).
   // Compressed to directory globs and capped — on real repos the raw list is
   // hundreds of entries and unreadable (field-reported on Hono: ~140 test
@@ -331,10 +330,7 @@ export function draftLock(
   for (const a of anchors) {
     for (const t of testFilesFor(index, a, domains)) relatedTests.add(t);
   }
-  const manifestDeny: string[] = [];
-  for (const { path: m } of domains.dependencyManifests()) {
-    if (fs.existsSync(path.join(rootDir, m))) manifestDeny.push(m);
-  }
+  const manifestDeny = presentManifests(rootDir, domains);
   const unrelatedTests: string[] = [];
   for (const f of Object.keys(index.files).sort()) {
     if (isTestFile(f, domains) && !relatedTests.has(f)) unrelatedTests.push(f);

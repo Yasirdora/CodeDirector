@@ -180,9 +180,14 @@ export class DomainRegistry {
     return out;
   }
 
-  /** What a manifest's content counts as for no-new-dependency: its domain's fingerprint, else its hash. */
+  /**
+   * What a manifest's content counts as for no-new-dependency: its domain's
+   * fingerprint, else its hash. A manifest below the root
+   * (packages/a/package.json) is known by its file name.
+   */
   manifestFingerprint(manifestPath: string, raw: string): string {
-    const m = this.dependencyManifests().find((x) => x.path === manifestPath);
+    const name = manifestPath.split("/").pop() ?? manifestPath;
+    const m = this.dependencyManifests().find((x) => x.path === manifestPath || x.path === name);
     return m?.fingerprint ? m.fingerprint(raw) : hashContent(raw);
   }
 

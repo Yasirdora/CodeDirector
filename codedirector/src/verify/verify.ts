@@ -45,7 +45,7 @@ import { sealViolation } from "../lock/seal";
 import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
 import { loadChecks } from "../config/checks";
-import { Baseline, baselineFileHash, loadBaseline, taskBaselinePath } from "../run/baseline";
+import { appearedManifests, Baseline, baselineFileHash, loadBaseline, taskBaselinePath } from "../run/baseline";
 import { probeArtifactRef, probeExcerpt, runArgvProbe, runShellProbe, type ProbeResult } from "../run/probe";
 import { gitToAbsRel, runIsolated, sha256Bytes } from "../run/tree";
 import { diagnosticsExcerpt, newDiagnostics, probeDiagnostics } from "../run/diagnostics";
@@ -217,10 +217,8 @@ function verifyNoNewDependency(
     );
   }
   // a manifest that did not exist before but exists now is a new dependency surface
-  for (const { path: m } of domains.dependencyManifests()) {
-    if (!(m in baseline.manifests) && fs.existsSync(path.join(rootDir, m))) {
-      items.push({ source: "keep-clause", clauseKind: kind, subject: `no-new-dependency · ${m}`, verdict: "violated", evidenceClass: "proven", detail: `${m} appeared`, artifactRef: artifactFor(m) });
-    }
+  for (const m of appearedManifests(rootDir, baseline, domains)) {
+    items.push({ source: "keep-clause", clauseKind: kind, subject: `no-new-dependency · ${m}`, verdict: "violated", evidenceClass: "proven", detail: `${m} appeared`, artifactRef: artifactFor(m) });
   }
   if (items.length === 0) {
     items.push({
