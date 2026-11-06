@@ -223,9 +223,8 @@ function checkKeepClauses(
           // The same fingerprint the baseline took (package.json's is its
           // dependency maps): a raw hash here reported every package.json as
           // changed whenever verification was switched off.
-          const after = domains.manifestFingerprint(m, fs.readFileSync(p, "utf8"));
           results.push(
-            after === before
+            domains.manifestUnchanged(m, fs.readFileSync(p, "utf8"), before)
               ? { kind: clause.kind, detail: `${m} unchanged`, status: "ok" }
               : { kind: clause.kind, detail: `${m} changed`, status: "violated" },
           );

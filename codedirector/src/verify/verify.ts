@@ -209,9 +209,8 @@ function verifyNoNewDependency(
       items.push({ source: "keep-clause", clauseKind: kind, subject, verdict: "violated", evidenceClass: "proven", detail: `${m} deleted`, artifactRef: artifactFor(m) });
       continue;
     }
-    const after = domains.manifestFingerprint(m, fs.readFileSync(p, "utf8"));
     items.push(
-      after === before
+      domains.manifestUnchanged(m, fs.readFileSync(p, "utf8"), before)
         ? { source: "keep-clause", clauseKind: kind, subject, verdict: "held", evidenceClass: "proven", detail: `${m} unchanged`, artifactRef: artifactFor(m) }
         : { source: "keep-clause", clauseKind: kind, subject, verdict: "violated", evidenceClass: "proven", detail: `${m} changed`, artifactRef: artifactFor(m) },
     );

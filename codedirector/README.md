@@ -308,7 +308,7 @@ KEEP clause kinds:
 | Kind | Payload | Checked how |
 |---|---|---|
 | `api-unchanged` | symbol ids | ✓ signature hash, diffed against the pre-change baseline (proven) |
-| `no-new-dependency` | — | ✓ dependency maps in package.json + manifest/lockfile hashes (npm, SPM, CocoaPods, Carthage) vs baseline (proven) — every manifest in the project, not only the root's (`packages/a/package.json`, `apple/Core/Package.swift`); never one in an ignored or build folder. A baseline taken before this looked at the root only, so against it a manifest below the root is not read as new |
+| `no-new-dependency` | — | ✓ dependency maps in package.json, the `.package(…)` entries of Package.swift (a target, a resource or a comment is not a dependency) + manifest/lockfile hashes (npm, SPM, CocoaPods, Carthage) vs baseline (proven) — every manifest in the project, not only the root's (`packages/a/package.json`, `apple/Core/Package.swift`); never one in an ignored or build folder. A baseline taken before this looked at the root only, so against it a manifest below the root is not read as new |
 | `output-unchanged` | entry command + fixtures | ✓ stdout **and stderr** sha256, captured at baseline, re-run at verify (measured) |
 | `tests-pass` | test glob | ✓ `node --test <glob>` (measured); empty glob is a violation |
 | `custom` | free text | ? not machine-checkable — always Unchecked, human judges |

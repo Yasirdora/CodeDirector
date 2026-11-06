@@ -14,6 +14,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { KeepClause } from "../../lock/types";
 import type { Domain, ProjectFact } from "../../domain/types";
+import { swiftPackageFingerprint } from "./deps";
 import { compressSwiftTestPaths, isSwiftSourceFile, isSwiftTestFile, swiftModuleOf } from "./tests";
 
 /** Apple test suites (swift test) need minutes, not the 60s default. */
@@ -62,7 +63,7 @@ export const appleDomain: Domain = {
   projectFacts: { detect },
   dependencyFacts: {
     manifests: [
-      { path: "Package.swift" },
+      { path: "Package.swift", fingerprint: swiftPackageFingerprint },
       { path: "Package.resolved" },
       { path: "Podfile" },
       { path: "Podfile.lock" },

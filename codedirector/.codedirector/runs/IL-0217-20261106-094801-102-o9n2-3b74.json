@@ -1,0 +1,143 @@
+{
+  "allowExpand": false,
+  "attemptId": "20261106-094801-102-o9n1-3b74",
+  "baselinePath": ".codedirector/baselines/IL-0217-task.json",
+  "baselineSha256": "8e6cc9a3413a4f63c04aea6323bbaa441dd885322371a160e9e449b711c8c2cf",
+  "budget": {
+    "filesChanged": 7,
+    "linesChanged": 182,
+    "maxFiles": 7,
+    "maxLines": 230
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domain/registry.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domains/apple/deps.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domains/apple/index.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/apple-deps.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261106T094751524",
+    "createdAt": "2026-11-06T09:47:51.562Z",
+    "dirty": false,
+    "id": "ckpt-20261106T094751524",
+    "ref": "4c60a44aba521986feea88f81b2db4bc84ffa3eb",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261106T094751524"
+  },
+  "command": [
+    "git",
+    "apply",
+    "../../w12-swift-deps.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-11-06T09:48:01.114Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json and every other manifest are judged exactly as before (same fingerprints; the added whole-hash match can only hold a manifest whose bytes are identical). No existing assertion is removed or loosened. Measured on eDraft's seven real Package.swift files: the entries found equal the `.package(` calls in each file (1, 4, 2, 3, 0, 0, 3). — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0217",
+  "startedAt": "2026-11-06T09:48:01.102Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0217-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0217-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0217-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"/usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'\" → exit 0",
+        "detail": "verifyCommand passed: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · package.json and every other manifest are judged exactly as before (same fingerprints; the added whole-hash match can only hold a manifest whose bytes are identical). No existing assertion is removed or loosened. Measured on eDraft's seven real Package.swift files: the entries found equal the `.package(` calls in each file (1, 4, 2, 3, 0, 0, 3).",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0217",
+    "verifiedAt": "2026-11-06T09:51:16.096Z",
+    "violations": []
+  },
+  "violations": []
+}

@@ -1,0 +1,53 @@
+schemaVersion: 1
+id: IL-0217
+status: verified
+utterance: always test and push it, if you find any weakness in code director also try to update and fix i to get the most out of each model, fine tune it so it become unbeatable that's the ultimate goal
+goal: "W12 (found 11-06 with W7): a Package.swift was hashed whole for no-new-dependency, so a new target, a resource, a platform or a comment read as a new dependency. With W7 every nested Package.swift is guarded, which would make any lock that touches one of them (an Apple project keeps seven) give the promise up. Now a Package.swift counts by its `.package(…)` entries only, the way package.json counts by its dependency maps: a package added, removed, moved to another version or place is a change; order, spacing, line breaks and comments are not. A baseline written before this holds a whole-file hash: the same bytes still hold against it, so an install between a baseline and its verify raises no false change. README says so."
+interpretation: "A small scanner in the Apple domain (src/domains/apple/deps.ts), not a Swift parser: comments and whitespace outside string literals go (a URL's // stays), every `.package(` call is read to its closing parenthesis, the entries are sorted and hashed. The Apple domain registers it as Package.swift's fingerprint. The registry gains manifestUnchanged (the fingerprint, or the older whole-file hash, matches); run.ts and verify.ts ask it instead of comparing fingerprints themselves. Package.resolved, Podfile and the lockfiles stay hashed whole."
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: "package.json and every other manifest are judged exactly as before (same fingerprints; the added whole-hash match can only hold a manifest whose bytes are identical). No existing assertion is removed or loosened. Measured on eDraft's seven real Package.swift files: the entries found equal the `.package(` calls in each file (1, 4, 2, 3, 0, 0, 3)."
+deny:
+  - package.json
+  - package-lock.json
+  - src/mcp/**
+  - src/report/**
+  - src/checkpoint/**
+  - src/core/**
+  - src/lock/**
+  - src/domains/node/**
+  - src/run/claim.ts
+  - src/run/baseline.ts
+  - eval/**
+change: Package.swift counts for no-new-dependency by its .package(…) entries, not its bytes; an older whole-file hash still holds identical bytes
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - README.md
+    - src/domain/registry.ts
+    - src/domains/apple/deps.ts
+    - src/domains/apple/index.ts
+    - src/run/run.ts
+    - src/verify/verify.ts
+    - test/apple-deps.test.ts
+  symbols: []
+  maxFiles: 7
+  maxLines: 230
+accept:
+  - "Written by the lead; rehearsed in scratch under the turn (11-06 10:42–10:47, a worktree at 4c60a44): build clean (0 TS errors); the whole suite 482/482 twice; eval 25/25. Patch w12-final.patch sha256 c3317b3d4d02f7f9…, 7 files, +174/−6, applies here; private-word scan clean."
+  - "Deliberate breaks, each type-checking (0 TS errors), each red where meant: A Package.swift hashed whole again → 'every Package.swift in the project gets the fingerprint …'; B comments kept → 'a commented-out package does not count …'; C string literals not skipped (a URL's // eats the line) → 4 of 5; D order counts → 'order, spacing and line breaks …'; E the older whole-file hash refused → 'every Package.swift … an older whole-file hash still holds'; F whitespace kept → 2 (entries and spacing). Restored, 5/5."
+  - The full check passes (build + whole suite + eval).
+assumptions:
+  - text: "The owner's standing words of 11-04 (the utterance) cover Code Director fixes, and the owner leaves the decisions to the lead (10-16: \"I leave all decisions to you\"). The push to the public repository is held with W6 until the owner confirms the history rewrite is finished."
+    source: user
+    confirmed: true
+  - text: Budget and deny set by hand from the rehearsed patch; the automatic draft is not used.
+    source: system
+    confirmed: false
+  - text: 'Not reached: Swift raw strings (#"…"#) and multi-line string literals in a Package.swift; a dependency declared through a helper function that never writes `.package(` (it would go unseen, as a whole-file hash would not have missed it — a narrowing to state in the report); `#if` blocks count both ways.'
+    source: system
+    confirmed: false
+createdAt: 2026-11-06T09:47:27.608Z
+createdBy: Yasirdora

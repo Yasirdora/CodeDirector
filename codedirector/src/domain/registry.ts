@@ -191,6 +191,16 @@ export class DomainRegistry {
     return m?.fingerprint ? m.fingerprint(raw) : hashContent(raw);
   }
 
+  /**
+   * Whether a manifest still holds what the baseline recorded. A baseline
+   * written before its manifest had a fingerprint holds the whole-file hash,
+   * and the same bytes still match it: giving a manifest a fingerprint never
+   * turns an untouched one into a change.
+   */
+  manifestUnchanged(manifestPath: string, raw: string, before: string): boolean {
+    return before === this.manifestFingerprint(manifestPath, raw) || before === hashContent(raw);
+  }
+
   // --- checkProviders ----------------------------------------------------
 
   diagnosticsChecks(): DiagnosticsCheck[] {
