@@ -26,6 +26,9 @@ checks:
   app:
     run: make test-app OUT=/tmp/app-build
     match: make test-app
+    # Optional: where the check leaves result files that name failed tests
+    # its console does not (see "Named checks" below).
+    results: /tmp/app-build/Logs/Test/*.xcresult
 areas:
   - paths: [src/core/**, src/shared/**]
     need: [unit, app]
@@ -46,6 +49,8 @@ areas:
   below.
 - `refresh` brings generated outputs up to date before the checks read them.
   It is optional and has its own section below.
+- `results` on a check is optional: a path, absolute or from the repo root,
+  whose last part may hold `*`. See "Named checks" below.
 
 ## The matching rule
 
@@ -220,6 +225,57 @@ changed, gets a finding when that output is missing or older than the change:
 `packages/core/dist is older than its sources (the run changed …): an error
 about "core" may come from the old build — build it first, or name the build in
 checks.yaml's refresh`.
+
+## Named checks: progress, times, and the check that failed
+
+A drafted lock's verifyCommand is the `run` texts of the checks it needs,
+joined by ` && `. While a verifyCommand is still exactly such a join, it runs
+as **named checks**:
+
+- The same text runs in the same one shell. Before each check, and after the
+  last, Code Director adds a marker: `{ true >"$CDIR_STEP_DIR/<n>" || true; }
+  2>/dev/null`. It creates an empty file in a temporary folder outside the
+  repo, prints nothing, and always succeeds, so the checks run in the same
+  order, share the same shell, print the same output and end with the same
+  exit code as the text without markers. (`true`, not `:`: dash and ksh end
+  the whole script when a redirection on `:` fails.)
+- `cdir run`, `cdir verify` and a re-verifying `cdir report` print a line on
+  stderr as the run starts, as each check starts (with the time the one
+  before took), and when it ends. stdout stays the report. The MCP server
+  prints nothing.
+- The Change Report names the run by its checks
+  (`verifyCommand · 11 checks: prepare, build, …`), prints the full command
+  once (as the artifact), and gives each check's time:
+  `times: prepare 14s · build 1m 05s · … · iphone 18m 20s (failed) · mac-build (not run)`.
+  The run record keeps each check's start, time and outcome
+  (`verification.items[].steps`), and the whole run's time (`durationMs`).
+- A failure names the check it failed in:
+  `verifyCommand failed (exit 65) in iphone (check 9 of 11) after 18m 20s`.
+  A timeout names the check it stopped.
+- **Exit 0 is not enough.** If the command exits 0 but a check after the one
+  it ended in never started — an `exit`, an `exec`, or a `#` that turned the
+  rest of the line into a comment — the item is Unchecked, naming the checks
+  that never ran. A declared check that could not run keeps the lock from
+  `verified`.
+
+A verifyCommand that is not such a join — written by hand, or edited after
+drafting — runs as written, as one step, and reads as it always did; only its
+total time is added.
+
+### Failed tests from result files
+
+Some test runners name no failed test on their console: `xcodebuild test
+-quiet` ends on "Testing started" and an exit code. When a named check fails,
+its console named no failed test, and the check has `results`, Code Director
+reads the result files there that were written since that check started
+(newest first, at most three, a minute each) with the reader of the domain
+that knows their kind. The Apple domain reads `.xcresult` bundles with
+`xcrun xcresulttool get test-results summary`. The report then says
+`1 failed test (from Test-App….xcresult): ClockTests/testTheClockStops() —
+XCTUnwrap failed: …`, the item lists every test (`failedTests`) and the files
+(`resultFiles`). What could not be read is said in the detail
+(`results: no result file at … written since the check started`); it never
+changes the verdict, which the exit code has already decided.
 
 ## What it does not do
 

@@ -636,9 +636,12 @@ async function main(): Promise<number> {
         const testTimeoutMs = flags.has("test-timeout") ? intFlag(flags, "test-timeout", 60_000) : undefined;
         const outcome = await runWithLock(root, lockId, runCommand, {
           allowExpand: flags.has("allow-expand"),
-          ...(testTimeoutMs !== undefined ? { verifyOptions: { testTimeoutMs } } : {}),
+          // Progress goes to stderr as the checks run; stdout stays the report.
+          verifyOptions: { progressFd: 2, ...(testTimeoutMs !== undefined ? { testTimeoutMs } : {}) },
         });
-        process.stdout.write(formatRunReport(outcome) + "\n");
+        // The Change Report follows unless --no-report: the run then leaves
+        // out what the report says anyway.
+        process.stdout.write(formatRunReport(outcome, { brief: !flags.has("no-report") }) + "\n");
         // The Change Report is auto-emitted at the end of every run.
         if (!flags.has("no-report")) {
           const report = await buildReport(root, lockId, {
@@ -664,6 +667,7 @@ async function main(): Promise<number> {
         const report = await buildReport(root, lockId, {
           ...(testTimeoutMs !== undefined ? { testTimeoutMs } : {}),
           reverify: true, // verify is the explicit command: it always runs the checks
+          progressFd: 2,
         });
         finalizeLockStatus(root, report);
         const fmt = flagStr(flags, "format") ?? "terminal";
@@ -683,6 +687,7 @@ async function main(): Promise<number> {
         const report = await buildReport(root, lockId, {
           ...(attempt !== undefined ? { attempt } : {}),
           ...(flags.has("reverify") ? { reverify: true } : {}),
+          progressFd: 2, // heard only when the report runs the checks again
         });
         finalizeLockStatus(root, report);
         const fmt = flagStr(flags, "format") ?? "terminal";

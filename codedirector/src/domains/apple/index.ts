@@ -15,6 +15,7 @@ import * as path from "node:path";
 import type { KeepClause } from "../../lock/types";
 import type { Domain, ProjectFact } from "../../domain/types";
 import { swiftPackageFingerprint } from "./deps";
+import { XCRESULT_READER } from "./results";
 import { compressSwiftTestPaths, isSwiftSourceFile, isSwiftTestFile, swiftModuleOf } from "./tests";
 
 /** Apple test suites (swift test) need minutes, not the 60s default. */
@@ -72,6 +73,7 @@ export const appleDomain: Domain = {
     ],
   },
   checkProviders: {
+    resultReaders: [XCRESULT_READER],
     toolchains: [
       { name: "swift", pattern: /\bswift\s+(test|build|run)\b/, languages: ["Swift"] },
       {

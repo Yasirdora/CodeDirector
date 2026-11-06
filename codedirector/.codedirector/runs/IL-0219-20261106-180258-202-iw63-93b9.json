@@ -1,0 +1,212 @@
+{
+  "afterHashes": {
+    "README.md": "9a3c95cca37d5a569f55dcbe4b7fe671dc3fe8cdba0ba5a096f315e23e02a9b1",
+    "docs/checks.md": "7648df3a80c235d4e60329c5f4b8d06c945ce0a6393cddbed415e7172f32d1c0",
+    "src/cli-main.ts": "63604a339241df19a261ac0cc7bf27e1263bf63aeaec7cdf36e65738a0cc6d3e",
+    "src/config/checks.ts": "6225dd1cbc1a7c564e46a674716ba5c7639b8d9eb00078a4c59807b87f971f3e",
+    "src/domain/registry.ts": "d1a77220efbab19f07112f9cad5d9825f1ee1ea77c8896ef85faaf16e2480bb7",
+    "src/domain/types.ts": "9f0463e3057bd5fad868eb46cebf061d90b95365db6424a27a20f35de359de76",
+    "src/domains/apple/index.ts": "c2daaeb6511cab7c5ac97c0d663eaa6716b2918c735ef6cea39b742a0e592515",
+    "src/domains/apple/results.ts": "45da0788f97baeb85ab356fd3e37e34e0607b3a74560e267100eb111604d7173",
+    "src/report/format.ts": "256d9068fe584f9bcb68366e64e18b68513e4841fb0439341c58235caa285909",
+    "src/run/probe.ts": "3772ca38b960d3b7ff1e9f181c8edd49ea96a72098b1ef5513c14195375c417f",
+    "src/run/run.ts": "bf9b1ba263336402478659a0dfc2892a826ea20200ffbbe78fb036cf5e7e824a",
+    "src/run/supervise.ts": "1673f5a8bc79450b152ee44338bfdf19295da5ae061117d577c9c55a446fcb31",
+    "src/verify/results.ts": "02ec33c274b64dc442b9c93f462d987c2f2613ef98bc234505c9f2b471045576",
+    "src/verify/steps.ts": "5b3216f7fcb4e4ce283b4e0183ae8d865540344b64834c104b75cc80dbe7d107",
+    "src/verify/types.ts": "e3ca56108d94a50197ced060b3ba30b2ba4a597d1db020768dedd23bae8f6072",
+    "src/verify/verify.ts": "a9b7ce5c2f3b85c9b58742c32d58b0a15ea4dfc42d44db5b7ebb3baa63788ea1",
+    "test/steps.test.ts": "376f253d378c20fbdb1f3f8d3b185d7b0f2f9a7bdacb2b0ff3e17047eff08e77"
+  },
+  "allowExpand": false,
+  "attemptId": "20261106-180258-202-iw62-93b9",
+  "baselinePath": ".codedirector/baselines/IL-0219-task.json",
+  "baselineSha256": "c2417eaadd078e7f63a80cc8a7e7f42f9dfb6f21e5763a057264627d366a4162",
+  "budget": {
+    "filesChanged": 17,
+    "linesChanged": 1216,
+    "maxFiles": 17,
+    "maxLines": 1250
+  },
+  "changed": [
+    {
+      "class": "in-budget",
+      "path": "docs/checks.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "README.md",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/cli-main.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/config/checks.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domain/registry.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domain/types.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domains/apple/index.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/domains/apple/results.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/report/format.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/probe.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/run.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/run/supervise.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/results.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/steps.ts",
+      "status": "??"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/types.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "src/verify/verify.ts",
+      "status": "M"
+    },
+    {
+      "class": "in-budget",
+      "path": "test/steps.test.ts",
+      "status": "??"
+    }
+  ],
+  "checkpoint": {
+    "blobDir": "ckpt-blobs/ckpt-20261106T180247813",
+    "createdAt": "2026-11-06T18:02:47.872Z",
+    "dirty": false,
+    "id": "ckpt-20261106T180247813",
+    "ref": "77d601038b653fed318b3879115db89965ec7403",
+    "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tag": "cdir/ckpt-20261106T180247813"
+  },
+  "command": [
+    "git",
+    "apply",
+    "../../w13-named-checks.patch"
+  ],
+  "exitCode": 0,
+  "finishedAt": "2026-11-06T18:02:58.217Z",
+  "keepResults": [
+    {
+      "detail": "package-lock.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "package.json unchanged",
+      "kind": "no-new-dependency",
+      "status": "ok"
+    },
+    {
+      "detail": "A verifyCommand that is not exactly a join of checks.yaml's run texts runs and reads exactly as before: the existing wording tests pass unchanged. The marked command prints the same output and ends with the same exit code as the command as written, even when no marker can be written (tested under sh, dash, ksh, bash and zsh). Without a progress descriptor nothing is printed (the MCP server's stdout stays clean). No existing assertion is removed or loosened. — not machine-checkable; human judges",
+      "kind": "custom",
+      "status": "custom"
+    }
+  ],
+  "lockId": "IL-0219",
+  "startedAt": "2026-11-06T18:02:58.202Z",
+  "taskBaselineSource": "captured",
+  "verification": {
+    "baselinePath": ".codedirector/baselines/IL-0219-task.json",
+    "counts": {
+      "asserted": 0,
+      "measured": 1,
+      "proven": 3,
+      "unchecked": 1
+    },
+    "items": [
+      {
+        "artifactRef": ".codedirector/baselines/IL-0219-task.json#manifests[package-lock.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package-lock.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package-lock.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": ".codedirector/baselines/IL-0219-task.json#manifests[package.json]",
+        "clauseKind": "no-new-dependency",
+        "detail": "package.json unchanged",
+        "evidenceClass": "proven",
+        "source": "keep-clause",
+        "subject": "no-new-dependency · package.json",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "node node_modules/typescript/bin/tsc --noEmit -p . → exit 0",
+        "detail": "tsc --noEmit clean",
+        "evidenceClass": "proven",
+        "source": "typecheck",
+        "subject": "typecheck · tsc --noEmit",
+        "verdict": "held"
+      },
+      {
+        "artifactRef": "sh -c \"/usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'\" → exit 0",
+        "detail": "verifyCommand passed: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "evidenceClass": "measured",
+        "source": "verify-command",
+        "subject": "verifyCommand · /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'",
+        "verdict": "held"
+      },
+      {
+        "clauseKind": "custom",
+        "detail": "not machine-checkable — human judges",
+        "evidenceClass": "unchecked",
+        "reason": "not machine-checkable — human judges",
+        "source": "keep-clause",
+        "subject": "custom · A verifyCommand that is not exactly a join of checks.yaml's run texts runs and reads exactly as before: the existing wording tests pass unchanged. The marked command prints the same output and ends with the same exit code as the command as written, even when no marker can be written (tested under sh, dash, ksh, bash and zsh). Without a progress descriptor nothing is printed (the MCP server's stdout stays clean). No existing assertion is removed or loosened.",
+        "verdict": "unchecked"
+      }
+    ],
+    "lockId": "IL-0219",
+    "verifiedAt": "2026-11-06T18:06:31.888Z",
+    "violations": []
+  },
+  "violations": []
+}

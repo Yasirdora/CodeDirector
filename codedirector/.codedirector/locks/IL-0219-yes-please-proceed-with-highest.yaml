@@ -1,0 +1,67 @@
+schemaVersion: 1
+id: IL-0219
+status: verified
+utterance: yes please proceed with highest level of professionalism
+goal: "W13, the owner's yes of 11-06 to items 3 and 4 of the speed plan: a shorter report, live progress, the failed test named, and each check step's time. A verifyCommand that is exactly checks.yaml's run texts joined by ' && ' runs as named checks: the same text in the same one shell, with a silent marker before each check and after the last (an empty file in a temporary folder; `{ true >\"$CDIR_STEP_DIR/<n>\" || true; } 2>/dev/null`, which cannot fail). From the markers: a progress line on the CLI's stderr as each check starts; each check's start, time and outcome in the record (items[].steps) and the run's time (durationMs); a failure or timeout names the check it happened in; exit 0 with a check that never started is Unchecked, naming it. The report names the run by its checks and prints the long command once (the artifact). A check may name `results:` (a path whose last part may hold *): when it fails and its console named no test, the result files it wrote since it started are read by the domain that knows them — the Apple domain reads .xcresult with xcresulttool. Before its Change Report, `cdir run` leaves out the promises, files and violations the report lists. docs/checks.md and the README say so."
+interpretation: "New: src/verify/steps.ts (split, marked command, times), src/verify/results.ts (list + read result files), src/domains/apple/results.ts (the .xcresult reader), test/steps.test.ts. Changed: the supervisor sets CDIR_STEP_DIR, reports when the command ended and, when asked, watches the markers and writes progress to its descriptor 3; probe.ts gains runStepsProbe; verify.ts runs named checks, words their items and reads results; the item gains steps, durationMs and resultFiles; checks.yaml gains `results`; the domain API gains ResultReader and the registry resultReader(); format.ts prints a times line; cli-main.ts passes stderr as the progress descriptor to run, verify and report and asks run for the brief summary; run.ts formatRunReport takes { brief }. Windows (cmd.exe) never runs named checks."
+keep:
+  - kind: no-new-dependency
+  - kind: custom
+    text: "A verifyCommand that is not exactly a join of checks.yaml's run texts runs and reads exactly as before: the existing wording tests pass unchanged. The marked command prints the same output and ends with the same exit code as the command as written, even when no marker can be written (tested under sh, dash, ksh, bash and zsh). Without a progress descriptor nothing is printed (the MCP server's stdout stays clean). No existing assertion is removed or loosened."
+deny:
+  - package.json
+  - package-lock.json
+  - src/mcp/**
+  - src/checkpoint/**
+  - src/core/**
+  - src/lock/**
+  - src/domains/node/**
+  - src/run/claim.ts
+  - src/run/baseline.ts
+  - src/run/tree.ts
+  - eval/**
+change: "named checks: progress, each check's time, the check a run failed in, exit 0 that skipped a check is Unchecked, failed tests read from a check's result files, the long command printed once, a brief run summary"
+verifyCommand: /usr/bin/lockf -k -t 3600 /tmp/edraft-checks.lock sh -c 'npm run build && node --liftoff-only --test --test-concurrency=4 dist/test/*.test.js && npm run eval'
+verifyTimeoutMs: 3600000
+budget:
+  files:
+    - README.md
+    - docs/checks.md
+    - src/cli-main.ts
+    - src/config/checks.ts
+    - src/domain/registry.ts
+    - src/domain/types.ts
+    - src/domains/apple/index.ts
+    - src/domains/apple/results.ts
+    - src/report/format.ts
+    - src/run/probe.ts
+    - src/run/run.ts
+    - src/run/supervise.ts
+    - src/verify/results.ts
+    - src/verify/steps.ts
+    - src/verify/types.ts
+    - src/verify/verify.ts
+    - test/steps.test.ts
+  symbols: []
+  maxFiles: 17
+  maxLines: 1250
+accept:
+  - "Written by the lead; rehearsed in scratch (a worktree at 77d6010, 11-06 18:2x–19:00): build clean (0 TS errors); steps.test 29/29; the whole suite 511/511 under the turn (18:52–18:55, load 20.6); eval 25/25 under the turn. Patch w13.patch sha256 c8008d7b7995a6e5…, 17 files, +1170/−42; private-word scan clean."
+  - "Deliberate breaks, each red where meant, restored green: K1 marker `:` (dash and ksh end the shell, measured) → 'a marker that cannot be written changes nothing in any shell here'; K2 no `|| true` → 8; K3 marker not silenced → 8; K4 exit 0 with unrun checks passes → 'exit 0 … is not a pass'; K5 no progress → 'progress says …'; K6 subject repeats the command → 2; K7 both match guards gone → 'any other command runs as written'; K8 times from the wrong marker → 6; K9 the rebuilt command not compared → 1; R1 result files read although the console named the test → 1; R2 stale result files read → 1; R3 message dropped → 1."
+  - "Measured on real data: the Apple reader names the one failed test and its XCTUnwrap message from a real result bundle of an app's iPhone suite, whose `xcodebuild -quiet` console named no test; six recent real verifyCommands of that app split into the same 13 named checks."
+  - The full check passes (build + whole suite + eval).
+assumptions:
+  - text: "The owner's yes of 11-06 (the utterance) answers the lead's question 'Shall I go ahead with items 2–4?': item 3 (shorter report, live progress, the failed test named) and item 4 (each step's time). The standing yes of 11-04 covers testing and pushing Code Director fixes; the owner leaves decisions to the lead (10-16)."
+    source: user
+    confirmed: true
+  - text: Budget and deny set by hand from the rehearsed patch; the automatic draft is not used.
+    source: system
+    confirmed: false
+  - text: "Redoes IL-0218, abandoned before any commit: its run named the patch by an absolute path, which a public run record must not hold. Same patch (sha256 c8008d7b7995a6e5…), same contract; its run passed the same check first."
+    source: system
+    confirmed: true
+  - text: "Not reached: a verifyCommand hand-joined with another separator (`;`, `&&` without spaces) runs as one step; a check that changes the shell's state for the next (cd, export) behaves exactly as before, since the shell is the same; progress is not shown through MCP; the reader needs an Xcode whose xcresulttool has `get test-results summary` (an older one is said in the detail, the verdict unchanged)."
+    source: system
+    confirmed: false
+createdAt: 2026-11-06T18:02:42.476Z
+createdBy: Yasirdora

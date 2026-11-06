@@ -34,6 +34,7 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { RepoIndex } from "../core/types";
@@ -46,7 +47,7 @@ import { signatureHash } from "../lock/check";
 import { matchPath } from "../lock/glob";
 import { loadChecks } from "../config/checks";
 import { appearedManifests, Baseline, baselineFileHash, loadBaseline, taskBaselinePath } from "../run/baseline";
-import { probeArtifactRef, probeExcerpt, runArgvProbe, runShellProbe, type ProbeResult } from "../run/probe";
+import { probeArtifactRef, probeExcerpt, runArgvProbe, runShellProbe, runStepsProbe, type ProbeResult } from "../run/probe";
 import { gitToAbsRel, runIsolated, sha256Bytes } from "../run/tree";
 import { diagnosticsExcerpt, newDiagnostics, probeDiagnostics } from "../run/diagnostics";
 import { CORE_SKIP_DIRS } from "../core/walk";
@@ -61,6 +62,17 @@ import {
   VerificationReport,
 } from "./types";
 import { failedTestLabels, formatFailedTests, readFailedTests } from "./failedTests";
+import { readCheckResults, type ResultsRead } from "./results";
+import {
+  clock,
+  formatDuration,
+  markedCommand,
+  readStepTimes,
+  stepsOf,
+  totalMs,
+  type CheckStep,
+  type StepTime,
+} from "./steps";
 
 export class VerifyError extends Error {}
 
@@ -97,6 +109,12 @@ export interface VerifyOptions {
   putBack?: ProbePutBack[];
   /** Domains whose checks and manifests are verified (default: the built-in ones). */
   domains?: DomainRegistry;
+  /**
+   * A file descriptor that hears the verifyCommand's progress while it runs:
+   * a line when it starts, one as each named check starts, one when it ends.
+   * The CLI passes its stderr; the MCP server and the tests pass nothing.
+   */
+  progressFd?: number;
 }
 
 const TAMPER_REASON = "baseline modified during execution — run invalid";
@@ -540,14 +558,34 @@ function verifyTestsPass(rootDir: string, lock: VibeCheck, opts: VerifyOptions, 
  * What a failed verifyCommand says: the tests it named first — read from the
  * whole output, not the kept tail — then the tail excerpt as the command's
  * own last words. With no recognisable test name it is the old detail, word
- * for word.
+ * for word. `head` says what failed: the command, or the check it failed in.
  */
-function failedVerifyCommandDetail(command: string, exitCode: number, probe: ProbeResult): { detail: string; failedTests?: string[] } {
+function failedVerifyCommandDetail(
+  head: string,
+  probe: ProbeResult,
+  results?: () => ResultsRead,
+): { detail: string; failedTests?: string[]; resultFiles?: string[] } {
   const failed = readFailedTests(`${probe.stdout}\n${probe.stderr}`);
   const names = formatFailedTests(failed);
   const excerpt = probeExcerpt(probe);
-  const head = `verifyCommand failed (exit ${exitCode}): ${command}`;
   const tail = excerpt ? ` — output: ${excerpt}` : "";
+  // The console's names win: they carry file and line. The check's result
+  // files are read only when it named none.
+  if (names.length === 0 && results) {
+    const read = results();
+    const problems = read.problems.length > 0 ? ` — results: ${read.problems.join("; ")}` : "";
+    if (read.tests.length === 0) return { detail: `${head}${problems}${tail}` };
+    const shown = read.tests.slice(0, MAX_RESULT_TESTS_SHOWN).join(", ");
+    const more = read.tests.length > MAX_RESULT_TESTS_SHOWN ? `, +${read.tests.length - MAX_RESULT_TESTS_SHOWN} more` : "";
+    const from = read.files.map((f) => path.basename(f)).join(", ");
+    return {
+      detail:
+        `${head} — ${read.tests.length} failed test${read.tests.length === 1 ? "" : "s"} (from ${from}): ${shown}${more}` +
+        `${read.message ? ` — ${read.message}` : ""}${problems}${tail}`,
+      failedTests: read.tests,
+      resultFiles: read.files,
+    };
+  }
   if (names.length === 0) return { detail: `${head}${tail}` };
   const total = failed.tests.length + failed.omitted;
   return {
@@ -556,49 +594,152 @@ function failedVerifyCommandDetail(command: string, exitCode: number, probe: Pro
   };
 }
 
-function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions): VerificationItem[] {
+/** Failed tests named in a detail when they come from result files; the item lists them all. */
+const MAX_RESULT_TESTS_SHOWN = 5;
+
+/**
+ * The checks a verifyCommand is made of, when it is exactly checks.yaml's
+ * run texts joined (verify/steps.ts); null runs it as written. The rules
+ * only name the checks: the text that runs is the lock's either way.
+ */
+function verifySteps(rootDir: string, command: string): CheckStep[] | null {
+  // The markers are POSIX shell; Windows runs a command through cmd.exe.
+  if (process.platform === "win32") return null;
+  const file = loadChecks(rootDir);
+  return file.status === "rules" ? stepsOf(command, file.rules.checks) : null;
+}
+
+/** A progress line to `fd`, when there is one; a closed descriptor ends nothing. */
+function say(fd: number | undefined, text: string): void {
+  if (fd === undefined) return;
+  try {
+    fs.writeSync(fd, `cdir · ${clock(Date.now())} · ${text}\n`);
+  } catch {
+    // nobody is listening
+  }
+}
+
+/** "iphone (check 9 of 11)" for the check a run ended in, or undefined. */
+function endedCheck(times: StepTime[] | undefined): { at: number; time: StepTime; label: string } | undefined {
+  const at = times?.findIndex((t) => t.outcome === "failed" || t.outcome === "stopped" || t.outcome === "ended") ?? -1;
+  if (!times || at < 0) return undefined;
+  return { at, time: times[at], label: `${times[at].name} (check ${at + 1} of ${times.length})` };
+}
+
+function verifyCommand(rootDir: string, lock: VibeCheck, opts: VerifyOptions, domains: DomainRegistry): VerificationItem[] {
   if (!lock.verifyCommand) return [];
-  const subject = `verifyCommand · ${lock.verifyCommand}`;
+  const command = lock.verifyCommand;
+  const steps = verifySteps(rootDir, command);
+  const checkWord = (n: number): string => (n === 1 ? "1 check" : `${n} checks`);
+  // A verifyCommand made of named checks is named by them: its full text is
+  // in the artifact once, not in every line that mentions it.
+  const subject = steps
+    ? `verifyCommand · ${checkWord(steps.length)}: ${steps.map((s) => s.name).join(", ")}`
+    : `verifyCommand · ${command}`;
   const timeout = resolveVerifyTimeoutMs(lock, opts);
   phaseFor(rootDir, "verifyCommand");
   // When the repo's rules ask for turns, wait for ours first: the wait is not
   // part of the timeout, which starts when the command does.
-  const taken = takeTurn(rootDir, lock.verifyCommand, opts.env);
+  const taken = takeTurn(rootDir, command, opts.env);
   if ("refused" in taken) return [uncheckedItem("verify-command", subject, taken.refused)];
   phaseFor(rootDir, "verifyCommand"); // the turn, if any, was only a wait
   const { turn } = taken;
+  if (turn.waitNote) say(opts.progressFd, `got the shared turn${turn.waitNote}`);
+  say(opts.progressFd, steps ? `verifyCommand started: ${checkWord(steps.length)}` : "verifyCommand started");
+  const stepDir = steps ? fs.mkdtempSync(path.join(os.tmpdir(), "cdir-steps-")) : undefined;
+  const startedAt = Date.now();
   let probe: ProbeResult;
+  let times: StepTime[] | undefined;
   try {
-    probe = runIsolated(
-      rootDir,
-      () => runShellProbe(rootDir, lock.verifyCommand!, timeout, opts.env),
-      (p) => opts.putBack?.push({ probe: subject, ...p }),
-    );
+    try {
+      probe = runIsolated(
+        rootDir,
+        () =>
+          steps && stepDir
+            ? runStepsProbe(rootDir, markedCommand(steps), command, timeout, {
+                dir: stepDir,
+                names: steps.map((s) => s.name),
+                progressFd: opts.progressFd,
+              }, opts.env)
+            : runShellProbe(rootDir, command, timeout, opts.env),
+        (p) => opts.putBack?.push({ probe: subject, ...p }),
+      );
+    } finally {
+      turn.release();
+    }
+    if (steps && stepDir) {
+      times = readStepTimes(stepDir, steps, {
+        endedAtMs: probe.endedAtMs ?? Date.now(),
+        exitCode: probe.exitCode,
+        timedOut: probe.timedOut,
+      });
+    }
   } finally {
-    turn.release();
+    if (stepDir) fs.rmSync(stepDir, { recursive: true, force: true });
   }
-  const artifactRef = `sh -c ${JSON.stringify(lock.verifyCommand)} → exit ${probe.exitCode ?? "?"}`;
+  const durationMs = Math.max(0, (probe.endedAtMs ?? Date.now()) - startedAt);
+  const timing = { durationMs, ...(times ? { steps: times } : {}) };
+  const ended = endedCheck(times);
+  const artifactRef = `sh -c ${JSON.stringify(command)} → exit ${probe.exitCode ?? "?"}`;
   if (probe.timedOut) {
-    return [uncheckedItem("verify-command", subject, `verifyCommand timed out after ${timeout}ms`)];
+    say(opts.progressFd, `verifyCommand stopped: timed out after ${formatDuration(timeout)}${ended ? ` in ${ended.label}` : ""}`);
+    const where = ended ? `, in ${ended.label}` : "";
+    return [{ ...uncheckedItem("verify-command", subject, `verifyCommand timed out after ${timeout}ms${where}`), ...timing }];
   }
   if (probe.error || probe.exitCode === null) {
-    return [uncheckedItem("verify-command", subject, `verifyCommand could not run: ${probe.error ?? "spawn failed"}`)];
+    say(opts.progressFd, "verifyCommand could not run");
+    return [{ ...uncheckedItem("verify-command", subject, `verifyCommand could not run: ${probe.error ?? "spawn failed"}`), ...timing }];
   }
   if (probe.exitCode === 0) {
-    return [{ source: "verify-command", subject, verdict: "held", evidenceClass: "measured", detail: `verifyCommand passed: ${lock.verifyCommand}${turn.waitNote}`, artifactRef }];
+    const unrun = times?.filter((t) => t.outcome === "not-started") ?? [];
+    if (steps && times && unrun.length > 0) {
+      // The exit code says passed; the markers say some checks never ran.
+      // A check that never ran held nothing — the verdict cannot be "passed".
+      const reason =
+        `verifyCommand exited 0, but ${unrun.length === 1 ? "1 check" : `${unrun.length} checks`} never started: ` +
+        `${unrun.map((t) => t.name).join(", ")} — the shell ended in ${ended?.label ?? "an earlier check"}`;
+      say(opts.progressFd, reason);
+      return [{ ...uncheckedItem("verify-command", subject, reason), artifactRef, ...timing }];
+    }
+    say(opts.progressFd, steps ? `checks passed: ${checkWord(steps.length)} in ${formatDuration(durationMs)}` : `verifyCommand passed in ${formatDuration(durationMs)}`);
+    const detail = steps
+      ? `verifyCommand passed: ${checkWord(steps.length)} in ${formatDuration(times ? totalMs(times) : durationMs)}${times ? "" : " (check times not recorded)"}${turn.waitNote}`
+      : `verifyCommand passed: ${command}${turn.waitNote}`;
+    return [{ source: "verify-command", subject, verdict: "held", evidenceClass: "measured", detail, artifactRef, ...timing }];
   }
-  // A failure has to be diagnosable from the report alone: the tests that
-  // failed, the command's own last words, and the hashes of everything it
-  // said. A pass needs none of it — its exit code is the whole story.
-  const { detail, failedTests } = failedVerifyCommandDetail(lock.verifyCommand, probe.exitCode, probe);
+  // A failure has to be diagnosable from the report alone: the check it
+  // failed in, the tests that failed, the command's own last words, and the
+  // hashes of everything it said. A pass needs none of it — its exit code is
+  // the whole story.
+  const head = !steps
+    ? `verifyCommand failed (exit ${probe.exitCode}): ${command}`
+    : ended
+      ? `verifyCommand failed (exit ${probe.exitCode}) in ${ended.label} after ${formatDuration(ended.time.durationMs ?? 0)}`
+      : `verifyCommand failed (exit ${probe.exitCode})`;
+  say(
+    opts.progressFd,
+    ended
+      ? `${ended.label} failed (exit ${probe.exitCode}) after ${formatDuration(ended.time.durationMs ?? 0)}`
+      : `verifyCommand failed (exit ${probe.exitCode}) after ${formatDuration(durationMs)}`,
+  );
+  const failedStep = ended ? steps?.[ended.at] : undefined;
+  const pattern = failedStep?.results;
+  const since = ended?.time.startedAt !== undefined ? Date.parse(ended.time.startedAt) : undefined;
+  const { detail, failedTests, resultFiles } = failedVerifyCommandDetail(
+    head,
+    probe,
+    pattern !== undefined && since !== undefined ? () => readCheckResults(rootDir, pattern, since, domains, opts.env) : undefined,
+  );
   const item: VerificationItem = {
     source: "verify-command",
     subject,
     verdict: "violated",
     evidenceClass: "measured",
     detail: `${detail}${turn.waitNote}`,
-    artifactRef: probeArtifactRef(`sh -c ${JSON.stringify(lock.verifyCommand)}`, probe),
+    artifactRef: probeArtifactRef(`sh -c ${JSON.stringify(command)}`, probe),
     ...(failedTests !== undefined ? { failedTests } : {}),
+    ...(resultFiles !== undefined ? { resultFiles } : {}),
+    ...timing,
   };
   return [item];
 }
@@ -701,7 +842,7 @@ export function verifyWithBaseline(
   phaseFor(rootDir, "tests-pass");
   const tests = verifyTestsPass(rootDir, lock, opts, domains);
   phaseFor(rootDir, "verifyCommand");
-  const commandChecks = verifyCommand(rootDir, lock, opts);
+  const commandChecks = verifyCommand(rootDir, lock, opts, domains);
   phaseFor(rootDir, "output-unchanged");
   const outputs = verifyOutputUnchanged(rootDir, lock, baseline, baselineRel, opts);
   let items: VerificationItem[] = [...structural, ...refresh, ...typecheck, ...tests, ...commandChecks, ...outputs, ...verifyCustom(lock)];

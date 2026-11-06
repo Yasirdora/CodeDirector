@@ -502,7 +502,13 @@ async function runClaimed(
 }
 
 /** Human-readable violation report printed after a failed run. */
-export function formatRunReport(outcome: RunOutcome): string {
+/**
+ * What a run says about itself. With `brief`, the Change Report follows and
+ * says the promises, the changed files and the violations itself, so they
+ * are left out here rather than printed twice; what only the run can say —
+ * its exit, its checkpoint, its record and what you can do next — stays.
+ */
+export function formatRunReport(outcome: RunOutcome, opts: { brief?: boolean } = {}): string {
   const r = outcome.record;
   const lines: string[] = [];
   lines.push(
@@ -513,14 +519,16 @@ export function formatRunReport(outcome: RunOutcome): string {
   lines.push(`checkpoint: ${r.checkpoint.tag} — restore with \`cdir undo\``);
   lines.push(`record: ${outcome.recordPath}`);
   if (r.staleClaim) lines.push(`note: ${r.staleClaim}`);
-  if (r.keepResults.length > 0) {
+  if (opts.brief) {
+    // The violations are the Change Report's to list; the way out is ours.
+  } else if (r.keepResults.length > 0) {
     lines.push(`KEEP:`);
     for (const k of r.keepResults) {
       const mark = k.status === "ok" ? "✓" : k.status === "violated" ? "✗" : k.status === "deferred" ? "~" : "?";
       lines.push(`  ${mark} ${k.kind}: ${k.detail}`);
     }
   }
-  if (r.changed.length > 0) {
+  if (!opts.brief && r.changed.length > 0) {
     lines.push(`changed files:`);
     for (const c of r.changed) {
       const tag =
@@ -529,8 +537,12 @@ export function formatRunReport(outcome: RunOutcome): string {
     }
   }
   if (r.violations.length > 0) {
-    lines.push(``, `VIOLATIONS (${r.violations.length}):`);
-    for (const v of r.violations) lines.push(`  ✗ ${v}`);
+    if (opts.brief) {
+      lines.push(``, `${r.violations.length} violation(s) — listed in the Change Report below.`);
+    } else {
+      lines.push(``, `VIOLATIONS (${r.violations.length}):`);
+      for (const v of r.violations) lines.push(`  ✗ ${v}`);
+    }
     lines.push(
       ``,
       `Nothing was reverted automatically — you decide:`,

@@ -23,8 +23,7 @@ import type {
   ProfileRule,
   ProjectFact,
   TestRunnerDescription,
-  ToolchainReach,
-} from "./types";
+  ToolchainReach, ResultReader } from "./types";
 
 export class DomainRegistryError extends Error {}
 
@@ -217,6 +216,15 @@ export class DomainRegistry {
 
   toolchains(): ToolchainReach[] {
     return this.list.flatMap((d) => d.checkProviders?.toolchains ?? []);
+  }
+
+  /** The reader for a result file, by the ending of its name, or null. */
+  resultReader(fileName: string): ResultReader | null {
+    for (const d of this.list) {
+      const reader = d.checkProviders?.resultReaders?.find((r) => fileName.endsWith(r.suffix));
+      if (reader) return reader;
+    }
+    return null;
   }
 
   // --- changeClassifiers -------------------------------------------------

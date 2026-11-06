@@ -27,6 +27,13 @@ export interface CheckDef {
   run: string;
   /** The text a verifyCommand must contain to count as running this check. */
   match: string;
+  /**
+   * Where the check leaves its result files, for a runner that says little
+   * on its console (xcodebuild -quiet names no failed test): a path,
+   * absolute or from the root, whose last part may hold `*`. When the check
+   * fails, the files there it wrote are read for the tests that failed.
+   */
+  results?: string;
 }
 
 export interface CheckArea {
@@ -107,10 +114,14 @@ function parseCheck(name: string, def: unknown): CheckDef {
     const run = reqString(def, where);
     return { name, run, match: run };
   }
-  if (!isObj(def)) err(`${where} must be a command, or a mapping with run (and optionally match)`);
-  onlyKeys(def, ["run", "match"], where);
+  if (!isObj(def)) err(`${where} must be a command, or a mapping with run (and optionally match and results)`);
+  onlyKeys(def, ["run", "match", "results"], where);
   const run = reqString(def.run, `${where}.run`);
-  return { name, run, match: def.match === undefined ? run : reqString(def.match, `${where}.match`) };
+  const match = def.match === undefined ? run : reqString(def.match, `${where}.match`);
+  if (def.results === undefined) return { name, run, match };
+  const results = reqString(def.results, `${where}.results`);
+  if (path.dirname(results).includes("*")) err(`${where}.results: only the last part of the path may hold *`);
+  return { name, run, match, results };
 }
 
 function parseArea(raw: unknown, i: number, known: Set<string>): CheckArea {

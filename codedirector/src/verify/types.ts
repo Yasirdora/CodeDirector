@@ -14,6 +14,7 @@
  *  - unchecked:  no check exists or none could run — named, with the reason
  */
 
+import type { StepTime } from "./steps";
 import { KeepClauseKind } from "../lock/types";
 import { PutBack } from "../run/tree";
 
@@ -50,6 +51,15 @@ export interface VerificationItem {
   artifactRef?: string;
   /** Why the claim is unchecked (required when verdict is "unchecked"). */
   reason?: string;
+  /** How long a verifyCommand ran, its wait for the turn not included. */
+  durationMs?: number;
+  /** The result files a failed check's tests were read from (checks.yaml `results`). */
+  resultFiles?: string[];
+  /**
+   * A verifyCommand made of named checks (verify/steps.ts): when each check
+   * started, how long it ran, and how it ended — in the order they run.
+   */
+  steps?: StepTime[];
 }
 
 /** What one probe (a verifyCommand, a test run, the typecheck…) left behind and had put back. */

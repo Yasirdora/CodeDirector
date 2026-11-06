@@ -197,9 +197,25 @@ export interface ToolchainReach {
   languages: string[];
 }
 
+/**
+ * Reads which tests failed from a result file a check left behind — for a
+ * runner that names none on its console. The core runs `argv` (bounded,
+ * supervised) and hands its output to `failures`; the domain spawns nothing.
+ */
+export interface ResultReader {
+  /** The ending of the file or bundle name this reader takes, e.g. ".xcresult". */
+  suffix: string;
+  /** The command that prints the result as text. */
+  argv(resultPath: string): string[];
+  /** The failed tests in that text, and the first failure's message when it has one. */
+  failures(output: string): { tests: string[]; message?: string };
+}
+
 export interface CheckProviders {
   diagnostics?: DiagnosticsCheck[];
   testRunner?: TestRunnerDescription;
+  /** Readers for result files that checks name in .codedirector/checks.yaml (`results`). */
+  resultReaders?: ResultReader[];
   /** What a verifyCommand reaches when it names one of these toolchains. */
   toolchains?: ToolchainReach[];
 }

@@ -355,7 +355,7 @@ silently, and re-running never moves it.
 
 ### `cdir checks [paths...] [--json]`
 
-Reads the optional `.codedirector/checks.yaml` — which checks each area of the repo needs — and says what it requires. Drafting fills the verifyCommand from it, `lock check` refuses a verifyCommand that leaves a needed check out, and a run or report fails on one (a `CHECKS` violation): see [docs/checks.md](docs/checks.md).
+Reads the optional `.codedirector/checks.yaml` — which checks each area of the repo needs — and says what it requires. Drafting fills the verifyCommand from it, `lock check` refuses a verifyCommand that leaves a needed check out, and a run or report fails on one (a `CHECKS` violation): see [docs/checks.md](docs/checks.md). A verifyCommand made of those checks runs as **named checks**: the same text in the same shell, with silent markers between the checks, so the CLI shows progress on stderr as each check starts, the report gives each check's time and prints the long command once, a failure names the check it failed in, an exit 0 that skipped a check is Unchecked, and a check's `results` files name the failed tests its console did not (docs/checks.md, "Named checks").
 
 ### `cdir checkpoint [<lock-id>]` · `cdir undo [--force] [--keep-untracked]`
 

@@ -4,6 +4,7 @@
  * violated · ? unchecked · ! asserted finding.
  */
 
+import { stepTimesLine } from "../verify/steps";
 import { stableStringify } from "../core/store";
 import { VerificationItem } from "../verify/types";
 import { runningNowLine } from "../run/claim";
@@ -227,6 +228,7 @@ export function formatReport(report: ChangeReport): string {
     lines.push(`Checks (violations first):`);
     for (const i of checked) {
       lines.push(`  ${MARK[i.verdict]} ${i.evidenceClass.padEnd(8)} ${i.subject} — ${i.detail}`);
+      if (i.steps) lines.push(`             times: ${stepTimesLine(i.steps)}`);
       if (i.artifactRef) lines.push(`             artifact: ${i.artifactRef}`);
     }
   }
@@ -239,6 +241,7 @@ export function formatReport(report: ChangeReport): string {
     lines.push(`Unchecked (${unchecked.length}) — named, not silently dropped:`);
     for (const i of unchecked) {
       lines.push(`  ? ${i.subject} — ${i.reason ?? i.detail}`);
+      if (i.steps) lines.push(`             times: ${stepTimesLine(i.steps)}`);
     }
   }
 
@@ -325,7 +328,7 @@ export function formatReportMarkdown(report: ChangeReport): string {
     lines.push(`|---|---|---|---|---|`);
     for (const i of checked) {
       lines.push(
-        `| ${MARK[i.verdict]} ${i.verdict} | ${i.evidenceClass} | ${i.subject} | ${i.detail} | ${i.artifactRef ? `\`${i.artifactRef}\`` : "—"} |`,
+        `| ${MARK[i.verdict]} ${i.verdict} | ${i.evidenceClass} | ${i.subject} | ${i.detail}${i.steps ? ` — times: ${stepTimesLine(i.steps)}` : ""} | ${i.artifactRef ? `\`${i.artifactRef}\`` : "—"} |`,
       );
     }
   }
@@ -336,7 +339,9 @@ export function formatReportMarkdown(report: ChangeReport): string {
   if (unchecked.length === 0) {
     lines.push(`None — every claim had a runnable check.`);
   } else {
-    for (const i of unchecked) lines.push(`- ? **${i.subject}** — ${i.reason ?? i.detail}`);
+    for (const i of unchecked) {
+      lines.push(`- ? **${i.subject}** — ${i.reason ?? i.detail}${i.steps ? ` — times: ${stepTimesLine(i.steps)}` : ""}`);
+    }
   }
 
   if (report.accept.length > 0) {

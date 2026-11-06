@@ -40,6 +40,8 @@ export interface ProbeResult {
   timedOut: boolean;
   /** Set when the command could not be run at all (spawn error). */
   error?: string;
+  /** When the command's process ended (ms since the epoch), when the supervisor said. */
+  endedAtMs?: number;
 }
 
 /** Output kept in memory per stream; the rest is hashed, not held. */
@@ -107,6 +109,7 @@ function runSupervised(
   label: string,
   timeoutMs: number,
   env?: NodeJS.ProcessEnv,
+  steps?: { dir: string; names: string[]; progressFd?: number },
 ): ProbeResult {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdir-probe-"));
   try {
@@ -118,12 +121,15 @@ function runSupervised(
       stdoutPath: path.join(dir, "stdout"),
       stderrPath: path.join(dir, "stderr"),
       resultPath: path.join(dir, "result.json"),
+      ...(steps ? { steps: { dir: steps.dir, names: steps.names, progress: steps.progressFd !== undefined } } : {}),
     };
     const specPath = path.join(dir, "spec.json");
     fs.writeFileSync(specPath, JSON.stringify(spec));
     const sup = spawnSync(process.execPath, [SUPERVISOR, specPath], {
       env: probeEnv(env),
-      stdio: ["ignore", "ignore", "pipe"],
+      // Progress, when asked for, is the supervisor's descriptor 3: the
+      // caller's own descriptor, so the lines appear as the checks start.
+      stdio: steps?.progressFd !== undefined ? ["ignore", "ignore", "pipe", steps.progressFd] : ["ignore", "ignore", "pipe"],
       encoding: "utf8",
       // A backstop only: the supervisor enforces the real timeout.
       timeout: timeoutMs + KILL_GRACE_MS + 30_000,
@@ -159,6 +165,7 @@ function runSupervised(
       stderrSha256: err.sha256,
       ...(Object.keys(omitted).length > 0 ? { omitted } : {}),
       timedOut: result.timedOut,
+      ...(result.endedAtMs !== undefined ? { endedAtMs: result.endedAtMs } : {}),
       error:
         result.spawnError ??
         (result.exitCode === null && result.signal ? `killed by signal ${result.signal}` : undefined),
@@ -175,6 +182,23 @@ export function runShellProbe(
   env?: NodeJS.ProcessEnv,
 ): ProbeResult {
   return runSupervised(rootDir, { shell: command }, command, timeoutMs, env);
+}
+
+/**
+ * Run a verifyCommand as named checks (verify/steps.ts): `marked` is the
+ * command with its markers, `label` the command as approved — what the
+ * result says ran. The markers go to `stepDir`; with `progressFd`, a line
+ * per started check goes to that descriptor while the run goes on.
+ */
+export function runStepsProbe(
+  rootDir: string,
+  marked: string,
+  label: string,
+  timeoutMs: number,
+  steps: { dir: string; names: string[]; progressFd?: number },
+  env?: NodeJS.ProcessEnv,
+): ProbeResult {
+  return runSupervised(rootDir, { shell: marked }, label, timeoutMs, env, steps);
 }
 
 /** Same as runShellProbe but for an explicit argv (no shell). */
