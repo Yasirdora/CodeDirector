@@ -1,4 +1,5 @@
 <div align="center">
+  <img src="codedirector/brand/logo.svg" width="200" alt="Code Director logo" />
   <h1>Code Director</h1>
   <p><strong>Human Intent → Verified Execution</strong></p>
 </div>

@@ -1,35 +1,5 @@
-<svg width="512" height="352" viewBox="0 0 512 352" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
-<rect x="0" y="0" width="512" height="32" fill="#FED30B"/>
-<rect x="0" y="32" width="512" height="32" fill="#FED30B"/>
-<rect x="0" y="64" width="512" height="32" fill="#111111"/>
-<rect x="0" y="96" width="32" height="32" fill="#FED30B"/>
-<rect x="32" y="96" width="32" height="32" fill="#111111"/>
-<rect x="64" y="96" width="96" height="32" fill="#FFFFFF"/>
-<rect x="160" y="96" width="160" height="32" fill="#111111"/>
-<rect x="320" y="96" width="96" height="32" fill="#FFFFFF"/>
-<rect x="416" y="96" width="64" height="32" fill="#111111"/>
-<rect x="480" y="96" width="32" height="32" fill="#FED30B"/>
-<rect x="0" y="128" width="32" height="32" fill="#FED30B"/>
-<rect x="32" y="128" width="32" height="32" fill="#111111"/>
-<rect x="64" y="128" width="32" height="32" fill="#FFFFFF"/>
-<rect x="96" y="128" width="128" height="32" fill="#111111"/>
-<rect x="224" y="128" width="64" height="32" fill="#FED30B"/>
-<rect x="288" y="128" width="32" height="32" fill="#111111"/>
-<rect x="320" y="128" width="32" height="32" fill="#FFFFFF"/>
-<rect x="352" y="128" width="128" height="32" fill="#111111"/>
-<rect x="480" y="128" width="32" height="32" fill="#FED30B"/>
-<rect x="0" y="160" width="64" height="32" fill="#FED30B"/>
-<rect x="64" y="160" width="128" height="32" fill="#111111"/>
-<rect x="192" y="160" width="128" height="32" fill="#FED30B"/>
-<rect x="320" y="160" width="128" height="32" fill="#111111"/>
-<rect x="448" y="160" width="64" height="32" fill="#FED30B"/>
-<rect x="0" y="192" width="512" height="32" fill="#FED30B"/>
-<rect x="0" y="224" width="128" height="32" fill="#FED30B"/>
-<rect x="128" y="224" width="32" height="32" fill="#5C3A21"/>
-<rect x="160" y="224" width="352" height="32" fill="#FED30B"/>
-<rect x="0" y="256" width="160" height="32" fill="#FED30B"/>
-<rect x="160" y="256" width="192" height="32" fill="#5C3A21"/>
-<rect x="352" y="256" width="160" height="32" fill="#FED30B"/>
-<rect x="0" y="288" width="512" height="32" fill="#FED30B"/>
-<rect x="0" y="320" width="512" height="32" fill="#FED30B"/>
+<svg width="561" height="288" viewBox="0 0 561 288" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M247.923 288L200.723 288L312.723 4.22339e-05L359.923 4.63603e-05L247.923 288Z" fill="#85E713"/>
+<path d="M174.323 266L112.323 266L27.4549 159.588C20.1818 150.469 20.1817 137.531 27.4549 128.412L112.323 22L174.323 22" stroke-width="44" stroke-linejoin="round" stroke="#2AB2FF"/>
+<path d="M386.023 22L448.023 22.0001L532.891 128.412C540.164 137.531 540.164 150.469 532.891 159.588L448.023 266L386.023 266" stroke-width="44" stroke-linejoin="round" stroke="#FF0200"/>
 </svg>
